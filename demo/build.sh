@@ -20,7 +20,12 @@ controller | runner | all) ;;
 esac
 need kubectl
 need "${buildctl}"
-[[ -n "${DOCKER_CONFIG:-}" ]] || note "DOCKER_CONFIG is not set. BuildKit will push with ~/.docker/config.json."
+# Same default as the Makefile, so running this script directly pushes with the DOCR credentials.
+docr_config="${DOCR_DOCKER_CONFIG:-${HOME}/.cache/skill-ci/docker}"
+if [[ -z "${DOCKER_CONFIG:-}" && -f "${docr_config}/config.json" ]]; then
+  export DOCKER_CONFIG="${docr_config}"
+fi
+[[ -n "${DOCKER_CONFIG:-}" ]] || note "DOCKER_CONFIG is not set. BuildKit will push with ~/.docker/config.json (run 'make docr-login' first)."
 
 say "Opening a tunnel to the in-cluster BuildKit on localhost:${port}"
 kubectl -n "${NS}" port-forward svc/buildkitd "${port}:1234" >/dev/null &
