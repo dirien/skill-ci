@@ -122,6 +122,9 @@ resources:
           metadata:
             labels:
               app: buildkitd
+            # The cluster autoscaler drained this node mid-build once; keep the builder where it is.
+            annotations:
+              cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
           spec:
             containers:
               - name: buildkitd
@@ -181,6 +184,18 @@ resources:
         harborAdminPassword: ${harborAdminPassword.result}
         trivy:
           enabled: false
+        # DigitalOcean volumes are ReadWriteOnce: a rolling update deadlocks the registry and jobservice
+        # pods on their volumes, so replace them instead.
+        updateStrategy:
+          type: Recreate
+        # A scale-down must not move Harbor during a demo: every component stays put.
+        nginx: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        portal: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        core: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        jobservice: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        registry: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        database: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+        redis: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
     options:
       provider: ${k8s}
 
@@ -303,6 +318,7 @@ resources:
               app: toolbox
             annotations:
               kubectl.kubernetes.io/default-container: oras
+              cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
           spec:
             containers:
               - name: oras
