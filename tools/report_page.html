@@ -1,0 +1,238 @@
+<title>Skill CI Run Report</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one reading column of report sections; tables scroll inside their own box; reports open in an in-page viewer. */
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f5; --fg: #172131; --muted: #5a6577; --line: #dde2ea;
+    --accent: #2a78d6; --with: #2a78d6; --without: #eb6834;
+    --good: #1c7c4a; --good-bg: #e3f3ea; --bad: #b42318; --bad-bg: #fde8e6; --neutral-bg: #eceff3;
+    --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12161c; --surface: #1a1f27; --surface-2: #222833; --fg: #e5e9f0; --muted: #98a3b4; --line: #2d3542;
+      --accent: #3987e5; --with: #3987e5; --without: #d95926;
+      --good: #5cc98a; --good-bg: #183225; --bad: #f2877c; --bad-bg: #3a1d1b; --neutral-bg: #262d38;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12161c; --surface: #1a1f27; --surface-2: #222833; --fg: #e5e9f0; --muted: #98a3b4; --line: #2d3542;
+    --accent: #3987e5; --with: #3987e5; --without: #d95926;
+    --good: #5cc98a; --good-bg: #183225; --bad: #f2877c; --bad-bg: #3a1d1b; --neutral-bg: #262d38;
+    color-scheme: dark;
+  }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 36px 64px;
+  }
+  main { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+  header, section { display: flex; flex-direction: column; gap: 12px; }
+  .label { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0; text-wrap: balance; }
+  h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+  p { margin: 0; max-width: 68ch; }
+  .lede, .sub { color: var(--muted); }
+  .sub { font-size: 13px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 10px 28px; font-variant-numeric: tabular-nums; }
+  .facts div { display: flex; flex-direction: column; }
+  .facts strong { font-size: 22px; line-height: 1.2; }
+  .box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  code, .mono { font-family: var(--font-mono); font-size: 13px; }
+  .chip { display: inline-block; font-family: var(--font-mono); font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--neutral-bg); margin: 0 4px 4px 0; }
+  .chip.stable { background: var(--good-bg); color: var(--good); font-weight: 500; }
+  .chip.beta { background: var(--surface-2); color: var(--accent); }
+  .verdict { font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 4px; white-space: nowrap; }
+  .v-Helps { background: var(--good-bg); color: var(--good); }
+  .v-Neutral, .v-Obsolete, .v- { background: var(--neutral-bg); color: var(--muted); }
+  .v-Regressed, .v-Hurts { background: var(--bad-bg); color: var(--bad); }
+  .cell { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+  .lift { font-size: 18px; font-weight: 600; }
+  .decision { color: var(--fg); border-left: 3px solid var(--line); padding-left: 10px; }
+  .decision.good { border-left-color: var(--good); }
+  .decision.bad { border-left-color: var(--bad); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); align-items: center; }
+  .key { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+  .multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .chart h3 { margin: 0; font-size: 15px; font-family: var(--font-mono); font-weight: 500; }
+  .dim { display: grid; grid-template-columns: 112px 1fr; gap: 4px 10px; align-items: center; font-size: 13px; }
+  .bars { display: flex; flex-direction: column; gap: 2px; }
+  .bar { display: flex; align-items: center; gap: 6px; height: 14px; }
+  .bar .fill { height: 10px; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar .val { font-family: var(--font-mono); font-size: 11px; }
+  .bar:hover .fill { outline: 2px solid var(--fg); outline-offset: 1px; }
+  .reports { display: flex; flex-direction: column; gap: 8px; }
+  button { font: 500 14px var(--font-body); color: var(--accent); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; cursor: pointer; text-align: left; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .viewer { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px)); }
+  .viewer-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; flex-wrap: wrap; }
+  .viewer iframe { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 8px; background: #fff; margin-bottom: 12px; }
+  footer { color: var(--muted); font-size: 14px; }
+</style>
+
+<main>
+  <header>
+    <span class="label" id="eyebrow">skill-ci run report</span>
+    <h1>Skill CI run report</h1>
+    <p class="lede">Every SkillEval the controller ran: the scores with and without each skill version, per model, and the tag the policy gave each version in Harbor.</p>
+  </header>
+
+  <section aria-labelledby="facts-h">
+    <h2 id="facts-h" class="label">At a glance</h2>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <section aria-labelledby="versions-h">
+    <h2 id="versions-h">Skill versions and what the policy decided</h2>
+    <div class="box"><table id="versions"><thead><tr><th>Skill</th><th>Version</th><th>Tags</th><th>Decision</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section aria-labelledby="matrix-h">
+    <h2 id="matrix-h">Lift by skill version and model</h2>
+    <p class="lede">Lift is the with-skill score minus the no-skill score, on a 0 to 1 scale. Each cell is one SkillEval.</p>
+    <div class="box"><table id="matrix"><thead></thead><tbody></tbody></table></div>
+  </section>
+
+  <section aria-labelledby="dims-h" id="dims-section">
+    <h2 id="dims-h">Where the lift comes from</h2>
+    <p class="lede">SkillEvaluator scores six dimensions for each arm. Pick a skill version to compare them per model.</p>
+    <div class="legend">
+      <label for="dims-pick" class="label">Version</label><select id="dims-pick"></select>
+      <span><span class="key" style="background:var(--with)"></span>With skill</span>
+      <span><span class="key" style="background:var(--without)"></span>Without skill</span>
+    </div>
+    <div class="multiples" id="dims"></div>
+  </section>
+
+  <section aria-labelledby="reports-h" id="reports-section">
+    <h2 id="reports-h">SkillEvaluator reports</h2>
+    <p class="lede">The runner attaches SkillEvaluator's own report to the evaluated skill digest in Harbor. These copies were pulled with <code>make report</code>.</p>
+    <div class="reports" id="reports"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<div class="viewer" id="viewer" hidden>
+  <div class="viewer-bar">
+    <strong id="viewer-title"></strong>
+    <button type="button" id="viewer-close">Back to the run report</button>
+  </div>
+  <iframe id="viewer-frame" title="SkillEvaluator report" sandbox="allow-scripts"></iframe>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const short = m => m.replace(/^claude-/, "").replace(/-(\d+)-(\d+)$/, " $1.$2").replace(/^./, c => c.toUpperCase());
+  const fmt = (v, sign) => v === null || v === undefined ? "–" : (sign && v >= 0 ? "+" : "") + v.toFixed(2);
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) k === "class" ? (n.className = v) : n.setAttribute(k, v);
+    n.append(...kids);
+    return n;
+  };
+
+  const evals = data.versions.flatMap(v => v.evals);
+  document.getElementById("eyebrow").textContent = `skill-ci run report · generated ${data.generated}`;
+  document.getElementById("footer").textContent =
+    `Scores come from the SkillEval status in the cluster and from SkillEvaluator's result.json. Promotion threshold ${fmt(data.promoteThreshold, true)} lift on every required model.`;
+
+  const facts = [
+    [evals.length, "SkillEvals"],
+    [evals.filter(e => e.phase === "Succeeded").length, "succeeded"],
+    [new Set(evals.map(e => e.skill)).size, "skills"],
+    [data.versions.length, "skill versions"],
+    [data.models.length, "models"],
+    [data.versions.filter(v => v.tags.includes("stable")).length, "versions on stable"],
+    [data.versions.filter(v => v.evals.some(e => e.regressed)).length, "held back as regressions"],
+  ];
+  const factsEl = document.getElementById("facts");
+  for (const [n, label] of facts) factsEl.append(el("div", {}, el("strong", {}, String(n)), el("span", { class: "label" }, label)));
+
+  const vBody = document.querySelector("#versions tbody");
+  for (const v of data.versions) {
+    const chips = el("td");
+    for (const t of v.tags) chips.append(el("span", { class: "chip " + t }, t));
+    if (!v.tags.length) chips.append(el("span", { class: "sub" }, "none"));
+    vBody.append(el("tr", {}, el("td", {}, v.skill), el("td", { class: "mono" }, v.version), chips,
+      el("td", {}, el("p", { class: "decision " + v.decision.kind }, v.decision.text))));
+  }
+
+  document.querySelector("#matrix thead").append(el("tr", {}, el("th", {}, "Skill"), el("th", {}, "Version"), ...data.models.map(m => el("th", {}, short(m)))));
+  const mBody = document.querySelector("#matrix tbody");
+  for (const v of data.versions) {
+    const tr = el("tr", {}, el("td", {}, v.skill), el("td", { class: "mono" }, v.version));
+    for (const m of data.models) {
+      const e = v.evals.find(x => x.model === m);
+      if (!e || e.phase !== "Succeeded") { tr.append(el("td", { class: "sub" }, e ? e.phase : "not run")); continue; }
+      tr.append(el("td", {}, el("div", { class: "cell" },
+        el("span", { class: "lift" }, fmt(e.lift, true)),
+        el("span", { class: "sub" }, `with ${fmt(e.with_skill)} · without ${fmt(e.without_skill)}`),
+        el("span", {}, el("span", { class: "verdict v-" + e.verdict }, e.verdict || "–")))));
+    }
+    mBody.append(tr);
+  }
+
+  // Dimensions: group reports by skill version (the report directory name minus the model).
+  const dimNames = { accuracy: "Accuracy", goal_accuracy: "Goal accuracy", behavior_check: "Behavior", skill_execution: "Skill execution", skill_efficiency: "Efficiency", security: "Security" };
+  const groups = new Map();
+  for (const r of data.reports) {
+    if (!r.model || !Object.keys(r.dims).length) continue;
+    const key = r.name.slice(0, r.name.length - r.model.length - 1);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  const pick = document.getElementById("dims-pick");
+  const dimsEl = document.getElementById("dims");
+  const drawDims = key => {
+    dimsEl.replaceChildren();
+    const reps = (groups.get(key) || []).sort((a, b) => data.models.indexOf(a.model) - data.models.indexOf(b.model));
+    for (const r of reps) {
+      const grid = el("div", { class: "dim" });
+      for (const [k, label] of Object.entries(dimNames)) {
+        if (!r.dims[k]) continue;
+        const bar = (v, color, arm) => el("div", { class: "bar", title: `${label}, ${arm}: ${v.toFixed(2)}` },
+          el("span", { class: "fill", style: `width:${Math.max(v * 100, 1)}%;background:${color}` }), el("span", { class: "val" }, v.toFixed(2)));
+        grid.append(el("span", { class: "sub" }, label), el("div", { class: "bars" },
+          bar(r.dims[k][0], "var(--with)", "with skill"), bar(r.dims[k][1], "var(--without)", "without skill")));
+      }
+      dimsEl.append(el("div", { class: "chart" }, el("h3", {}, short(r.model)), grid));
+    }
+  };
+  for (const key of groups.keys()) pick.append(el("option", { value: key }, key));
+  if (groups.size) { pick.value = [...groups.keys()].pop(); drawDims(pick.value); pick.addEventListener("change", () => drawDims(pick.value)); }
+  else document.getElementById("dims-section").hidden = true;
+
+  // Reports open in an in-page viewer: inlined HTML in a sandboxed iframe, no navigation away.
+  const viewer = document.getElementById("viewer");
+  const frame = document.getElementById("viewer-frame");
+  const repEl = document.getElementById("reports");
+  for (const r of data.reports) {
+    const btn = el("button", { type: "button" }, `${r.name}`);
+    btn.addEventListener("click", () => {
+      document.getElementById("viewer-title").textContent = r.name;
+      frame.srcdoc = r.html;
+      viewer.hidden = false;
+      document.getElementById("viewer-close").focus();
+    });
+    repEl.append(btn);
+  }
+  if (!data.reports.length) document.getElementById("reports-section").hidden = true;
+  const close = () => { viewer.hidden = true; frame.srcdoc = ""; };
+  document.getElementById("viewer-close").addEventListener("click", close);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !viewer.hidden) close(); });
+</script>

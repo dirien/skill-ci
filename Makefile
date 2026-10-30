@@ -76,6 +76,10 @@ status: ## SkillEvals and the tags per skill in Harbor
 report: ## Download the eval reports of a skill version from Harbor (SKILL=... VERSION=... [MODEL=...] OUT=reports/)
 	@demo/report.sh $(SKILL) $(VERSION) "$(MODEL)" $(or $(OUT),reports)
 
+.PHONY: report-page
+report-page: ## Build the run report page with every SkillEval and the SkillEvaluator reports (OUT=reports/index.html)
+	@demo/report-page.sh $(or $(OUT),reports/index.html)
+
 .PHONY: dashboard
 dashboard: ## Port-forward Grafana and print the login
 	@demo/dashboard.sh
