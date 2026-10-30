@@ -43,6 +43,10 @@ updates:
       day: "monday"
     labels:
       - "dependencies"
+    # harbor must match the release SkillEvaluator pins (0.24.0 for SkillEvaluator 0.6.0), and the
+    # sandbox environment subclasses its internals; bump it together with SkillEvaluator, by hand.
+    ignore:
+      - dependency-name: "harbor"
     groups:
       pip-minor-patch:
         update-types:
