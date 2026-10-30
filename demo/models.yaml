@@ -17,10 +17,11 @@ models:
     agentVersion: "0.161.0"
     model: openai/gpt-6.1-sol
     required: false
-  # OpenCode with an open model on Ollama Cloud (key `ollama` in llm-keys). Needs the ollama-cloud
+  # OpenCode with Qwen through OpenRouter (key `openrouter` in llm-keys), via the OpenAI-compatible
   # gateway route of runner 0.6.0. Release 1.19.1 (npm opencode-ai) is at least two weeks old.
-  # gpt-oss:120b is free on the account's Ollama Cloud plan; GLM, Kimi and MiniMax need credits.
+  # OpenRouter lists no free Qwen or GLM models; qwen3.8-flash costs $0.15/$0.47 per million tokens.
+  # Free alternative on Ollama Cloud (key `ollama`): ollama-cloud/gpt-oss:120b.
   - agent: opencode
     agentVersion: "1.19.1"
-    model: ollama-cloud/gpt-oss:120b
+    model: openrouter/qwen/qwen3.8-flash
     required: false
