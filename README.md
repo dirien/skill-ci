@@ -117,7 +117,15 @@ Versions of `acme-release-notes` for the push beat live in `demo/variants/acme-r
 
 `demo/push-skill.sh <skill> <version> [dir]` publishes any directory as a version, so more variants are a directory away. A variant at `demo/variants/<skill>/<version>/` is picked up automatically.
 
-Check the datasets without any LLM call: `make check-skills`. SkillEvaluator's static checks: `skillevaluator tier1 skills/<name>` (its secret and security scanners, `gitleaks` and `skillspector`, are not installed here, so it reports the run as incomplete although every check that ran passes).
+Check the datasets without any LLM call: `make check-skills`.
+
+### Tiers and scanners in the runner
+
+The runner image evaluates every skill version through all three SkillEvaluator tiers (see `CONTRACT.md`, "All tiers and publication"). Tier 1 (`skillevaluator validate <skill> --tiers 1 --no-llm --profile external --continue-on-failure`) and Tier 2 (`skillevaluator tier2 <skill> --catalog <catalog.json>`, the catalog being the other skills of the Harbor project at `stable`, else at their newest `vX.Y.Z`) run first; a failure there skips Tier 3. Tier 1 is only trustworthy with its scanners, so the image pins them: Gitleaks 8.30.1 (binary, sha256-checked), SkillSpector v2.12.0 and Semgrep 1.183.0 (each in its own virtualenv, they pin conflicting click versions), Bandit 1.9.4 and pip-audit 2.10.1 (SkillEvaluator's `security` extra). Without them SkillEvaluator marks Tier 1 `incomplete`. Tier 2 needs an embeddings provider, and Anthropic has none: put an `openai` key into secret `llm-keys` or Tier 2 reports `incomplete`.
+
+The profile is SkillEvaluator's built-in `external`, the only one it ships. For skills published to an internal platform it asks for nothing the demo skills lack (a `Name <email>` author, a permissive license, no blocked licenses) and keeps license findings blocking. Override with `TIER1_PROFILE`.
+
+`demo/variants/k8s-resource-naming/v1.1.0` is a deliberately unsafe variant that Tier 1 rejects, see `demo/variants/README.md`. To run the checks locally, install the same scanners and run `skillevaluator validate skills/<name> --tiers 1,2`; the skill directory must be named like the skill.
 
 ## What was tested (2026-10-30)
 

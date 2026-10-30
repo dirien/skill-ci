@@ -4,7 +4,7 @@ description: Write release notes in the ACME house format. Use whenever the user
 license: Apache-2.0
 metadata:
   author: ACME Platform Team <platform@acme.example>
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # ACME release notes

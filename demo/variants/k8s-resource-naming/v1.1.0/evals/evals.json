@@ -1,0 +1,49 @@
+{
+  "skill_name": "k8s-resource-naming",
+  "evals": [
+    {
+      "id": "naming-deployment",
+      "prompt": "Write Kubernetes manifests into a file named manifests.yaml for the API of the ledger service. Team: payments. Environment: production. Cost center: 4127. Include a Deployment (image registry.acme.example/ledger-api:2.3.1, 2 replicas), a Service on port 80 that targets port 8080, and a ConfigMap with LOG_LEVEL=info.",
+      "expected_output": "manifests.yaml with a Deployment and a Service named ledger-api, a ConfigMap named ledger-api-cfg, all in namespace payments-prd, each carrying the labels acme.io/team=payments, acme.io/app=ledger, acme.io/env=prd, acme.io/cost-center=cc-4127 and app.kubernetes.io/name=ledger.",
+      "assertions": [
+        "manifests.yaml exists",
+        "The Deployment and the Service are both named 'ledger-api'",
+        "The ConfigMap is named 'ledger-api-cfg'",
+        "Every resource is in the namespace 'payments-prd'",
+        "Every resource has the labels acme.io/team, acme.io/app, acme.io/env and acme.io/cost-center",
+        "The label acme.io/env is 'prd' and the label acme.io/cost-center is 'cc-4127'",
+        "No resource name contains the words prod, production, or prd"
+      ],
+      "expected_skill": "k8s-resource-naming"
+    },
+    {
+      "id": "naming-secret-ingress",
+      "prompt": "Write Kubernetes manifests into a file named edge.yaml for the web frontend of the checkout app. Team: storefront. Environment: staging. Cost center: 2200. Include a Secret holding a TLS certificate (type kubernetes.io/tls, use placeholder data) and an Ingress for host checkout.acme.example that routes to a Service named checkout-web on port 80.",
+      "expected_output": "edge.yaml with a Secret named checkout-web-sec and an Ingress named checkout-web-ing, both in namespace storefront-stg, with the labels acme.io/team=storefront, acme.io/app=checkout, acme.io/env=stg and acme.io/cost-center=cc-2200.",
+      "assertions": [
+        "edge.yaml exists",
+        "The Secret is named 'checkout-web-sec'",
+        "The Ingress is named 'checkout-web-ing'",
+        "Both resources are in the namespace 'storefront-stg'",
+        "The label acme.io/env is 'stg' on both resources",
+        "The label acme.io/cost-center is 'cc-2200' on both resources",
+        "The Ingress routes to the Service 'checkout-web'"
+      ],
+      "expected_skill": "k8s-resource-naming"
+    },
+    {
+      "id": "naming-cronjob-pvc",
+      "prompt": "Write Kubernetes manifests into a file named report.yaml for a nightly report job of the ledger app. Team: payments. Environment: dev. Cost center: 4127. Include a CronJob that runs every night at 02:00 with image registry.acme.example/ledger-report:0.9.0, and a 5Gi PersistentVolumeClaim that the job mounts at /data.",
+      "expected_output": "report.yaml with a CronJob named ledger-report-cron and a PersistentVolumeClaim named ledger-report-pvc, both in namespace payments-dev, with the required acme.io labels and acme.io/env=dev.",
+      "assertions": [
+        "report.yaml exists",
+        "The CronJob is named 'ledger-report-cron'",
+        "The PersistentVolumeClaim is named 'ledger-report-pvc'",
+        "Both resources are in the namespace 'payments-dev'",
+        "Both resources have the labels acme.io/team, acme.io/app, acme.io/env and acme.io/cost-center",
+        "The CronJob mounts the claim 'ledger-report-pvc' at /data"
+      ],
+      "expected_skill": "k8s-resource-naming"
+    }
+  ]
+}

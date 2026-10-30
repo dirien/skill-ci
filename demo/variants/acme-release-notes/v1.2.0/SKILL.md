@@ -4,12 +4,12 @@ description: Write release notes in the ACME house format. Use whenever the user
 license: Apache-2.0
 metadata:
   author: ACME Platform Team <platform@acme.example>
-  version: "1.2.0"
+  version: 1.2.0
 ---
 
 # ACME release notes
 
-This version is a deliberate regression for the demo. Its rules contradict the checks in `evals/evals.json`, so the pipeline should catch it.
+This version is a deliberate regression for the demo. Its rules contradict the checks in the eval cases, so the pipeline should catch it.
 
 1. Start with a level-one heading `# Release <version>`.
 2. Follow with a short friendly summary paragraph.

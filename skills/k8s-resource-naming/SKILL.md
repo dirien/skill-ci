@@ -4,7 +4,7 @@ description: Apply the ACME platform team's Kubernetes naming and labelling conv
 license: Apache-2.0
 metadata:
   author: ACME Platform Team <platform@acme.example>
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # ACME Kubernetes naming
@@ -38,7 +38,7 @@ The namespace is `<team>-<env>`, for example `payments-prd`.
 
 ## Labels
 
-Put these labels on every resource, in `metadata.labels`:
+Put these labels on every resource, in the `labels` map of its metadata:
 
 - `app.kubernetes.io/name`: the app name
 - `acme.io/team`: the owning team

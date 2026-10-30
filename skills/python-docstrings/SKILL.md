@@ -4,7 +4,7 @@ description: Write Python docstrings in Google style. Use whenever the user asks
 license: Apache-2.0
 metadata:
   author: ACME Platform Team <platform@acme.example>
-  version: "1.0.0"
+  version: 1.0.0
 ---
 
 # Python docstrings
