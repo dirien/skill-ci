@@ -33,7 +33,7 @@ spec:
             - --harbor-project=skills
             - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.3.0
             - --models-configmap=skill-ci-models
-            - --default-attempts=1
+            - --default-attempts=3
             - --helps-threshold=0.05
             - --hurts-threshold=-0.10
             - --promote-threshold=0.10

@@ -52,7 +52,7 @@ spec:
   agent: claude-code
   model: claude-haiku-5-5
   required: true
-  attempts: 1                       # trials per arm
+  attempts: 3                       # trials per arm (deployed default; one attempt is too noisy for the regression gate)
   trigger: push                     # push | model-change | manual
 status:
   phase: Pending                    # Pending | Running | Succeeded | Failed | Planned (dry run)

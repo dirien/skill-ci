@@ -49,7 +49,9 @@ controller:
     tag: "0.3.0"
     digest: ""
   modelsConfigMap: skill-ci-models
-  defaultAttempts: 1
+  # Attempts per arm. One attempt is too noisy for the regression gate: the same
+  # version scored 0.95 and 0.87 on two single-attempt runs.
+  defaultAttempts: 3
   # Lift thresholds, as strings to keep the trailing zero.
   thresholds:
     helps: "0.05"
