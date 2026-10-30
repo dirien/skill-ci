@@ -42,9 +42,9 @@ RUN python -m venv /opt/skillspector \
  && /opt/semgrep/bin/pip install --no-cache-dir "semgrep==${SEMGREP_VERSION}" \
  && ln -s /opt/semgrep/bin/semgrep /usr/local/bin/semgrep
 
-COPY skillevaluator-patch/skillevaluator-0.6.0-ack-import-path.patch /tmp/
+COPY skillevaluator-patch/skillevaluator-0.6.0-skill-ci.patch /tmp/
 RUN git clone --depth 1 --branch ${SKILLEVALUATOR_VERSION} https://github.com/NVIDIA/SkillEvaluator /opt/skillevaluator \
- && cd /opt/skillevaluator && patch -p1 < /tmp/skillevaluator-0.6.0-ack-import-path.patch \
+ && cd /opt/skillevaluator && patch -p1 < /tmp/skillevaluator-0.6.0-skill-ci.patch \
  && pip install --no-cache-dir "/opt/skillevaluator[tier3,security]" \
       "bandit==${BANDIT_VERSION}" "pip-audit==${PIP_AUDIT_VERSION}"
 

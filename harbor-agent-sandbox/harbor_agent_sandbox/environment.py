@@ -38,6 +38,13 @@ SA_NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespac
 HOSTNAME_FILE = Path("/etc/hostname")
 
 
+def _positive_int(name: str, value: str) -> int:
+    """Parse the positive integer in environment variable ``name``."""
+    if not value.isdigit() or int(value) < 1:
+        raise ValueError(f"{name} must be a positive integer, got {value!r}")
+    return int(value)
+
+
 class AgentSandboxEnvironment(ACKEnvironment):
     """One Agent Sandbox per Harbor trial."""
 
@@ -57,6 +64,25 @@ class AgentSandboxEnvironment(ACKEnvironment):
         if address := os.environ.get("HARBOR_BUILDKIT_ADDRESS"):
             self.use_buildkit = True
             self.buildkit_address = address
+        self._apply_size_override()
+
+    def _apply_size_override(self) -> None:
+        """Size the sandbox from ``HARBOR_SANDBOX_CPUS`` and ``HARBOR_SANDBOX_MEMORY_MB``.
+
+        ``skillevaluator validate`` has no ``--override-cpus`` or ``--override-memory-mb``, and
+        a skill task asks for 2 CPU and 4 GiB, which starves a small cluster. Like the BuildKit
+        address, the size comes from the environment, so it stays out of the per-run kwargs.
+        A memory limit set through ``memory_limit_multiplier`` keeps its ratio to the request.
+        """
+        if cpus := os.environ.get("HARBOR_SANDBOX_CPUS"):
+            self.cpu_request = str(_positive_int("HARBOR_SANDBOX_CPUS", cpus))
+        if memory := os.environ.get("HARBOR_SANDBOX_MEMORY_MB"):
+            memory_mb = _positive_int("HARBOR_SANDBOX_MEMORY_MB", memory)
+            if self.memory_limit:
+                old_request = int(self.memory_request.removesuffix("Mi"))
+                old_limit = int(self.memory_limit.removesuffix("Mi"))
+                self.memory_limit = f"{memory_mb * old_limit // old_request}Mi"
+            self.memory_request = f"{memory_mb}Mi"
 
     @staticmethod
     @override

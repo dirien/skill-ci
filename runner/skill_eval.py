@@ -1,11 +1,14 @@
 """Run one SkillEval: pull a skill with ORAS, check it through all SkillEvaluator tiers.
 
 The runner Job configures this entrypoint through environment variables (see
-CONTRACT.md, "Runner Job contract" and "All tiers and publication"). Tier 1
-(static and security) and Tier 2 (deduplication against the other skills in
-Harbor) run first as a cheap gate. Only when neither failed does the live Tier 3
-evaluation run. On completion the runner writes one JSON object to the container
-termination log and exits 0, or ``{"error": ...}`` and exits 1.
+CONTRACT.md, "Runner Job contract" and "All tiers and publication"). A first
+``skillevaluator validate --tiers 1,2`` (static and security checks, deduplication
+against the other skills in Harbor) is the cheap gate. Only when neither tier
+failed does a second ``skillevaluator validate`` run all three tiers, including
+the live Tier 3 evaluation, in one invocation: its report then carries
+SkillEvaluator's own publication assessment. On completion the runner writes one
+JSON object to the container termination log and exits 0, or ``{"error": ...}``
+and exits 1.
 """
 
 from __future__ import annotations
@@ -27,19 +30,14 @@ TERMINATION_LOG = "/dev/termination-log"
 MAX_MESSAGE_BYTES = 4000  # Kubernetes caps the termination message at 4096 bytes.
 REPORT_TYPE = "application/vnd.skillci.report.v1+json"
 MEDIA_TYPES = {".html": "text/html", ".json": "application/json", ".md": "text/markdown"}
-# Order of the files in the report referrer. report.html and result.json come from Tier 3 when it
-# ran and from the failing static tier otherwise; the tierN.* files are always the static reports.
-REPORT_FILES = (
-    "report.html",
-    "result.json",
-    "BENCHMARK.md",
-    "tier1.html",
-    "tier1.json",
-    "tier2.html",
-    "tier2.json",
-)
+# Order of the files in the report referrer. report.html and BENCHMARK.md are the combined
+# SkillEvaluator report of the last ``validate`` run (it holds the publication assessment);
+# result.json is the Tier 3 result when Tier 3 ran. validate.json (the combined JSON report)
+# and tier3.html (the Tier 3 report) are attached only when Tier 3 ran.
+REPORT_FILES = ("report.html", "result.json", "BENCHMARK.md", "validate.json", "tier3.html")
 SECRET_ENV = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY")
-STATIC_TIMEOUT_SEC = 900  # one Tier 1 or Tier 2 command, scanners and embedding calls included
+# The Tier 1 + 2 gate or one catalog build, scanners and embedding calls included.
+STATIC_TIMEOUT_SEC = 1200
 RETRY_DELAYS = (2, 5, 10)  # seconds to wait before each retry of a failed oras call
 MAX_FINDINGS = 5
 MAX_FINDING_CHARS = 200
@@ -55,7 +53,8 @@ DEFAULTS = {
     "SANDBOX_NAMESPACE": "skill-ci",
     "TASK_IMAGE_REGISTRY": "registry.digitalocean.com/skill-ci-dirien",
     "TASK_IMAGE_PULL_SECRET": "docr",
-    # Skill tasks write a few files; the 2 CPU / 4 GiB task default starves a small cluster.
+    # Skill tasks write a few files; the 2 CPU / 4 GiB task default starves a small cluster. The
+    # size reaches the sandbox as HARBOR_SANDBOX_CPUS / HARBOR_SANDBOX_MEMORY_MB (tool_env).
     "SANDBOX_CPUS": "1",
     "SANDBOX_MEMORY_MB": "2048",
     # Trials running at once per eval; the controller caps how many evals run at once.
@@ -127,12 +126,26 @@ def pull_skill(config: Mapping[str, str], dest: Path) -> Path:
 
 @dataclass
 class TierResult:
-    """Outcome of one static tier: its status, short findings and report files."""
+    """Outcome of one tier: its status (passed | failed | incomplete) and short findings."""
 
-    status: str  # passed | failed | incomplete
+    status: str
     findings: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ValidateReport:
+    """What one ``skillevaluator validate`` run reported.
+
+    ``tiers`` holds the Tier 1 and Tier 2 statuses; ``publication`` is SkillEvaluator's own
+    publication assessment mapped to ``passed | failed | incomplete``.
+    """
+
+    tiers: dict[str, str]
+    findings: list[str]
+    publication: str
     json_path: Path | None = None
     html_path: Path | None = None
+    benchmark_path: Path | None = None
 
 
 def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
@@ -141,9 +154,17 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     SkillEvaluator refuses to guess when several provider keys exist, so the
     chat and embeddings providers are named here. Anthropic has no embeddings
     API: Tier 2 embeds through OpenAI (or NVIDIA Build) when that key is present.
-    A value already in the environment wins.
+    A value already in the environment wins. The sandbox size travels the same way:
+    ``validate`` has no ``--override-cpus``, so the harbor_agent_sandbox environment reads
+    ``HARBOR_SANDBOX_CPUS`` and ``HARBOR_SANDBOX_MEMORY_MB`` (patch hunk 4 lets them through).
     """
     env = dict(environ)
+    for name, source in (
+        ("HARBOR_SANDBOX_CPUS", "SANDBOX_CPUS"),
+        ("HARBOR_SANDBOX_MEMORY_MB", "SANDBOX_MEMORY_MB"),
+    ):
+        if not env.get(name):
+            env[name] = env.get(source) or DEFAULTS[source]
     if not env.get("SKILL_EVAL_LLM_PROVIDER"):
         if env.get("ANTHROPIC_API_KEY"):
             env["SKILL_EVAL_LLM_PROVIDER"] = "anthropic"
@@ -157,30 +178,52 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     return env
 
 
-def tier1_command(config: Mapping[str, str], skill_dir: Path, out: Path) -> list[str]:
-    """Build the Tier 1 command: static, security and quality checks, no LLM calls.
+def validate_command(
+    config: Mapping[str, str],
+    skill_dir: Path,
+    out: Path,
+    *,
+    tiers: str,
+    catalog: Path | None = None,
+    results: Path | None = None,
+) -> list[str]:
+    """Build a ``skillevaluator validate`` command line.
 
-    ``validate --tiers 1`` runs schema, version, security (SkillSpector), pii,
-    license, code-integrity (Bandit, Semgrep, Gitleaks), unicode, quality and
-    lint, and keeps going after the first failure so the report lists everything.
+    ``tiers`` is ``1,2`` for the gate (static, security, quality, lint and deduplication; no
+    LLM calls in Tier 1, no sandboxes) and ``1,2,3`` for the full run that adds the live Tier 3
+    evaluation, with ``results`` as the Harbor results directory. ``--no-autopilot`` keeps the
+    skill's own ``evals/`` and never generates a dataset, exactly as ``tier3 evaluate`` did.
+    ``catalog`` makes Tier 2 compare the skill with the other skills in Harbor
+    (patch hunks 1 to 3). ``--continue-on-failure`` keeps the reports complete.
     """
-    return [
+    cmd = [
         "skillevaluator", "validate", str(skill_dir),
-        "--tiers", "1",
+        "--tiers", tiers,
         "--no-llm",
         "--profile", config["TIER1_PROFILE"],
         "--continue-on-failure",
         "-r", "json,html",
         "-o", str(out),
     ]  # fmt: skip
-
-
-def tier2_command(skill_dir: Path, out: Path, catalog: Path | None) -> list[str]:
-    """Build the Tier 2 command: intra-skill dedup, plus a catalog comparison when given."""
-    cmd = ["skillevaluator", "tier2", str(skill_dir)]
     if catalog is not None:
         cmd += ["--catalog", str(catalog)]
-    return [*cmd, "-r", "json,html", "-o", str(out)]
+    if "3" in tiers.split(","):
+        if results is None:
+            raise ValueError("a run with Tier 3 needs a results directory")
+        cmd += [
+            "--no-autopilot",
+            "--agents", config["AGENT"],
+            "--env-mode", "ack",
+            "--ek", f"namespace={config['SANDBOX_NAMESPACE']}",
+            "--ek", f"registry={config['TASK_IMAGE_REGISTRY']}",
+            "--ek", f"image_pull_secret={config['TASK_IMAGE_PULL_SECRET']}",
+            "--ek", "skip_image_check=false",
+            "--agent-model", f"{config['AGENT']}={config['MODEL']}",
+            "--n-attempts", config["ATTEMPTS"],
+            "--n-concurrent", config["TRIAL_CONCURRENCY"],
+            "--results-dir", str(results),
+        ]  # fmt: skip
+    return cmd
 
 
 def catalog_build_command(catalog_dir: Path, catalog: Path, out: Path) -> list[str]:
@@ -305,20 +348,36 @@ def finding_message(finding: Mapping[str, Any]) -> str:
     return f"{text} ({where})" if where else text
 
 
-def report_findings(report: Mapping[str, Any], tier: str) -> list[str]:
-    """Extract short findings from a SkillEvaluator JSON report.
+def result_tier(result: Mapping[str, Any]) -> int | None:
+    """Return the tier (1, 2 or 3) a ``results[]`` entry belongs to, if the report says."""
+    tier = (result.get("gating") or {}).get("tier")
+    if tier is None:
+        tier = (result.get("publication_evidence") or {}).get("tier")
+    return tier if isinstance(tier, int) else None
 
-    Reads ``results[]``: every validator whose ``status`` is not ``passed`` yields
-    its high and critical ``findings[]`` (rule name, message, file and line) or,
-    when it has none, its blocking ``legacy.errors``. ``publication_evidence.check_id``
-    names the check (``security``, ``pii``, ``similarity`` ...).
+
+def report_findings(report: Mapping[str, Any], tier: str) -> list[str]:
+    """Extract short findings for ``tier`` (``tier1`` or ``tier2``) from a SkillEvaluator report.
+
+    Reads ``results[]``: every validator of that tier whose ``status`` is not ``passed``
+    yields its high and critical ``findings[]`` (rule name, message, file and line) or, when
+    it has none, its blocking ``legacy.errors``. ``publication_evidence.check_id`` names the
+    check (``security``, ``pii``, ``similarity`` ...). A skipped validator names its skip
+    reason instead, because a skipped required check leaves the tier incomplete.
     """
     out: list[str] = []
     for result in report.get("results", []):
-        if result.get("status") in ("passed", "skipped") or result.get("skipped"):
+        if f"tier{result_tier(result)}" != tier:
+            continue
+        skipped = result.get("status") == "skipped" or result.get("skipped")
+        if result.get("status") == "passed":
             continue
         evidence = result.get("publication_evidence") or {}
         check = evidence.get("check_id") or str(result.get("validator", "check")).lower()
+        if skipped:
+            reason = str(result.get("skip_reason") or "skipped")
+            out.append(finding_text(tier, check, reason.splitlines()[0]))
+            continue
         serious = [
             f
             for f in result.get("findings", [])
@@ -335,83 +394,97 @@ def report_findings(report: Mapping[str, Any], tier: str) -> list[str]:
     return out
 
 
-def read_tier(
-    out: Path, pattern: str, tier: str, proc: subprocess.CompletedProcess | None
-) -> TierResult:
-    """Turn the report a tier command wrote under ``out`` into a :class:`TierResult`."""
-    json_path = newest(out, pattern)
-    html_path = newest(out, pattern.replace(".json", ".html"))
+def tier_status(report: Mapping[str, Any], tier: int) -> str:
+    """Return ``passed``, ``failed`` or ``incomplete`` for one tier of a ``validate`` report.
+
+    Failed beats incomplete. A tier with no results, or whose results were all skipped
+    (Tier 2 without an embeddings provider), is incomplete: SkillEvaluator requires it.
+    """
+    results = [r for r in report.get("results", []) if result_tier(r) == tier]
+    statuses = {r.get("status") for r in results}
+    if "failed" in statuses:
+        return "failed"
+    if (
+        not results
+        or "incomplete" in statuses
+        or any(r.get("incomplete_scans") for r in results)
+        or statuses <= {"skipped"}
+    ):
+        return "incomplete"
+    return "passed"
+
+
+def publication_of(report: Mapping[str, Any]) -> str:
+    """Map SkillEvaluator's publication assessment to ``passed``, ``failed`` or ``incomplete``.
+
+    The report's ``publication.status`` is ``pass``, ``fail``, ``incomplete`` or ``neutral``
+    (Tier 3 ran, but the skill does not clearly beat the baseline). ``neutral`` maps to
+    ``passed``: the evidence is complete and nothing failed; the lift is the controller's
+    business (verdict ``Neutral``). Anything unrecognised is ``incomplete``.
+    """
+    publication = report.get("publication")
+    status = publication.get("status") if isinstance(publication, dict) else None
+    status = status or report.get("publication_status")
+    return {"pass": "passed", "neutral": "passed", "fail": "failed"}.get(str(status), "incomplete")
+
+
+def read_validate(out: Path, proc: subprocess.CompletedProcess | None) -> ValidateReport:
+    """Turn the report a ``validate`` run wrote under ``out`` into a :class:`ValidateReport`."""
+    json_path = newest(out, "skillevaluator-output-*.json")
+    html_path = newest(out, "skillevaluator-output-*.html")
+    benchmark = out / "BENCHMARK.md"
+    benchmark_path = benchmark if benchmark.is_file() else None
+    incomplete = {"tier1": "incomplete", "tier2": "incomplete"}
     if json_path is None:
         reason = "timed out" if proc is None else (proc.stderr or proc.stdout).strip()
         last = reason.splitlines()[-1] if reason else f"exited {proc.returncode} without a report"
-        return TierResult("incomplete", [finding_text(tier, "run", last)], None, html_path)
+        finding = finding_text("tier1", "run", last)
+        return ValidateReport(incomplete, [finding], "incomplete", None, html_path, benchmark_path)
     try:
         report = json.loads(json_path.read_text())
     except (OSError, ValueError) as err:
-        return TierResult("incomplete", [finding_text(tier, "run", f"unreadable report: {err}")])
-    status = report.get("overall_status")
-    if status not in ("passed", "failed", "incomplete"):
-        status = "passed" if report.get("overall_passed") is True else "failed"
-    findings = report_findings(report, tier) if status != "passed" else []
-    return TierResult(status, findings, json_path, html_path)
+        finding = finding_text("tier1", "run", f"unreadable report: {err}")
+        return ValidateReport(incomplete, [finding], "incomplete", None, html_path, benchmark_path)
+    tiers = {f"tier{n}": tier_status(report, n) for n in (1, 2)}
+    findings = [
+        finding
+        for tier, status in tiers.items()
+        if status != "passed"
+        for finding in (report_findings(report, tier) or [finding_text(tier, "run", status)])
+    ]
+    return ValidateReport(
+        tiers, findings, publication_of(report), json_path, html_path, benchmark_path
+    )
 
 
-def run_tier1(
-    config: Mapping[str, str], skill_dir: Path, work: Path, env: Mapping[str, str]
-) -> TierResult:
-    """Run Tier 1 on the pulled skill and read its verdict."""
-    out = work / "tier1"
-    proc = run_static(tier1_command(config, skill_dir, out), env)
-    return read_tier(out, "skillevaluator-output-*.json", "tier1", proc)
+def prepare_catalog(
+    config: Mapping[str, str], work: Path, env: Mapping[str, str]
+) -> tuple[bool, Path | None, list[str]]:
+    """Prepare the Tier 2 comparison catalog and say whether Tier 2 can run.
 
-
-def run_tier2(
-    config: Mapping[str, str], skill_dir: Path, work: Path, env: Mapping[str, str]
-) -> TierResult:
-    """Run Tier 2: compare the skill with itself and with the other skills in Harbor."""
+    Returns ``(tier2, catalog, findings)``. ``tier2`` is false when Tier 2 cannot produce
+    trustworthy evidence (no embeddings provider, or a catalog that cannot be built); the
+    runs then leave Tier 2 out, SkillEvaluator calls the publication incomplete, and the
+    finding says why. ``catalog`` is ``None`` when there are no other skills to compare with.
+    """
     if not env.get("SKILL_EVAL_EMBEDDING_PROVIDER"):
         reason = "no embeddings provider: Anthropic has none, set OPENAI_API_KEY in llm-keys"
-        return TierResult("incomplete", [finding_text("tier2", "embeddings", reason)])
-    catalog_file: Path | None = None
+        return False, None, [finding_text("tier2", "embeddings", reason)]
     catalog_dir = work / "catalog" / "skills"
-    others = pull_catalog(config, catalog_dir)
-    if others:
-        catalog_file = work / "catalog.json"
-        proc = run_static(
-            catalog_build_command(catalog_dir, catalog_file, work / "catalog-report"), env
-        )
-        if not catalog_file.is_file():
-            detail = "timed out" if proc is None else (proc.stderr or proc.stdout).strip()
-            last = detail.splitlines()[-1] if detail else f"exited {proc.returncode}"
-            return TierResult("incomplete", [finding_text("tier2", "catalog", last)])
-    else:
+    if not pull_catalog(config, catalog_dir):
         print(
             "skill-eval: no other skills to compare with; Tier 2 checks the skill alone", flush=True
         )
-    out = work / "tier2"
-    proc = run_static(tier2_command(skill_dir, out, catalog_file), env)
-    return read_tier(out, "skillevaluator-tier2.json", "tier2", proc)
-
-
-def evaluate_command(config: Mapping[str, str], skill_dir: Path, results: Path) -> list[str]:
-    """Build the ``skillevaluator tier3 evaluate`` command line."""
-    agent = config["AGENT"]
-    return [
-        "skillevaluator", "tier3", "evaluate", str(skill_dir),
-        "--agents", agent,
-        "--env-mode", "ack",
-        "--ek", f"namespace={config['SANDBOX_NAMESPACE']}",
-        "--ek", f"registry={config['TASK_IMAGE_REGISTRY']}",
-        "--ek", f"image_pull_secret={config['TASK_IMAGE_PULL_SECRET']}",
-        "--ek", "skip_image_check=false",
-        "--agent-model", f"{agent}={config['MODEL']}",
-        "--n-attempts", config["ATTEMPTS"],
-        "--override-cpus", config["SANDBOX_CPUS"],
-        "--override-memory-mb", config["SANDBOX_MEMORY_MB"],
-        "--n-concurrent", config["TRIAL_CONCURRENCY"],
-        "--results-dir", str(results),
-        "--progress", "plain",
-    ]  # fmt: skip
+        return True, None, []
+    catalog_file = work / "catalog.json"
+    proc = run_static(
+        catalog_build_command(catalog_dir, catalog_file, work / "catalog-report"), env
+    )
+    if not catalog_file.is_file():
+        detail = "timed out" if proc is None else (proc.stderr or proc.stdout).strip()
+        last = detail.splitlines()[-1] if detail else f"exited {proc.returncode}"
+        return False, None, [finding_text("tier2", "catalog", last)]
+    return True, catalog_file, []
 
 
 def newest_result(results: Path) -> Path:
@@ -461,41 +534,31 @@ def tier3_tier(results: Path) -> TierResult:
     return TierResult("incomplete", [finding_text("tier3", "execution", errors)])
 
 
-def publication_status(tiers: Mapping[str, str]) -> str:
-    """Combine the tier statuses: ``failed`` if any failed, ``passed`` only if all passed.
+def build_bundle(bundle: Path, report: ValidateReport, run_dir: Path | None) -> list[str]:
+    """Copy the reports of the last ``validate`` run into ``bundle``; return the file names.
 
-    SkillEvaluator's own assessment needs one command that covers every tier, and
-    ``validate`` can neither size the sandboxes nor compare against a catalog. The
-    runner therefore applies the same rule to the per-tier statuses.
-    """
-    values = set(tiers.values())
-    if "failed" in values:
-        return "failed"
-    return "passed" if values == {"passed"} else "incomplete"
-
-
-def build_bundle(
-    bundle: Path, tier1: TierResult, tier2: TierResult, run_dir: Path | None
-) -> list[str]:
-    """Copy the reports of every tier that ran into ``bundle`` and return the file names.
-
-    ``report.html`` and ``result.json`` are the Tier 3 report when Tier 3 ran; when
-    it was skipped they are the report of the first tier that did not pass.
+    ``report.html`` and ``BENCHMARK.md`` are the combined SkillEvaluator report (with its
+    publication assessment) of that run. With Tier 3, ``result.json`` is the Tier 3 result the
+    controller reads its dimension scores from, and ``validate.json`` and ``tier3.html`` are
+    the combined JSON and the Tier 3 report; without it ``result.json`` is the combined JSON,
+    so a Rejected run shows the failing checks.
     """
     bundle.mkdir(parents=True, exist_ok=True)
+    sources: dict[str, Path | None] = {
+        "report.html": report.html_path,
+        "result.json": report.json_path,
+        "BENCHMARK.md": report.benchmark_path,
+    }
     if run_dir is not None:
-        for name in ("report.html", "result.json", "BENCHMARK.md"):
-            if (run_dir / name).is_file():
-                shutil.copy(run_dir / name, bundle / name)
-    else:
-        lead = next((t for t in (tier1, tier2) if t.status != "passed"), tier1)
-        for src, name in ((lead.html_path, "report.html"), (lead.json_path, "result.json")):
-            if src is not None:
-                shutil.copy(src, bundle / name)
-    for label, tier in (("tier1", tier1), ("tier2", tier2)):
-        for src, ext in ((tier.html_path, ".html"), (tier.json_path, ".json")):
-            if src is not None:
-                shutil.copy(src, bundle / f"{label}{ext}")
+        sources |= {
+            "report.html": report.html_path or run_dir / "report.html",
+            "result.json": run_dir / "result.json",
+            "validate.json": report.json_path,
+            "tier3.html": run_dir / "report.html",
+        }
+    for name, src in sources.items():
+        if src is not None and src.is_file():
+            shutil.copy(src, bundle / name)
     return [name for name in REPORT_FILES if (bundle / name).is_file()]
 
 
@@ -528,6 +591,20 @@ def attach_report(
     return found.group(1)
 
 
+def final_publication(report: ValidateReport, tiers: Mapping[str, str]) -> str:
+    """Return the ``publication`` of the termination message.
+
+    It is SkillEvaluator's assessment, with two guards in the safe direction: a failed tier
+    is a failure (SkillEvaluator reports ``incomplete`` first when something else is missing),
+    and ``passed`` needs every tier to have passed.
+    """
+    if "failed" in tiers.values():
+        return "failed"
+    if report.publication == "passed" and set(tiers.values()) != {"passed"}:
+        return "incomplete"
+    return report.publication
+
+
 def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
     """Pull the skill, run Tiers 1 to 3 and return the termination payload."""
     config = load_config(environ)
@@ -536,37 +613,51 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         # skills/<name> is the layout SkillEvaluator expects for a skill.
         skill_dir = pull_skill(config, work / "skills")
         env = tool_env(environ)
-        tier1 = run_tier1(config, skill_dir, work, env)
-        tier2 = run_tier2(config, skill_dir, work, env)
-        tiers = {"tier1": tier1.status, "tier2": tier2.status, "tier3": "skipped"}
-        findings = tier1.findings + tier2.findings
+        tier2, catalog, notes = prepare_catalog(config, work, env)
+        static = "1,2" if tier2 else "1"
+        # The gate: Tier 1 and 2 only, so a Rejected skill costs no sandbox and no tokens.
+        out = work / "validate-static"
+        cmd = validate_command(config, skill_dir, out, tiers=static, catalog=catalog)
+        report = read_validate(out, run_static(cmd, env))
         payload: dict[str, Any] = {"agent": config["AGENT"], "model": config["MODEL"]}
         run_dir: Path | None = None
-        if "failed" in (tier1.status, tier2.status):
+        tiers = {**report.tiers, "tier3": "skipped"}
+        findings = report.findings
+        if "failed" in (report.tiers["tier1"], report.tiers["tier2"]):
             print("skill-eval: Tier 1 or Tier 2 failed, skipping Tier 3", flush=True)
         else:
+            # One validate run over every tier: its report carries SkillEvaluator's own
+            # publication assessment. Output streams straight to the container log. A non-zero
+            # exit is not fatal: a failed trial can still leave scores for the other arm.
             results = work / "results"
-            # Output streams straight to the container log. A non-zero exit is not
-            # fatal: a failed trial can still leave scores for the other arm.
-            cmd = evaluate_command(config, skill_dir, results)
+            out = work / "validate"
+            cmd = validate_command(
+                config, skill_dir, out, tiers=f"{static},3", catalog=catalog, results=results
+            )
             proc = subprocess.run(cmd, check=False, env=env)
             try:
                 payload = read_scores(results, config["AGENT"])
             except EvalError as err:
                 raise EvalError(f"skillevaluator exited {proc.returncode}: {err}") from err
             run_dir = newest_result(results).parent
+            full = read_validate(out, proc)
+            if full.json_path is None:  # Tier 3 left scores but no combined report
+                full = ValidateReport(report.tiers, full.findings, "incomplete", None, None, None)
+            report = full
             tier3 = tier3_tier(results)
-            tiers["tier3"] = tier3.status
-            findings += tier3.findings
-        publication = publication_status(tiers)
+            tiers = {**report.tiers, "tier3": tier3.status}
+            findings = report.findings + tier3.findings
+        if not tier2:
+            findings = notes + [f for f in findings if not f.startswith("tier2/")]
+        publication = final_publication(report, tiers)
         annotations = {"skillci.dev/model": config["MODEL"], "skillci.dev/agent": config["AGENT"]}
         if "lift" in payload:
             annotations["skillci.dev/lift"] = f"{payload['lift']:+.2f}"
         annotations["skillci.dev/publication"] = publication
         bundle = work / "bundle"
-        files = build_bundle(bundle, tier1, tier2, run_dir)
-        if report := attach_report(config, bundle, files, annotations):
-            payload["report"] = report
+        files = build_bundle(bundle, report, run_dir)
+        if digest := attach_report(config, bundle, files, annotations):
+            payload["report"] = digest
         payload |= {"tiers": tiers, "publication": publication, "findings": findings[:MAX_FINDINGS]}
         return payload
 

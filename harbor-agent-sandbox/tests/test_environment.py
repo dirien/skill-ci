@@ -33,6 +33,13 @@ def make_env(tmp_path: Path, **kwargs) -> AgentSandboxEnvironment:
     )
 
 
+@pytest.fixture(autouse=True)
+def clean_size_env(monkeypatch):
+    """Keep the host's sandbox size variables out of every test."""
+    monkeypatch.delenv("HARBOR_SANDBOX_CPUS", raising=False)
+    monkeypatch.delenv("HARBOR_SANDBOX_MEMORY_MB", raising=False)
+
+
 def pod_spec(manifest: dict) -> dict:
     """Return the pod spec of a Sandbox manifest."""
     return manifest["spec"]["podTemplate"]["spec"]
@@ -107,6 +114,52 @@ def test_buildkit_address_from_environment(tmp_path, monkeypatch, env_value, use
     env = make_env(tmp_path)
     assert env.use_buildkit is use_buildkit
     assert env.buildkit_address == address
+
+
+@pytest.mark.parametrize(
+    ("cpus", "memory_mb", "kwargs", "requests", "limits"),
+    [
+        (None, None, {}, {"cpu": "1", "memory": "2048Mi"}, None),
+        ("2", None, {}, {"cpu": "2", "memory": "2048Mi"}, None),
+        (None, "1024", {}, {"cpu": "1", "memory": "1024Mi"}, None),
+        ("1", "3072", {}, {"cpu": "1", "memory": "3072Mi"}, None),
+        # A task that asked for 4 GiB with a 1.5x limit: the limit follows the new request.
+        (
+            "1",
+            "2048",
+            {"memory_limit_multiplier": 1.5},
+            {"cpu": "1", "memory": "2048Mi"},
+            {"memory": "3072Mi"},
+        ),
+    ],
+)
+def test_sandbox_size_from_environment(
+    tmp_path, monkeypatch, cpus, memory_mb, kwargs, requests, limits
+):
+    """HARBOR_SANDBOX_CPUS and HARBOR_SANDBOX_MEMORY_MB override the task's resources."""
+    if cpus:
+        monkeypatch.setenv("HARBOR_SANDBOX_CPUS", cpus)
+    if memory_mb:
+        monkeypatch.setenv("HARBOR_SANDBOX_MEMORY_MB", memory_mb)
+    (container,) = pod_spec(make_env(tmp_path, **kwargs)._sandbox_manifest())["containers"]
+    assert container["resources"]["requests"] == requests
+    assert container["resources"].get("limits") == limits
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("HARBOR_SANDBOX_CPUS", "0"),
+        ("HARBOR_SANDBOX_CPUS", "two"),
+        ("HARBOR_SANDBOX_MEMORY_MB", "-1"),
+        ("HARBOR_SANDBOX_MEMORY_MB", "2Gi"),
+    ],
+)
+def test_sandbox_size_rejects_bad_values(tmp_path, monkeypatch, name, value):
+    """A size that is not a positive integer fails at construction, not in the cluster."""
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match=name):
+        make_env(tmp_path)
 
 
 def test_custom_api_requires_started_client(tmp_path):

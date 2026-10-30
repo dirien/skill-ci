@@ -1,0 +1,86 @@
+Local patch for NVIDIA SkillEvaluator v0.6.0 (applied by runner/Dockerfile with `patch -p1`).
+Regenerate: fetch src/skillevaluator/cli.py and src/skillevaluator/tier3/harbor/runner.py at
+tag v0.6.0, edit, then `diff -u a/<file> b/<file>`. Each hunk, in file order:
+
+cli.py
+  1. `validate --catalog FILE` (option): a saved Tier 2 catalog (`similarity-check --save-catalog`).
+     Without it validate compares the skill only with itself, so a skill that duplicates another
+     skill in the registry would pass Tier 2.
+  2. `validate` signature: receives the new `catalog` parameter.
+  3. `validate` Tier 2 stage: after the intra-skill dedup, runs the same inter-skill
+     similarity check as `skillevaluator tier2 --catalog` (threshold 0.75) and folds its results
+     into Tier 2, so one `validate` run covers Tier 1, Tier 2 (with catalog) and Tier 3 and the
+     publication assessment of its report is complete.
+
+tier3/harbor/runner.py
+  4. Environment allowlist for `--env-mode ack`: lets HARBOR_BUILDKIT_ADDRESS (shared BuildKit),
+     HARBOR_SANDBOX_CPUS and HARBOR_SANDBOX_MEMORY_MB (sandbox size, read by
+     harbor_agent_sandbox.AgentSandboxEnvironment) reach Harbor. `validate` has no
+     --override-cpus/--override-memory-mb, so the size travels in the environment.
+  5. Command builder: SKILLEVALUATOR_ACK_ENV_IMPORT_PATH replaces the `ack` environment type with
+     an import path, e.g. harbor_agent_sandbox:AgentSandboxEnvironment (Agent Sandbox instead of
+     bare pods).
+
+--- a/src/skillevaluator/cli.py
++++ b/src/skillevaluator/cli.py
+@@ -1639,6 +1639,14 @@
+     help="Make Tier 2 findings gate the exit code. Default: blocking.",
+ )
+ @click.option(
++    "--catalog",
++    type=click.Path(exists=True, dir_okay=False, path_type=Path),
++    default=None,
++    cls=GroupedOption,
++    help_group=_TIER2_GROUP,
++    help="Saved JSON catalog for inter-skill comparison, added to the Tier 2 intra-skill checks.",
++)
++@click.option(
+     "--tier3/--no-tier3",
+     "--agent-eval/--no-agent-eval",
+     "agent_eval",
+@@ -1843,6 +1851,7 @@
+     policy_path: Path | None,
+     dedup: bool,
+     block_on_dedup: bool | None,
++    catalog: Path | None,
+     agent_eval: bool | None,
+     block_on_agent_eval: bool | None,
+     autopilot: bool | None,
+@@ -2080,6 +2089,11 @@
+         view.tier_start(tier2_index)
+         view.tier_progress(tier2_index, [stage_hint_row("stages", "chunk · embed · cluster · llm-judge")])
+         tier2_results = _run_dedup_or_skip(target_path)
++        if catalog is not None and not all(r.metadata.get("skipped") for r in tier2_results):
++            from skillevaluator.tier2.commands import run_similarity_check
++
++            tier2_results.extend(run_similarity_check(target_path, threshold=0.75, catalog=catalog))
++            sanitize_tier2_results(tier2_results, target_path, catalog)
+         results.extend(tier2_results)
+         tier2_gate_results.extend(tier2_results)
+         if quiet:
+--- a/src/skillevaluator/tier3/harbor/runner.py
++++ b/src/skillevaluator/tier3/harbor/runner.py
+@@ -1012,6 +1012,9 @@
+     ),
+     "ack": _DOCKER_HOST_ENV_VARS
+     | {
++        "HARBOR_BUILDKIT_ADDRESS",
++        "HARBOR_SANDBOX_CPUS",
++        "HARBOR_SANDBOX_MEMORY_MB",
+         "KUBECONFIG",
+         "KUBERNETES_SERVICE_HOST",
+         "KUBERNETES_SERVICE_PORT",
+@@ -1710,7 +1713,12 @@
+             env_import_path = SECURE_DOCKER_ENV_IMPORT_PATH
+         command.extend(["--env", env_import_path])
+     else:
+-        command.extend(["--agent", agent_import_path or agent, "--env", harbor_environment_type(env_mode)])
++        env_type = harbor_environment_type(env_mode)
++        # A Kubernetes backend can be swapped for a compatible subclass, for
++        # example harbor_agent_sandbox:AgentSandboxEnvironment.
++        if env_mode == "ack" and os.environ.get("SKILLEVALUATOR_ACK_ENV_IMPORT_PATH"):
++            env_type = os.environ["SKILLEVALUATOR_ACK_ENV_IMPORT_PATH"]
++        command.extend(["--agent", agent_import_path or agent, "--env", env_type])
+     for name, value in sorted(_harbor_agent_kwargs(agent, model, env_mode).items()):
+         command.extend(["--ak", encode_environment_kwarg(name, value)])
+     for name, value in sorted(validated_environment_kwargs.items()):

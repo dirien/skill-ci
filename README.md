@@ -13,7 +13,7 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 | DOKS + DOCR | Cluster and image registry (DOCR professional tier) | Kubernetes 1.36.5 |
 | [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
 | skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.4.1 (Helm chart `charts/skill-ci-controller`) |
-| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, report upload | 0.4.1 |
+| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, report upload | 0.5.0 |
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
 
@@ -29,7 +29,7 @@ charts/                Helm chart of the controller (what `make deploy` installs
 config/                Controller manifests (CRD source, RBAC, Deployment, Service), plain `kubectl apply -k` alternative
 reports/               Eval reports downloaded by `make report`
 harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox
-skillevaluator-patch/  Two-hunk patch so SkillEvaluator can use that environment
+skillevaluator-patch/  Five-hunk patch: that environment, its sizing, and a Tier 2 catalog for validate
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
 ```
 
@@ -45,7 +45,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | --- | --- |
 | `make up` | `pulumi up`: cluster, registry, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
 | `make docr-login` | Writes DOCR push credentials from the cluster to `~/.cache/skill-ci/docker` (used by `make build` when present) |
-| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.4.1`, `RUNNER_TAG=0.4.1`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
+| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.4.1`, `RUNNER_TAG=0.5.0`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
 | `make deploy` | Applies the CRD and installs the controller with its Helm chart (`helm upgrade --install --take-ownership`), pinning the controller and runner tags |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |
@@ -121,7 +121,7 @@ Check the datasets without any LLM call: `make check-skills`.
 
 ### Tiers and scanners in the runner
 
-The runner image evaluates every skill version through all three SkillEvaluator tiers (see `CONTRACT.md`, "All tiers and publication"). Tier 1 (`skillevaluator validate <skill> --tiers 1 --no-llm --profile external --continue-on-failure`) and Tier 2 (`skillevaluator tier2 <skill> --catalog <catalog.json>`, the catalog being the other skills of the Harbor project at `stable`, else at their newest `vX.Y.Z`) run first; a failure there skips Tier 3. Tier 1 is only trustworthy with its scanners, so the image pins them: Gitleaks 8.30.1 (binary, sha256-checked), SkillSpector v2.12.0 and Semgrep 1.183.0 (each in its own virtualenv, they pin conflicting click versions), Bandit 1.9.4 and pip-audit 2.10.1 (SkillEvaluator's `security` extra). Without them SkillEvaluator marks Tier 1 `incomplete`. Tier 2 needs an embeddings provider, and Anthropic has none: put an `openai` key into secret `llm-keys` or Tier 2 reports `incomplete`.
+The runner image evaluates every skill version through all three SkillEvaluator tiers (see `CONTRACT.md`, "All tiers and publication"). The gate is `skillevaluator validate <skill> --tiers 1,2 --no-llm --profile external --continue-on-failure --catalog <catalog.json>` (Tier 1 static and security checks, Tier 2 deduplication; the catalog holds the other skills of the Harbor project at `stable`, else at their newest `vX.Y.Z`); a failure there skips Tier 3. Otherwise one more `validate --tiers 1,2,3` run adds the live Tier 3 evaluation, so SkillEvaluator's own report (`report.html`, `BENCHMARK.md`) carries a complete publication assessment, which the runner reads from `publication.status`. Two patch hunks make that possible: `validate --catalog`, and the sandbox size (`SANDBOX_CPUS`, `SANDBOX_MEMORY_MB`) reaching the sandbox environment as `HARBOR_SANDBOX_CPUS` and `HARBOR_SANDBOX_MEMORY_MB`, because `validate` has no `--override-cpus`. Tier 1 is only trustworthy with its scanners, so the image pins them: Gitleaks 8.30.1 (binary, sha256-checked), SkillSpector v2.12.0 and Semgrep 1.183.0 (each in its own virtualenv, they pin conflicting click versions), Bandit 1.9.4 and pip-audit 2.10.1 (SkillEvaluator's `security` extra). Without them SkillEvaluator marks Tier 1 `incomplete`. Tier 2 needs an embeddings provider, and Anthropic has none: put an `openai` key into secret `llm-keys` or Tier 2 reports `incomplete`.
 
 The profile is SkillEvaluator's built-in `external`, the only one it ships. For skills published to an internal platform it asks for nothing the demo skills lack (a `Name <email>` author, a permissive license, no blocked licenses) and keeps license findings blocking. Override with `TIER1_PROFILE`.
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Install or upgrade the controller with its Helm chart (charts/skill-ci-controller).
-#   CONTROLLER_TAG=0.4.1 RUNNER_TAG=0.4.1 demo/deploy.sh
+#   CONTROLLER_TAG=0.4.1 RUNNER_TAG=0.5.0 demo/deploy.sh
 # The first run adopts resources applied earlier with `kubectl apply -k config/`.
 set -euo pipefail
 # shellcheck source=demo/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 controller_tag="${CONTROLLER_TAG:-0.4.1}"
-runner_tag="${RUNNER_TAG:-0.4.1}"
+runner_tag="${RUNNER_TAG:-0.5.0}"
 chart="${ROOT_DIR}/charts/skill-ci-controller"
 need kubectl
 need helm

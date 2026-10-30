@@ -98,7 +98,7 @@ keys are rejected.
 | `controller.namespace` | `""` (release namespace) | `--namespace` |
 | `controller.harborUrl` | `http://harbor.harbor.svc.cluster.local` | `--harbor-url` |
 | `controller.harborProject` | `skills` | `--harbor-project` |
-| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.4.1` / `""` | `--runner-image` |
+| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.5.0` / `""` | `--runner-image` |
 | `controller.modelsConfigMap` | `skill-ci-models` | `--models-configmap` |
 | `controller.defaultAttempts` | `1` | `--default-attempts` |
 | `controller.thresholds.helps` | `"0.05"` | `--helps-threshold` |
