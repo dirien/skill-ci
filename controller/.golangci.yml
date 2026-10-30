@@ -1,0 +1,47 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - revive
+    - gosec
+    - errorlint
+    - wrapcheck
+    - misspell
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+            - sayRepetitiveInsteadOfStutters
+    wrapcheck:
+      # controller-runtime helpers return the error they were given.
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - client.IgnoreNotFound(
+  exclusions:
+    rules:
+      # Tests assert on values instead of wrapping errors.
+      - path: _test\.go
+        linters:
+          - wrapcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/dirien/skill-ci

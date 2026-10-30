@@ -1,0 +1,40 @@
+# Identity of the runner Jobs: they create one Agent Sandbox per trial.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["docr"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+subjects:
+  - kind: ServiceAccount
+    name: skill-eval-runner
+    namespace: skill-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: skill-eval-runner

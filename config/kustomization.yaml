@@ -1,0 +1,15 @@
+# kubectl apply -k config/
+# Not included: the skill-ci namespace, the secrets (llm-keys, docr, harbor-credentials,
+# harbor-pull, harbor-webhook), the skill-ci-models ConfigMap and SkillEval objects.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: skill-ci
+resources:
+  - crd/skillci.dev_skillevals.yaml
+  - rbac/controller.yaml
+  - rbac/runner.yaml
+  - manager/deployment.yaml
+  - manager/service.yaml
+images:
+  - name: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller
+    newTag: 0.1.0

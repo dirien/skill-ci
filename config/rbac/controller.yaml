@@ -1,0 +1,54 @@
+# Identity and permissions of the skill-ci controller. Everything is namespaced.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: skill-ci-controller
+  namespace: skill-ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: skill-ci-controller
+  namespace: skill-ci
+rules:
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals/status"]
+    verbs: ["get", "update", "patch"]
+  # Needed to set blockOwnerDeletion on the Jobs it owns.
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # The model list: read it, and record the last-applied copy in an annotation.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Only used with --leader-elect.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: skill-ci-controller
+  namespace: skill-ci
+subjects:
+  - kind: ServiceAccount
+    name: skill-ci-controller
+    namespace: skill-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: skill-ci-controller

@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skill-ci-controller
+  namespace: skill-ci
+  labels:
+    app.kubernetes.io/name: skill-ci-controller
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skill-ci-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: skill-ci-controller
+    spec:
+      serviceAccountName: skill-ci-controller
+      imagePullSecrets:
+        - name: docr
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.1.0
+          args:
+            - --namespace=skill-ci
+            - --harbor-url=http://harbor.harbor.svc.cluster.local
+            - --harbor-project=skills
+            - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.2.0
+            - --models-configmap=skill-ci-models
+            - --default-attempts=1
+            - --helps-threshold=0.05
+            - --hurts-threshold=-0.10
+            - --promote-threshold=0.10
+            - --demote-threshold=-0.10
+            - --obsolete-baseline=0.80
+            - --max-concurrent-jobs=4
+            - --trial-budget=200
+            - --dry-run=false
+            - --webhook-addr=:8080
+            - --metrics-addr=:8081
+            - --leader-elect=false
+          env:
+            - name: HARBOR_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-credentials
+                  key: username
+            - name: HARBOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-credentials
+                  key: password
+            # Optional: without the secret the controller warns and accepts all webhooks.
+            - name: WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-webhook
+                  key: token
+                  optional: true
+          ports:
+            - name: webhook
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: webhook
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
