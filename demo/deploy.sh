@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Install the controller: CRD, RBAC, Deployment, Service (kubectl apply -k config/), then pin the image tags.
-#   CONTROLLER_TAG=0.1.2 RUNNER_TAG=0.2.1 demo/deploy.sh
+#   CONTROLLER_TAG=0.1.2 RUNNER_TAG=0.2.2 demo/deploy.sh
 set -euo pipefail
 # shellcheck source=demo/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 controller_tag="${CONTROLLER_TAG:-0.1.2}"
-runner_tag="${RUNNER_TAG:-0.2.1}"
+runner_tag="${RUNNER_TAG:-0.2.2}"
 registry="${REGISTRY:-registry.digitalocean.com/skill-ci-dirien}"
 need kubectl
 need python3

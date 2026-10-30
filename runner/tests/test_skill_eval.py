@@ -149,6 +149,7 @@ def test_commands(termination, monkeypatch):
         ("--n-attempts", "2"),
         ("--override-cpus", "1"),
         ("--override-memory-mb", "2048"),
+        ("--n-concurrent", "2"),
     ]:
         assert evaluator[evaluator.index(flag) + 1] == value
     eks = [evaluator[i + 1] for i, arg in enumerate(evaluator) if arg == "--ek"]

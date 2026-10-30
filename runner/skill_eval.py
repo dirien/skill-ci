@@ -31,6 +31,8 @@ DEFAULTS = {
     # Skill tasks write a few files; the 2 CPU / 4 GiB task default starves a small cluster.
     "SANDBOX_CPUS": "1",
     "SANDBOX_MEMORY_MB": "2048",
+    # Trials running at once per eval; the controller caps how many evals run at once.
+    "TRIAL_CONCURRENCY": "2",
 }
 REQUIRED = ("SKILL_REF", "SKILL_NAME", "AGENT", "MODEL")
 
@@ -47,7 +49,7 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
     config = {name: environ[name] for name in REQUIRED}
     for name, default in DEFAULTS.items():
         config[name] = environ.get(name) or default
-    for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB"):
+    for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
             raise EvalError(f"{name} must be a positive integer, got {config[name]!r}")
     return config
@@ -84,6 +86,7 @@ def evaluate_command(config: Mapping[str, str], skill_dir: Path, results: Path) 
         "--n-attempts", config["ATTEMPTS"],
         "--override-cpus", config["SANDBOX_CPUS"],
         "--override-memory-mb", config["SANDBOX_MEMORY_MB"],
+        "--n-concurrent", config["TRIAL_CONCURRENCY"],
         "--results-dir", str(results),
         "--progress", "plain",
     ]  # fmt: skip

@@ -35,7 +35,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | --- | --- |
 | `make up` | `pulumi up`: cluster, registry, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
 | `make docr-login` | Writes DOCR push credentials from the cluster to `~/.cache/skill-ci/docker` (used by `make build` when present) |
-| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.1.2`, `RUNNER_TAG=0.2.1`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
+| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.1.2`, `RUNNER_TAG=0.2.2`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
 | `make deploy` | `kubectl apply -k config/`, then sets the controller and runner image tags |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |

@@ -33,6 +33,10 @@ GROUP = "agents.x-k8s.io"
 VERSION = "v1beta1"
 PLURAL = "sandboxes"
 
+# Where a pod finds its own namespace and name.
+SA_NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+HOSTNAME_FILE = Path("/etc/hostname")
+
 
 class AgentSandboxEnvironment(ACKEnvironment):
     """One Agent Sandbox per Harbor trial."""
@@ -114,6 +118,36 @@ class AgentSandboxEnvironment(ACKEnvironment):
                 raise ValueError("Building a task image needs --ek registry=<registry>.")
             await self._build_and_push_image()
 
+    async def _owner_reference(self) -> dict[str, Any] | None:
+        """Return an owner reference to the pod running Harbor, if it runs next to the sandboxes.
+
+        With it, Kubernetes deletes the sandboxes of a cancelled or crashed run
+        together with the run's pod instead of leaving them to hold capacity.
+        """
+        try:
+            if SA_NAMESPACE_FILE.read_text().strip() != self.namespace:
+                return None
+            pod_name = HOSTNAME_FILE.read_text().strip()
+        except OSError:
+            return None  # not running in a pod
+        if self._core_api is None:
+            return None
+        try:
+            pod = await asyncio.to_thread(
+                self._core_api.read_namespaced_pod, pod_name, self.namespace
+            )
+        except ApiException as e:
+            logger.warning(
+                "Sandbox %s gets no owner: reading pod %s failed: %s", self.pod_name, pod_name, e
+            )
+            return None
+        return {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": pod.metadata.name,
+            "uid": pod.metadata.uid,
+        }
+
     async def _wait_for_sandbox_ready(self) -> None:
         api = self._custom_api()
         for _ in range(self.ready_timeout_sec // 2):
@@ -135,13 +169,16 @@ class AgentSandboxEnvironment(ACKEnvironment):
         await self._ensure_client()
         await self._ensure_image(force_build)
 
+        manifest = self._sandbox_manifest()
+        if owner := await self._owner_reference():
+            manifest["metadata"]["ownerReferences"] = [owner]
         await asyncio.to_thread(
             self._custom_api().create_namespaced_custom_object,
             GROUP,
             VERSION,
             self.namespace,
             PLURAL,
-            self._sandbox_manifest(),
+            manifest,
         )
         await self._wait_for_sandbox_ready()
 

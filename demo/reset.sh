@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Put the demo back to its start so it can run again:
-#   - delete all SkillEvals and their Jobs
+#   - delete all SkillEvals, their Jobs and any trial Sandboxes left behind
 #   - remove the beta/stable tags and every skill version except v1.0.0 from Harbor
 #   - restore the model list from demo/models.yaml
 # Skills, the Harbor project and the webhook policy stay.
@@ -18,6 +18,8 @@ else
   note "No SkillEval CRD yet, nothing to delete."
 fi
 kubectl -n "${NS}" delete jobs -l skillci.dev/skill --wait=false --ignore-not-found
+# Owner references clean these up with the runner pods; this catches older runs.
+kubectl -n "${NS}" delete sandboxes.agents.x-k8s.io -l app.kubernetes.io/managed-by=harbor --wait=false --ignore-not-found
 
 wait_toolbox
 say "Resetting tags in Harbor"

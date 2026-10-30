@@ -83,7 +83,7 @@ The controller creates one `batch/v1` Job per SkillEval (owner reference to the 
 | `ANTHROPIC_API_KEY` | from secret `llm-keys` key `anthropic` |
 | `OPENAI_API_KEY` | from secret `llm-keys` key `openai` (optional) |
 
-The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien`, `TASK_IMAGE_PULL_SECRET=docr`, `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size).
+The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien`, `TASK_IMAGE_PULL_SECRET=docr`, `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them.
 
 The container sets `terminationMessagePolicy: FallbackToLogsOnError`. On completion it writes one JSON object to `/dev/termination-log` and exits 0:
 
@@ -131,4 +131,4 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 
 ## Cost guard
 
-Controller flags `--max-concurrent-jobs` (default 4; extra SkillEvals stay Pending), `--trial-budget` (max trials per controller lifetime, default 200; trials = attempts x 2 arms), `--dry-run` (create SkillEvals in phase Planned, log matrix size, create no Jobs).
+Controller flags `--max-concurrent-jobs` (default 4, deployed with 3 so 3 Jobs x 2 trials fit a small cluster; extra SkillEvals stay Pending), `--trial-budget` (max trials per controller lifetime, default 200; trials = attempts x 2 arms), `--dry-run` (create SkillEvals in phase Planned, log matrix size, create no Jobs).

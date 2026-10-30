@@ -113,3 +113,55 @@ def test_custom_api_requires_started_client(tmp_path):
     """Using the Kubernetes API before start() fails with a clear error."""
     with pytest.raises(RuntimeError, match="not initialized"):
         make_env(tmp_path)._custom_api()
+
+
+class FakeCoreApi:
+    """Answers read_namespaced_pod like the Kubernetes API, or fails with a status."""
+
+    def __init__(self, status: int | None = None) -> None:
+        self.status = status
+
+    def read_namespaced_pod(self, name: str, namespace: str):
+        from types import SimpleNamespace
+
+        from kubernetes.client.rest import ApiException
+
+        if self.status:
+            raise ApiException(status=self.status)
+        return SimpleNamespace(metadata=SimpleNamespace(name=name, uid=f"uid-{name}-{namespace}"))
+
+
+@pytest.mark.parametrize(
+    ("pod_namespace", "api_status", "expected"),
+    [
+        (
+            "skill-ci",
+            None,
+            {
+                "apiVersion": "v1",
+                "kind": "Pod",
+                "name": "runner-abc",
+                "uid": "uid-runner-abc-skill-ci",
+            },
+        ),
+        ("other", None, None),  # owner references cannot cross namespaces
+        ("skill-ci", 403, None),  # no permission to read the pod: run without an owner
+        (None, None, None),  # not running in a pod
+    ],
+)
+def test_owner_reference(tmp_path, monkeypatch, pod_namespace, api_status, expected):
+    """Sandboxes are owned by the runner pod when it runs in the sandbox namespace."""
+    import asyncio
+
+    from harbor_agent_sandbox import environment
+
+    ns_file, host_file = tmp_path / "namespace", tmp_path / "hostname"
+    if pod_namespace:
+        ns_file.write_text(pod_namespace + "\n")
+        host_file.write_text("runner-abc\n")
+    monkeypatch.setattr(environment, "SA_NAMESPACE_FILE", ns_file)
+    monkeypatch.setattr(environment, "HOSTNAME_FILE", host_file)
+    env = make_env(tmp_path)
+    env._core_api = FakeCoreApi(api_status)
+
+    assert asyncio.run(env._owner_reference()) == expected

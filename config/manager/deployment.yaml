@@ -31,7 +31,7 @@ spec:
             - --namespace=skill-ci
             - --harbor-url=http://harbor.harbor.svc.cluster.local
             - --harbor-project=skills
-            - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.2.1
+            - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.2.2
             - --models-configmap=skill-ci-models
             - --default-attempts=1
             - --helps-threshold=0.05
@@ -39,7 +39,7 @@ spec:
             - --promote-threshold=0.10
             - --demote-threshold=-0.10
             - --obsolete-baseline=0.80
-            - --max-concurrent-jobs=4
+            - --max-concurrent-jobs=3
             - --trial-budget=200
             - --dry-run=false
             - --webhook-addr=:8080
