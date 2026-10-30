@@ -63,6 +63,10 @@ func (s *Server) reportView(r *http.Request, run Run) ReportView {
 	if !run.HasReport() {
 		return ReportView{State: "none"}
 	}
+	if run.NoScores() {
+		// Tier 3 did not run: there are no dimension scores to read, only the stored files.
+		return ReportView{State: "files"}
+	}
 	data, err := s.cfg.Reports.File(r.Context(), run.Skill, run.ReportDigest, reportstore.FileResult)
 	switch {
 	case errors.Is(err, reportstore.ErrNotFound):

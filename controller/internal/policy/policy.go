@@ -67,6 +67,9 @@ type Result struct {
 	Lift float64
 	// Verdict is the classification of this result.
 	Verdict v1alpha1.Verdict
+	// Rejected is true when Tier 1 or Tier 2 failed. A rejected result is
+	// finished (Succeeded is true) but has no usable lift.
+	Rejected bool
 }
 
 // Outcome is what the results of one digest add up to.
@@ -82,6 +85,9 @@ type Outcome struct {
 	// Regressed means the digest scores worse than the stable version and
 	// must not replace it.
 	Regressed bool
+	// Rejected means a required model's run failed Tier 1 or Tier 2. The digest
+	// never gets beta or stable and loses stable if it has it.
+	Rejected bool
 }
 
 // Evaluate applies the promote, demote and obsolete rules to one digest.
@@ -97,6 +103,10 @@ func (t Thresholds) Evaluate(results []Result) Outcome {
 		if !r.Succeeded {
 			return Outcome{}
 		}
+		if r.Rejected {
+			out.Rejected, allPromote, allObsolete = true, false, false
+			continue
+		}
 		lift := round2(r.Lift)
 		out.Demote = out.Demote || lift <= t.Demote+epsilon
 		allPromote = allPromote && lift >= t.Promote-epsilon
@@ -106,7 +116,7 @@ func (t Thresholds) Evaluate(results []Result) Outcome {
 		return Outcome{}
 	}
 	out.Complete = true
-	out.Promote = allPromote && !out.Demote
+	out.Promote = allPromote && !out.Demote && !out.Rejected
 	out.Obsolete = allObsolete
 	return out
 }
@@ -170,14 +180,15 @@ type Op struct {
 
 // Plan returns the tag changes for the digest under evaluation. Newest says
 // whether it is the newest fully evaluated version of its skill. Removals come
-// before additions so a tag never sits on two digests.
+// before additions so a tag never sits on two digests. A rejected digest never
+// gets beta or stable, and loses stable.
 func Plan(out Outcome, digest string, newest bool, arts []harbor.Artifact) []Op {
 	var ops []Op
-	if newest {
+	if newest && !out.Rejected {
 		ops = append(ops, moveTag(TagBeta, digest, arts)...)
 	}
 	switch {
-	case out.Demote:
+	case out.Demote || out.Rejected:
 		if harbor.Tagged(arts, digest, TagStable) {
 			ops = append(ops, Op{Digest: digest, Tag: TagStable})
 		}

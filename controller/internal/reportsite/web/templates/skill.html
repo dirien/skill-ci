@@ -32,9 +32,13 @@
               {{if .Lift.Text}}
               <span class="lift">{{.Lift.Text}}</span> {{template "status" .VerdictStatus}}
               <span class="sub">with {{.With.Text}} · without {{.Without.Text}}</span>
+              {{else if .Rejected}}
+              {{template "status" .VerdictStatus}}
+              <span class="sub">{{.RejectedBy}} failed · no trials run</span>
               {{else}}
               {{template "status" .PhaseStatus}}
               {{end}}
+              {{if .TiersKnown}}<span class="sub">{{template "tiers" .}}</span>{{end}}
             </a>
             {{else}}<span class="muted">not run</span>{{end}}
           </td>

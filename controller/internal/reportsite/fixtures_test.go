@@ -50,6 +50,10 @@ type spec struct {
 	report                bool
 	message               string
 	regressed             string
+	tiers                 [3]string // tier1, tier2, tier3; empty for a runner without tiers
+	publication           string
+	findings              []string
+	rejected              string // message of the Rejected condition
 }
 
 func at(hour, minute int) time.Time {
@@ -80,6 +84,16 @@ func (s spec) object() *v1alpha1.SkillEval {
 	}
 	if s.report {
 		se.Status.ReportDigest = reportDigestOf(s)
+	}
+	if s.tiers != [3]string{} {
+		se.Status.Tiers = &v1alpha1.TierStatuses{Tier1: s.tiers[0], Tier2: s.tiers[1], Tier3: s.tiers[2]}
+	}
+	se.Status.Publication, se.Status.Findings = s.publication, s.findings
+	if s.rejected != "" {
+		se.Status.Conditions = append(se.Status.Conditions, metav1.Condition{
+			Type: "Rejected", Status: metav1.ConditionTrue, Reason: "Tier1Failed", Message: s.rejected,
+			LastTransitionTime: metav1.NewTime(s.started.Add(s.took)),
+		})
 	}
 	if s.regressed != "" {
 		se.Status.Conditions = []metav1.Condition{{
@@ -135,6 +149,82 @@ func demoSpecs() []spec {
 		spec{skill: a, version: "v1.3.0", model: sonnet, required: true, trigger: push, started: at(14, 27), phase: v1alpha1.PhasePending},
 	)
 	return specs
+}
+
+// Skills of the tier fixtures.
+const (
+	sloppy = "sloppy-deploy"
+	dup    = "dup-notes"
+	gap    = "scanner-gap"
+)
+
+var (
+	allPassed = [3]string{"passed", "passed", "passed"}
+	finding1  = "tier1/security: hardcoded credential in scripts/deploy.sh"
+	finding2  = "tier1/license: no license declared"
+)
+
+// tierSpecs are the demo runs after the runner reports tiers: the newer
+// acme-release-notes runs carry tier results, the older ones are in the old
+// format, and three more skills show a Tier 1 rejection, a Tier 2 rejection
+// and an incomplete tier.
+func tierSpecs() []spec {
+	push := v1alpha1.TriggerPush
+	specs := demoSpecs()
+	for i := range specs {
+		s := &specs[i]
+		if s.skill == "acme-release-notes" && s.version == "v1.1.0" {
+			s.tiers, s.publication = allPassed, "passed"
+		}
+		if s.skill == "acme-release-notes" && s.version == "v1.2.0" {
+			s.tiers, s.publication = allPassed, "passed"
+		}
+	}
+	rejected := func(skill string, model string, required bool, tiers [3]string, findings ...string) spec {
+		s := spec{
+			skill: skill, version: "v1.0.0", model: model, required: required, trigger: push, started: at(14, 20),
+			took: 40 * time.Second, phase: v1alpha1.PhaseSucceeded, verdict: v1alpha1.VerdictRejected,
+			tiers: tiers, publication: "failed", findings: findings,
+			rejected: findings[0],
+		}
+		return s
+	}
+	specs = append(specs,
+		rejected(sloppy, haiku, true, [3]string{"failed", "passed", "skipped"}, finding1, finding2),
+		rejected(sloppy, sonnet, true, [3]string{"failed", "passed", "skipped"}, finding1, finding2),
+		rejected(sloppy, opus, false, [3]string{"failed", "passed", "skipped"}, finding1, finding2),
+		rejected(dup, haiku, true, [3]string{"passed", "failed", "skipped"}, "tier2/dedup: 91% similar to acme-release-notes"),
+		rejected(dup, sonnet, true, [3]string{"passed", "failed", "skipped"}, "tier2/dedup: 91% similar to acme-release-notes"),
+		ok(gap, "v1.0.0", haiku, true, push, at(14, 22), "0.95", "0.40", "+0.55", "Helps"),
+		ok(gap, "v1.0.0", sonnet, true, push, at(14, 22), "0.95", "0.40", "+0.55", "Helps"),
+	)
+	for i := range specs {
+		s := &specs[i]
+		if s.skill == gap {
+			s.tiers, s.publication = [3]string{"incomplete", "passed", "passed"}, "incomplete"
+		}
+		if s.skill == sloppy && s.model == haiku {
+			s.report = true
+		}
+	}
+	return specs
+}
+
+func tierHarbor() *harbor.Fake {
+	arts := map[string][]harbor.Artifact{
+		sloppy: {{Digest: digestOf(sloppy, "v1.0.0"), Tags: []string{"v1.0.0"}}},
+		dup:    {{Digest: digestOf(dup, "v1.0.0"), Tags: []string{"v1.0.0"}}},
+		gap:    {{Digest: digestOf(gap, "v1.0.0"), Tags: []string{"v1.0.0", "beta", "stable"}}},
+	}
+	demo := demoHarbor()
+	for _, n := range []string{"acme-release-notes", "k8s-resource-naming", "python-docstrings"} {
+		a, err := demo.ListArtifacts(context.Background(), n)
+		if err != nil {
+			panic(err) // the fake never fails without Err set
+		}
+		arts[n] = a
+	}
+	return harbor.NewFake(arts)
 }
 
 func demoHarbor() *harbor.Fake {
@@ -202,6 +292,12 @@ type harness struct {
 
 func newHarness(t *testing.T, specs []spec) *harness {
 	t.Helper()
+	return newHarnessWith(t, specs, demoHarbor())
+}
+
+// newHarnessWith is newHarness over a given registry.
+func newHarnessWith(t *testing.T, specs []spec, hb *harbor.Fake) *harness {
+	t.Helper()
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
@@ -211,7 +307,7 @@ func newHarness(t *testing.T, specs []spec) *harness {
 		objs[i] = s.object()
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
-	h := &harness{harbor: demoHarbor(), reports: demoReports(specs), client: c}
+	h := &harness{harbor: hb, reports: demoReports(specs), client: c}
 	srv, err := New(Config{
 		Reader: c, Namespace: "skill-ci", Project: "skills", Harbor: h.harbor, Reports: h.reports,
 		Thresholds: policy.DefaultThresholds(), Now: func() time.Time { return testNow }, Log: logr.Discard(),

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -60,6 +61,97 @@ func TestParseResult(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestParseResultTiers(t *testing.T) {
+	tests := []struct {
+		name         string
+		msg          string
+		wantErr      bool
+		tiers        Tiers
+		publication  string
+		findings     []string
+		rejected     bool
+		hasScores    bool
+		lift         float64
+		wantLiftNone bool
+	}{
+		{name: "full message",
+			msg: `{"withSkill":0.95,"withoutSkill":0.36,"lift":0.59,"report":"sha256:abc",` +
+				`"tiers":{"tier1":"passed","tier2":"passed","tier3":"passed"},"publication":"passed","findings":[]}`,
+			tiers: Tiers{"passed", "passed", "passed"}, publication: "passed", hasScores: true, lift: 0.59},
+		{name: "tier 1 failed, no scores",
+			msg: `{"tiers":{"tier1":"failed","tier2":"passed","tier3":"skipped"},"publication":"failed",` +
+				`"findings":["tier1/security: hardcoded credential in scripts/deploy.sh"]}`,
+			tiers: Tiers{"failed", "passed", "skipped"}, publication: "failed", rejected: true, wantLiftNone: true,
+			findings: []string{"tier1/security: hardcoded credential in scripts/deploy.sh"}},
+		{name: "tier 2 failed, no scores",
+			msg:   `{"tiers":{"tier1":"passed","tier2":"failed","tier3":"skipped"},"publication":"failed","findings":["tier2/dedup: 91% similar to acme-notes"]}`,
+			tiers: Tiers{"passed", "failed", "skipped"}, publication: "failed", rejected: true, wantLiftNone: true,
+			findings: []string{"tier2/dedup: 91% similar to acme-notes"}},
+		{name: "tier 3 skipped without a failed tier is still a result",
+			msg:   `{"tiers":{"tier1":"incomplete","tier2":"passed","tier3":"skipped"},"publication":"incomplete"}`,
+			tiers: Tiers{"incomplete", "passed", "skipped"}, publication: "incomplete", wantLiftNone: true},
+		{name: "tier 1 failed but scores present keeps them",
+			msg:   `{"withSkill":0.9,"withoutSkill":0.4,"tiers":{"tier1":"failed"}}`,
+			tiers: Tiers{Tier1: "failed"}, rejected: true, hasScores: true, lift: 0.5},
+		{name: "a tier that is not a string is a malformed message",
+			msg:     `{"withSkill":0.9,"withoutSkill":0.4,"tiers":{"tier1":"maybe","tier2":"PASSED","tier3":7},"publication":"skipped"}`,
+			wantErr: true},
+		{name: "unknown tier strings are unknown",
+			msg:   `{"withSkill":0.9,"withoutSkill":0.4,"tiers":{"tier1":"maybe","tier2":" Passed ","tier3":""},"publication":"great"}`,
+			tiers: Tiers{Tier2: "passed"}, hasScores: true, lift: 0.5},
+		{name: "older runner without tiers",
+			msg: `{"withSkill":0.95,"withoutSkill":0.36,"lift":0.59}`, hasScores: true, lift: 0.59},
+		{name: "older runner without scores or tiers is an error",
+			msg: `{"lift":0.2}`, wantErr: true},
+		{name: "findings are trimmed and capped at five",
+			msg:   `{"tiers":{"tier1":"failed"},"findings":[" a ","","b","c","d","e","f","g"]}`,
+			tiers: Tiers{Tier1: "failed"}, rejected: true, wantLiftNone: true, findings: []string{"a", "b", "c", "d", "e"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ParseResult(tt.msg)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ParseResult() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if res.Tiers != tt.tiers {
+				t.Errorf("Tiers = %+v, want %+v", res.Tiers, tt.tiers)
+			}
+			if res.Publication != tt.publication {
+				t.Errorf("Publication = %q, want %q", res.Publication, tt.publication)
+			}
+			if !slices.Equal(res.Findings, tt.findings) {
+				t.Errorf("Findings = %q, want %q", res.Findings, tt.findings)
+			}
+			if res.Rejected() != tt.rejected {
+				t.Errorf("Rejected() = %v, want %v", res.Rejected(), tt.rejected)
+			}
+			if res.HasScores() != tt.hasScores {
+				t.Errorf("HasScores() = %v, want %v", res.HasScores(), tt.hasScores)
+			}
+			if tt.wantLiftNone && res.Lift != nil {
+				t.Errorf("Lift = %v, want none", *res.Lift)
+			}
+			if tt.hasScores && (res.Lift == nil || *res.Lift-tt.lift > 1e-9 || tt.lift-*res.Lift > 1e-9) {
+				t.Errorf("Lift = %v, want %v", res.Lift, tt.lift)
+			}
+		})
+	}
+}
+
+func TestParseResultFindingLength(t *testing.T) {
+	long := strings.Repeat("x", 1000)
+	res, err := ParseResult(`{"tiers":{"tier1":"failed"},"findings":["` + long + `"]}`)
+	if err != nil {
+		t.Fatalf("ParseResult() error = %v", err)
+	}
+	if got := len([]rune(res.Findings[0])); got != maxFindingLen {
+		t.Errorf("finding has %d runes, want %d", got, maxFindingLen)
 	}
 }
 

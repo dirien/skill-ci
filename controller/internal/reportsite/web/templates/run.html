@@ -5,13 +5,49 @@
 <section aria-labelledby="summary-h">
   <h2 id="summary-h">Result</h2>
   <dl class="stats">
+    {{if not .Run.NoScores}}
     <div><dt>With skill</dt><dd>{{dash .Run.With.Text}}</dd></div>
     <div><dt>Without skill</dt><dd>{{dash .Run.Without.Text}}</dd></div>
     <div><dt>Lift</dt><dd>{{dash .Run.Lift.Text}}</dd></div>
+    {{end}}
     <div><dt>Verdict</dt><dd class="status-dd">{{template "status" .Run.VerdictStatus}}</dd></div>
+    <div><dt>Tiers</dt><dd class="status-dd">{{template "tiers" .Run}}</dd></div>
+    <div><dt>Publication</dt><dd class="status-dd">{{template "status" .Run.PublicationStatus}}</dd></div>
     <div><dt>Phase</dt><dd class="status-dd">{{template "status" .Run.PhaseStatus}}</dd></div>
   </dl>
   {{if .Run.Message}}<p class="notice{{if eq .Run.Phase "Failed"}} failed{{end}}">{{.Run.Message}}</p>{{end}}
+  {{with .Run.Tier3Note}}<p class="notice{{if $.Run.Rejected}} failed{{end}}">{{.}}</p>{{end}}
+</section>
+
+<section aria-labelledby="tiers-h">
+  <h2 id="tiers-h">SkillEvaluator tiers</h2>
+  {{if .Run.TiersKnown}}
+  <div class="table-wrap">
+    <table class="tier-table">
+      <thead><tr><th scope="col">Tier</th><th scope="col">Status</th><th scope="col">What it covers</th></tr></thead>
+      <tbody>
+        {{range .Run.TierMarkers}}
+        <tr>
+          <th scope="row">{{.Name}}</th>
+          <td class="nowrap">{{template "status" .Status}}{{if not .Status.Kind}}<span class="muted"> not reported</span>{{end}}</td>
+          <td class="wrap">{{.Covers}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{if .Run.Findings}}
+  <h3 id="findings-h">Findings</h3>
+  <ul class="findings" aria-labelledby="findings-h">
+    {{range .Run.Findings}}<li>{{.}}</li>
+    {{end}}
+  </ul>
+  {{else if .Run.Finished}}
+  <p class="note">No findings.</p>
+  {{end}}
+  {{else}}
+  <p class="empty">{{if .Run.Finished}}This run has no tier results: the runner that produced it did not report them.{{else}}Tier results appear when the run finishes.{{end}}</p>
+  {{end}}
 </section>
 
 <section aria-labelledby="details-h">
@@ -63,6 +99,12 @@
   <p class="empty">The report is no longer in Harbor. Referrer <code class="mono wrap">{{.Run.ReportDigest}}</code> was not found.</p>
   {{else if eq .Report.State "error"}}
   <p class="notice">Could not read the report from Harbor: {{.Report.Err}}</p>
+  {{else if eq .Report.State "files"}}
+  <p class="actions">
+    <a class="button primary" href="/runs/{{.Run.Name}}/report" target="_blank" rel="noopener">Open full SkillEvaluator report</a>
+    <a class="button" href="/runs/{{.Run.Name}}/result.json" download>Download result.json</a>
+  </p>
+  <p class="sub">No dimension scores: Tier 3 did not run, so there were no live trials to score.</p>
   {{else}}
   <p class="actions">
     <a class="button primary" href="/runs/{{.Run.Name}}/report" target="_blank" rel="noopener">Open full SkillEvaluator report</a>

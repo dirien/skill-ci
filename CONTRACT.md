@@ -110,6 +110,31 @@ oras attach --artifact-type application/vnd.skillci.report.v1+json \
 
 `SKILL_REF` is pinned to the digest, so the subject is exactly the version that was scored. Re-running an eval adds another referrer. `make report SKILL=<skill> VERSION=<vX.Y.Z> [MODEL=<model>] OUT=reports/` lists the referrers (`oras discover`) and downloads the newest report per model.
 
+## All tiers and publication
+
+Every run evaluates the skill version through all three SkillEvaluator tiers, Tier 1 first as a cheap gate:
+
+1. **Tier 1** (static, security, quality: schema, security, pii, license, code-integrity, unicode, version, quality, lint) and **Tier 2** (deduplication against the other skills in Harbor) run before any live trial.
+2. If Tier 1 or Tier 2 fails, the runner does **not** run Tier 3: no sandboxes, no tokens. It still exits 0 and reports the result.
+3. Otherwise **Tier 3** (live with/without-skill evaluation, as before) runs, and SkillEvaluator's publication assessment covers all three tiers.
+
+The termination message gains these fields (scores stay as before; they are absent when Tier 3 was skipped):
+
+```json
+{"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "claude-haiku-5-5",
+ "report": "sha256:...",
+ "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "passed"},
+ "publication": "passed",
+ "findings": ["tier1/security: hardcoded credential in scripts/deploy.sh"]}
+```
+
+- Tier values: `passed`, `failed`, `incomplete` (a check could not produce trustworthy evidence, e.g. a scanner missing), `skipped`.
+- `publication` is SkillEvaluator's publication assessment: `passed`, `failed`, `incomplete`.
+- `findings`: at most 5 short strings naming the failing tier/check and why; empty when everything passed. Keep the whole message under 4 KB.
+- Reports from all tiers are attached to the skill digest as before (one referrer per run).
+
+SkillEval status gains `tiers` (`tier1`, `tier2`, `tier3` strings), `publication` and `findings` (list). New verdict **`Rejected`**: Tier 1 or Tier 2 failed. A Rejected run never counts toward promotion; a digest with a Rejected run on any required model never gets `beta` or `stable`, and loses `stable` if it had it. Gauge `skillci_publication{skill,version,model,status}` is 1 for the run's publication status.
+
 ## Triggers
 
 1. **Skill push.** Harbor webhook policy on project `skills`, events `PUSH_ARTIFACT`, target `http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor`, payload format `Default`. The controller acts only when the pushed tag matches `^v\d+\.\d+\.\d+$`. Other tags (`beta`, `stable`) are ignored. For each model in the list it creates a SkillEval unless one already exists for the same digest and model (dedupe by labels).
@@ -127,6 +152,7 @@ Per digest, once every required model has a Succeeded SkillEval:
 - **Newest wins ties**: an older version never takes `stable` from a newer stable version unless that newer version scores worse than it (the regression gate, applied the other way round). Without this rule two equally good versions would swap the tag on every reconcile.
 - **Demote**: lift `<= -0.10` on any required model: remove tag `stable` from that digest.
 - **Obsolete**: verdict Obsolete on all required models: flag only (metric + condition), never delete.
+- **Rejected**: a run whose Tier 1 or Tier 2 failed ends `Succeeded` with verdict `Rejected` and usually no scores (Tier 3 was skipped; a Succeeded run without scores and without a failed tier is marked `Failed` instead). It counts as finished for "every required model has a result". If any required model is Rejected, the digest gets no `beta` and no `stable`, loses `stable` if it holds it, and is never the "newest evaluated version" that takes `beta` (the older version keeps it). The Rejected run gets condition `Rejected` (reason `Tier1Failed` or `Tier2Failed`, message the findings) and a Warning event with the same reason. Rejected runs are left out of the regression comparison. Rejected optional models never gate. A termination message from a runner without `tiers` still works: the tiers are unknown, nothing is Rejected.
 
 Verdicts depend on other digests (the stable one), so when a SkillEval reaches `Succeeded`, or the policy changes a tag, the controller re-enqueues the other `Succeeded` SkillEvals of the same skill (all digests). They re-run the policy and converge; a re-run that changes nothing writes nothing and enqueues nothing.
 
@@ -134,7 +160,7 @@ Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repo
 
 ## Metrics (controller `:8081/metrics`)
 
-Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Counter `skillci_skillevals_total{phase}` counts phase transitions. Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_stable`, `skillci_obsolete` and `skillci_regressed` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
+Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Gauge `skillci_publication{skill,version,model,status}` is 1 for the publication status of the run (`passed`, `failed` or `incomplete`; one series per skill, version and model, replaced when a rerun changes the status, absent for runs without a publication status). Gauge `skillci_rejected{skill,version}` is 1 when a required model's run failed Tier 1 or Tier 2. Counter `skillci_skillevals_total{phase}` counts phase transitions. Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_publication` series of its skill, version and model, and the `skillci_stable`, `skillci_obsolete`, `skillci_regressed` and `skillci_rejected` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
 
 ## Reporting site (controller `:8082`)
 
@@ -142,9 +168,9 @@ Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEva
 
 | Route | Content |
 |---|---|
-| `/` | Counts, release channels per skill, all runs newest first. Filters: `skill`, `model`, `verdict`, `phase` |
-| `/skills/{skill}` | Versions x models (with, without, lift, verdict), channel tags, policy decision per version |
-| `/runs/{name}` | One SkillEval: scores, conditions, the six SkillEvaluator dimensions when a report is stored |
+| `/` | Counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `model`, `verdict`, `phase`, `publication` |
+| `/skills/{skill}` | Versions x models (with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
+| `/runs/{name}` | One SkillEval: scores, the SkillEvaluator tiers with findings, conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks |
 | `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
 | `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
 | `/healthz` | `ok` |

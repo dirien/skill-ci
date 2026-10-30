@@ -25,10 +25,20 @@ const (
 	ConditionPolicy = "PolicyApplied"
 	// ConditionRegressed records that the version scores worse than the stable one.
 	ConditionRegressed = "Regressed"
+	// ConditionRejected records that Tier 1 or Tier 2 failed for the run.
+	ConditionRejected = "Rejected"
 )
 
 // ReasonWorseThanStable is the reason of the Regressed condition and its event.
 const ReasonWorseThanStable = "WorseThanStable"
+
+// Reasons of the Rejected condition and its event.
+const (
+	// ReasonTier1Failed means Tier 1 (static, security, quality) failed.
+	ReasonTier1Failed = "Tier1Failed"
+	// ReasonTier2Failed means Tier 2 (deduplication) failed.
+	ReasonTier2Failed = "Tier2Failed"
+)
 
 // regression says which models of a candidate scored worse than the stable version.
 type regression struct {
@@ -64,7 +74,7 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 	newest := "" // digest of the newest fully evaluated version
 	for digest, group := range byDigest {
 		outcomes[digest] = r.Config.Thresholds.Evaluate(results(group, r.Config.Thresholds))
-		if outcomes[digest].Complete && (newest == "" || semver.Compare(group[0].Spec.Version, byDigest[newest][0].Spec.Version) > 0) {
+		if outcomes[digest].Complete && !outcomes[digest].Rejected && (newest == "" || semver.Compare(group[0].Spec.Version, byDigest[newest][0].Spec.Version) > 0) {
 			newest = digest
 		}
 	}
@@ -103,6 +113,7 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 	for d, group := range byDigest {
 		metrics.SetStable(se.Spec.Skill, group[0].Spec.Version, harbor.Tagged(arts, d, policy.TagStable))
 		metrics.SetObsolete(se.Spec.Skill, group[0].Spec.Version, outcomes[d].Obsolete)
+		metrics.SetRejected(se.Spec.Skill, group[0].Spec.Version, outcomes[d].Rejected)
 	}
 	metrics.SetRegressed(se.Spec.Skill, se.Spec.Version, reg != nil)
 	return r.record(ctx, byDigest[digest], out, ops, reg)
@@ -153,7 +164,7 @@ func yieldsToStable(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillE
 func withScores(group []*v1alpha1.SkillEval) []policy.Score {
 	var out []policy.Score
 	for _, e := range group {
-		if e.Status.Phase != v1alpha1.PhaseSucceeded {
+		if e.Status.Phase != v1alpha1.PhaseSucceeded || rejectedRun(e) {
 			continue
 		}
 		if with, _, _, err := scores(e); err == nil {
@@ -180,6 +191,8 @@ func (r *SkillEvalReconciler) applyOp(ctx context.Context, skill string, op poli
 func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.SkillEval, out policy.Outcome, ops []policy.Op, reg *regression) error {
 	reason, eventType := "Evaluated", corev1.EventTypeNormal
 	switch {
+	case out.Rejected:
+		reason, eventType = "Rejected", corev1.EventTypeWarning
 	case out.Demote:
 		reason, eventType = "Demoted", corev1.EventTypeWarning
 	case out.Promote:
@@ -205,7 +218,8 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 			ObservedGeneration: e.Generation,
 		})
 		regChanged := markRegression(e, reg, r.Config.Thresholds)
-		if !changed && !regChanged && len(ops) == 0 {
+		rejReason, rejMsg, rejChanged := markRejected(e)
+		if !changed && !regChanged && !rejChanged && len(ops) == 0 {
 			continue
 		}
 		if err := r.Status().Update(ctx, e); err != nil {
@@ -216,6 +230,9 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 		}
 		if regChanged && reg != nil {
 			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, ReasonWorseThanStable, "ApplyPolicy", "%s", reg.message)
+		}
+		if rejChanged && rejReason != "" {
+			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, rejReason, "ApplyPolicy", "%s", rejMsg)
 		}
 	}
 	return nil
@@ -241,10 +258,35 @@ func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds
 	if reg.has(e.Spec.Agent + "/" + e.Spec.Model) {
 		verdict = v1alpha1.VerdictRegressed
 	}
+	if rejectedRun(e) {
+		verdict = v1alpha1.VerdictRejected
+	}
 	if verdict != e.Status.Verdict {
 		e.Status.Verdict, changed = verdict, true
 	}
 	return changed
+}
+
+// markRejected sets or clears the Rejected condition of one SkillEval. The
+// message lists the findings. It returns the reason and message for the event
+// and whether anything changed; the reason is empty when the run is not rejected.
+func markRejected(e *v1alpha1.SkillEval) (reason, message string, changed bool) {
+	if !rejectedRun(e) {
+		return "", "", meta.RemoveStatusCondition(&e.Status.Conditions, ConditionRejected)
+	}
+	reason = ReasonTier2Failed
+	if e.Status.Tiers.Tier1 == v1alpha1.TierFailed {
+		reason = ReasonTier1Failed
+	}
+	message = strings.Join(e.Status.Findings, "; ")
+	if message == "" {
+		message = map[string]string{ReasonTier1Failed: "Tier 1 failed", ReasonTier2Failed: "Tier 2 failed"}[reason]
+	}
+	changed = meta.SetStatusCondition(&e.Status.Conditions, metav1.Condition{
+		Type: ConditionRejected, Status: metav1.ConditionTrue, Reason: reason, Message: message,
+		ObservedGeneration: e.Generation,
+	})
+	return reason, message, changed
 }
 
 // results converts the SkillEvals of one digest into policy input.
@@ -252,7 +294,10 @@ func results(group []*v1alpha1.SkillEval, th policy.Thresholds) []policy.Result 
 	out := make([]policy.Result, 0, len(group))
 	for _, e := range group {
 		res := policy.Result{Required: e.Spec.Required, Succeeded: e.Status.Phase == v1alpha1.PhaseSucceeded}
-		if res.Succeeded {
+		if res.Succeeded && rejectedRun(e) {
+			// Finished without usable scores: Tier 3 did not run.
+			res.Rejected, res.Verdict = true, v1alpha1.VerdictRejected
+		} else if res.Succeeded {
 			_, without, lift, err := scores(e)
 			if err != nil { // unreadable scores count as not evaluated
 				res.Succeeded = false

@@ -119,6 +119,14 @@ p { margin: 0 0 var(--sp-3); }
 .status { font-weight: 500; }
 .status.done, .status.neutral, .status.active { font-weight: 400; }
 
+/* Tier markers: the status shape plus T1 to T3; the full text is in title and aria-label */
+.tiers { display: inline-flex; gap: var(--sp-3); }
+.tier { font-family: var(--font-mono); font-size: var(--fs-s); }
+.tier i { margin-right: var(--sp-1); }
+h3 { margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-m); font-weight: 600; }
+.findings { margin: 0 0 var(--sp-3); padding-left: var(--sp-4); }
+.findings li { margin-bottom: var(--sp-1); overflow-wrap: anywhere; }
+
 .tag { display: inline-block; font-family: var(--font-mono); font-size: var(--fs-s); line-height: 1.4; padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--fg-muted); }
 .tag.stable { color: var(--pass); border-color: var(--pass); }
 

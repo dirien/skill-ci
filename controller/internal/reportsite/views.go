@@ -36,12 +36,15 @@ type Page struct {
 
 // Filter is the set of server-side filters of the runs table.
 type Filter struct {
-	// Skill, Model, Verdict and Phase each match exactly; empty matches all.
-	Skill, Model, Verdict, Phase string
+	// Skill, Model, Verdict, Phase and Publication each match exactly; empty matches all.
+	Skill, Model, Verdict, Phase, Publication string
 }
 
 func filterFrom(q url.Values) Filter {
-	return Filter{Skill: q.Get("skill"), Model: q.Get("model"), Verdict: q.Get("verdict"), Phase: q.Get("phase")}
+	return Filter{
+		Skill: q.Get("skill"), Model: q.Get("model"), Verdict: q.Get("verdict"), Phase: q.Get("phase"),
+		Publication: q.Get("publication"),
+	}
 }
 
 // Active reports whether any filter is set.
@@ -51,13 +54,14 @@ func (f Filter) match(r Run) bool {
 	return (f.Skill == "" || r.Skill == f.Skill) &&
 		(f.Model == "" || r.Model == f.Model) &&
 		(f.Verdict == "" || r.Verdict == f.Verdict) &&
-		(f.Phase == "" || r.Phase == f.Phase)
+		(f.Phase == "" || r.Phase == f.Phase) &&
+		(f.Publication == "" || r.Publication == f.Publication)
 }
 
 // FilterOptions are the values the filter drop-downs offer.
 type FilterOptions struct {
-	// Skills, Models, Verdicts and Phases hold the distinct values present in the runs.
-	Skills, Models, Verdicts, Phases []string
+	// Skills, Models, Verdicts, Phases and Publications hold the distinct values present in the runs.
+	Skills, Models, Verdicts, Phases, Publications []string
 }
 
 // Stats are the counts in the header of the runs page.
@@ -70,6 +74,8 @@ type Stats struct {
 	OnStable int
 	// HeldBack counts skill versions the regression gate holds back.
 	HeldBack int
+	// Rejected counts skill versions that failed Tier 1 or Tier 2 on a required model.
+	Rejected int
 }
 
 // ChannelRow is one skill in the release channels table.
@@ -80,6 +86,8 @@ type ChannelRow struct {
 	Stable, Beta string
 	// HeldBack lists the versions the regression gate holds back, newest first.
 	HeldBack []string
+	// Rejected lists the versions that failed Tier 1 or Tier 2 on a required model, newest first.
+	Rejected []string
 	// Versions counts the digests that have been evaluated.
 	Versions int
 }
@@ -102,7 +110,8 @@ func buildIndex(page Page, runs []Run, ch *Channels, f Filter, th policy.Thresho
 	if ch != nil && ch.Err != nil {
 		v.ChannelsErr = ch.Err.Error()
 	}
-	held := map[[2]string]string{} // (skill, digest) -> version
+	held := map[[2]string]string{}     // (skill, digest) -> version
+	rejected := map[[2]string]string{} // (skill, digest) -> version
 	for _, r := range runs {
 		v.Stats.Runs++
 		switch v1alpha1.Phase(r.Phase) {
@@ -114,6 +123,9 @@ func buildIndex(page Page, runs []Run, ch *Channels, f Filter, th policy.Thresho
 		if r.Regressed != "" {
 			held[[2]string{r.Skill, r.Digest}] = r.Version
 		}
+		if r.Required && r.Rejected() {
+			rejected[[2]string{r.Skill, r.Digest}] = r.Version
+		}
 		if r.Active() {
 			v.Refresh = refreshSeconds
 		}
@@ -123,6 +135,7 @@ func buildIndex(page Page, runs []Run, ch *Channels, f Filter, th policy.Thresho
 	}
 	v.Stats.Skills = len(skills)
 	v.Stats.HeldBack = len(held)
+	v.Stats.Rejected = len(rejected)
 	if ch.Known() {
 		v.Stats.OnStable = ch.OnStable()
 	}
@@ -142,7 +155,13 @@ func buildIndex(page Page, runs []Run, ch *Channels, f Filter, th policy.Thresho
 				row.HeldBack = append(row.HeldBack, version)
 			}
 		}
+		for key, version := range rejected {
+			if key[0] == skill {
+				row.Rejected = append(row.Rejected, version)
+			}
+		}
 		slices.SortFunc(row.HeldBack, newerFirst)
+		slices.SortFunc(row.Rejected, newerFirst)
 		v.Channels = append(v.Channels, row)
 	}
 	return v
@@ -171,6 +190,9 @@ func filterOptions(runs []Run, f Filter) FilterOptions {
 		o.Skills = append(o.Skills, r.Skill)
 		o.Models = append(o.Models, r.Model)
 		o.Phases = append(o.Phases, r.Phase)
+		if r.Publication != "" {
+			o.Publications = append(o.Publications, r.Publication)
+		}
 		if r.Verdict != "" {
 			o.Verdicts = append(o.Verdicts, r.Verdict)
 		}
@@ -178,6 +200,7 @@ func filterOptions(runs []Run, f Filter) FilterOptions {
 	// A filter value from a shared URL stays selectable even when no run has it.
 	o.Skills, o.Models = keepSorted(o.Skills, f.Skill), keepSorted(o.Models, f.Model)
 	o.Verdicts, o.Phases = keepSorted(o.Verdicts, f.Verdict), keepSorted(o.Phases, f.Phase)
+	o.Publications = keepSorted(o.Publications, f.Publication)
 	return o
 }
 
@@ -284,7 +307,8 @@ func buildSkill(page Page, skill string, runs []Run, ch *Channels, th policy.Thr
 // ReportView is the report section of the run page.
 type ReportView struct {
 	// State is none (no report stored), missing (stored but gone from the
-	// registry), error (registry or file problem) or ok.
+	// registry), error (registry or file problem), files (Tier 3 did not run,
+	// so only the stored files are offered) or ok.
 	State string
 	// Err is the error text for the error state.
 	Err string

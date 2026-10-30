@@ -25,6 +25,7 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/evals"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/metrics"
+	"github.com/dirien/skill-ci/controller/internal/policy"
 	"github.com/dirien/skill-ci/controller/internal/runner"
 )
 
@@ -191,24 +192,57 @@ func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1
 		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job failed: "+reason)
 	}
 
-	se.Status.WithSkill = format(*res.WithSkill, "%.2f")
-	se.Status.WithoutSkill = format(*res.WithoutSkill, "%.2f")
-	se.Status.Lift = format(*res.Lift, "%+.2f")
-	se.Status.ReportDigest = res.Report
-	se.Status.Verdict = r.Config.Thresholds.Verdict(*res.Lift, *res.WithoutSkill)
+	if !res.HasScores() && !res.Rejected() {
+		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "runner reported no scores and no failed tier")
+	}
+	applyResult(se, res, r.Config.Thresholds)
 	if err := r.setPhase(ctx, se, v1alpha1.PhaseSucceeded, ""); err != nil {
 		return err
 	}
 	return r.afterSucceeded(ctx, se)
 }
 
-// afterSucceeded publishes the scores as metrics and applies the tag policy.
+// applyResult copies a parsed runner result into the status. A run whose
+// Tier 1 or Tier 2 failed is Rejected whatever its scores say; it may have
+// none, because Tier 3 did not run.
+func applyResult(se *v1alpha1.SkillEval, res runner.Result, th policy.Thresholds) {
+	st := &se.Status
+	st.WithSkill, st.WithoutSkill, st.Lift, st.Verdict = "", "", "", ""
+	if res.HasScores() {
+		st.WithSkill = format(*res.WithSkill, "%.2f")
+		st.WithoutSkill = format(*res.WithoutSkill, "%.2f")
+		st.Lift = format(*res.Lift, "%+.2f")
+		st.Verdict = th.Verdict(*res.Lift, *res.WithoutSkill)
+	}
+	if res.Rejected() {
+		st.Verdict = v1alpha1.VerdictRejected
+	}
+	st.ReportDigest = res.Report
+	st.Tiers = nil
+	if res.Tiers.Known() {
+		st.Tiers = &v1alpha1.TierStatuses{Tier1: res.Tiers.Tier1, Tier2: res.Tiers.Tier2, Tier3: res.Tiers.Tier3}
+	}
+	st.Publication = res.Publication
+	st.Findings = res.Findings
+}
+
+// rejectedRun reports whether Tier 1 or Tier 2 failed for this SkillEval.
+func rejectedRun(se *v1alpha1.SkillEval) bool {
+	t := se.Status.Tiers
+	return t != nil && (t.Tier1 == v1alpha1.TierFailed || t.Tier2 == v1alpha1.TierFailed)
+}
+
+// afterSucceeded publishes the scores and publication status as metrics and
+// applies the tag policy. A rejected run may have no scores.
 func (r *SkillEvalReconciler) afterSucceeded(ctx context.Context, se *v1alpha1.SkillEval) error {
 	with, without, lift, err := scores(se)
-	if err != nil {
+	switch {
+	case err == nil:
+		metrics.ObserveScores(se, with, without, lift)
+	case !rejectedRun(se):
 		return err
 	}
-	metrics.ObserveScores(se, with, without, lift)
+	metrics.ObservePublication(se)
 	return r.applyPolicy(ctx, se)
 }
 

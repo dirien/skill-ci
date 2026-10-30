@@ -39,6 +39,9 @@ func TestEvaluate(t *testing.T) {
 	ok := func(lift float64, v v1alpha1.Verdict) Result {
 		return Result{Required: true, Succeeded: true, Lift: lift, Verdict: v}
 	}
+	rejected := func(required bool) Result {
+		return Result{Required: required, Succeeded: true, Rejected: true, Verdict: v1alpha1.VerdictRejected}
+	}
 	tests := []struct {
 		name    string
 		results []Result
@@ -57,6 +60,17 @@ func TestEvaluate(t *testing.T) {
 		{"obsolete on all", []Result{ok(0.0, "Obsolete"), ok(0.01, "Obsolete")},
 			Outcome{Complete: true, Obsolete: true}},
 		{"obsolete needs all", []Result{ok(0.0, "Obsolete"), ok(0.0, "Neutral")}, Outcome{Complete: true}},
+		{"rejected required model is finished and blocks promotion", []Result{rejected(true)},
+			Outcome{Complete: true, Rejected: true}},
+		{"rejected beats a strong lift on the other model", []Result{ok(0.60, "Helps"), rejected(true)},
+			Outcome{Complete: true, Rejected: true}},
+		{"rejected does not hide a demote", []Result{ok(-0.2, "Hurts"), rejected(true)},
+			Outcome{Complete: true, Rejected: true, Demote: true}},
+		{"rejected is not obsolete", []Result{ok(0.0, "Obsolete"), rejected(true)},
+			Outcome{Complete: true, Rejected: true}},
+		{"rejected optional model is ignored", []Result{ok(0.30, "Helps"), rejected(false)},
+			Outcome{Complete: true, Promote: true}},
+		{"rejected waits for the other required model", []Result{rejected(true), {Required: true}}, Outcome{}},
 	}
 	th := DefaultThresholds()
 	for _, tt := range tests {
@@ -100,6 +114,13 @@ func TestPlan(t *testing.T) {
 			[]Op{{Digest: "sha256:cur", Tag: "stable"}}},
 		{"demote without stable is a no-op", Outcome{Complete: true, Demote: true}, false,
 			arts([]string{"v1.0.0", "stable"}, []string{"v1.1.0"}), nil},
+		{"rejected never gets beta", Outcome{Complete: true, Rejected: true}, true,
+			arts([]string{"v1.0.0", "beta"}, []string{"v1.1.0"}), nil},
+		{"rejected never gets stable", Outcome{Complete: true, Rejected: true, Promote: true}, false,
+			arts([]string{"v1.0.0", "stable"}, []string{"v1.1.0"}), nil},
+		{"rejected loses stable", Outcome{Complete: true, Rejected: true}, false,
+			arts([]string{"v1.0.0", "beta"}, []string{"v1.1.0", "stable"}),
+			[]Op{{Digest: "sha256:cur", Tag: "stable"}}},
 		{"obsolete never touches tags", Outcome{Complete: true, Obsolete: true}, false,
 			arts([]string{"v1.0.0"}, []string{"v1.1.0", "stable"}), nil},
 	}

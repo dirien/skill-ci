@@ -48,7 +48,7 @@ func se(name, skill, version, model string) *v1alpha1.SkillEval {
 
 // resetAll clears the package-level series so cases do not see each other.
 func resetAll() {
-	for _, g := range []*prometheus.GaugeVec{lift, withScore, withoutScore, stable, obsolete, regressed} {
+	for _, g := range []*prometheus.GaugeVec{lift, withScore, withoutScore, stable, obsolete, regressed, rejected, publication} {
 		g.Reset()
 	}
 	clear(tracked)
@@ -85,6 +85,79 @@ func TestForgetRemovesSeries(t *testing.T) {
 				Forget("skill-ci", name)
 			}
 			n, err := testutil.GatherAndCount(reg, "skillci_lift", "skillci_with_score", "skillci_without_score", "skillci_stable", "skillci_obsolete", "skillci_regressed")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n != tt.wantSeries {
+				t.Errorf("series = %d, want %d", n, tt.wantSeries)
+			}
+		})
+	}
+}
+
+func TestPublication(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	Register(reg)
+	resetAll()
+	t.Cleanup(resetAll)
+
+	run := se("a", "acme", "v1.0.0", "haiku")
+	run.Status.Publication = "failed"
+	ObservePublication(run)
+	SetRejected("acme", "v1.0.0", true)
+
+	want := `
+# HELP skillci_publication 1 for the publication status SkillEvaluator reported for the run.
+# TYPE skillci_publication gauge
+skillci_publication{model="haiku",skill="acme",status="failed",version="v1.0.0"} 1
+# HELP skillci_rejected 1 when a required model's run of the skill version failed Tier 1 or Tier 2.
+# TYPE skillci_rejected gauge
+skillci_rejected{skill="acme",version="v1.0.0"} 1
+`
+	if err := testutil.GatherAndCompare(reg, strings.NewReader(want), "skillci_publication", "skillci_rejected"); err != nil {
+		t.Error(err)
+	}
+
+	// A rerun with another status replaces the series instead of adding one.
+	run.Status.Publication = "passed"
+	ObservePublication(run)
+	if n, err := testutil.GatherAndCount(reg, "skillci_publication"); err != nil || n != 1 {
+		t.Errorf("publication series after a rerun = %d, %v; want 1", n, err)
+	}
+	// A run from a runner without publication leaves no series.
+	run.Status.Publication = ""
+	ObservePublication(run)
+	if n, err := testutil.GatherAndCount(reg, "skillci_publication"); err != nil || n != 0 {
+		t.Errorf("publication series without a status = %d, %v; want 0", n, err)
+	}
+}
+
+func TestForgetRemovesPublication(t *testing.T) {
+	tests := []struct {
+		name       string
+		forget     []string
+		wantSeries int // publication and rejected series left
+	}{
+		{"forget one of two models", []string{"a"}, 1 + 1},
+		{"forget both", []string{"a", "b"}, 0},
+		{"forget nothing", nil, 2 + 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := prometheus.NewRegistry()
+			Register(reg)
+			resetAll()
+			t.Cleanup(resetAll)
+			for _, o := range []struct{ name, model string }{{"a", "haiku"}, {"b", "sonnet"}} {
+				run := se(o.name, "acme", "v1.0.0", o.model)
+				run.Status.Publication = "failed"
+				ObservePublication(run)
+			}
+			SetRejected("acme", "v1.0.0", true)
+			for _, name := range tt.forget {
+				Forget("skill-ci", name)
+			}
+			n, err := testutil.GatherAndCount(reg, "skillci_publication", "skillci_rejected")
 			if err != nil {
 				t.Fatal(err)
 			}

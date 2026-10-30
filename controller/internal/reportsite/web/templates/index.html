@@ -9,6 +9,7 @@
   <div><dt>Skills</dt><dd>{{.Stats.Skills}}</dd></div>
   <div><dt>Versions on stable</dt><dd>{{if .ChannelsOK}}{{.Stats.OnStable}}{{else}}–{{end}}</dd></div>
   <div><dt>Held back</dt><dd>{{.Stats.HeldBack}}</dd></div>
+  <div><dt>Rejected</dt><dd>{{.Stats.Rejected}}</dd></div>
 </dl>
 
 <section aria-labelledby="channels-h">
@@ -18,7 +19,7 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th scope="col">Skill</th><th scope="col">Stable</th><th scope="col">Beta</th><th scope="col">Held back</th><th scope="col" class="num">Versions evaluated</th></tr>
+        <tr><th scope="col">Skill</th><th scope="col">Stable</th><th scope="col">Beta</th><th scope="col">Held back</th><th scope="col">Rejected</th><th scope="col" class="num">Versions evaluated</th></tr>
       </thead>
       <tbody>
         {{range .Channels}}
@@ -27,6 +28,7 @@
           <td>{{dash .Stable}}</td>
           <td>{{dash .Beta}}</td>
           <td>{{if .HeldBack}}{{range .HeldBack}}<span class="status regressed"><i aria-hidden="true"></i>{{.}}</span> {{end}}{{else}}<span class="muted">–</span>{{end}}</td>
+          <td>{{if .Rejected}}{{range .Rejected}}<span class="status failed" title="Tier 1 or Tier 2 failed: never beta or stable"><i aria-hidden="true"></i>{{.}}</span> {{end}}{{else}}<span class="muted">–</span>{{end}}</td>
           <td class="num">{{.Versions}}</td>
         </tr>
         {{end}}
@@ -45,6 +47,7 @@
     {{template "select" (sel "model" "Model" .Filter.Model .Options.Models)}}
     {{template "select" (sel "verdict" "Verdict" .Filter.Verdict .Options.Verdicts)}}
     {{template "select" (sel "phase" "Phase" .Filter.Phase .Options.Phases)}}
+    {{template "select" (sel "publication" "Publication" .Filter.Publication .Options.Publications)}}
     <button type="submit">Apply</button>
     {{if .Filter.Active}}<a href="/">Clear filters</a>{{end}}
     <span class="count" role="status">{{if .Filter.Active}}{{len .Runs}} of {{.Stats.Runs}} runs{{else}}{{.Stats.Runs}} runs{{end}}</span>
@@ -65,6 +68,8 @@
           <th scope="col" class="num">Without</th>
           <th scope="col" class="num">Lift</th>
           <th scope="col">Verdict</th>
+          <th scope="col">Tiers</th>
+          <th scope="col">Publication</th>
           <th scope="col" class="num">Duration</th>
           <th scope="col">Report</th>
         </tr>
@@ -83,6 +88,8 @@
           <td class="num">{{dash .Without.Text}}</td>
           <td class="num">{{dash .Lift.Text}}</td>
           <td class="nowrap">{{template "status" .VerdictStatus}}</td>
+          <td class="nowrap">{{template "tiers" .}}</td>
+          <td class="nowrap">{{template "status" .PublicationStatus}}</td>
           <td class="num nowrap">{{dur .Duration}}</td>
           <td class="nowrap">{{if .HasReport}}<a href="/runs/{{.Name}}/report">Open</a>{{else}}<span class="muted">not stored</span>{{end}}</td>
         </tr>

@@ -61,6 +61,20 @@ const (
 	VerdictObsolete Verdict = "Obsolete"
 	// VerdictRegressed means the version scores worse than the stable version.
 	VerdictRegressed Verdict = "Regressed"
+	// VerdictRejected means Tier 1 or Tier 2 failed, so no live trials ran.
+	VerdictRejected Verdict = "Rejected"
+)
+
+// Tier and publication statuses reported by the runner.
+const (
+	// TierPassed means every check of the tier passed.
+	TierPassed = "passed"
+	// TierFailed means a check of the tier failed.
+	TierFailed = "failed"
+	// TierIncomplete means a check could not produce trustworthy evidence.
+	TierIncomplete = "incomplete"
+	// TierSkipped means the tier was not run.
+	TierSkipped = "skipped"
 )
 
 // SkillEvalSpec identifies one skill digest and one model to evaluate it with.
@@ -93,6 +107,20 @@ type SkillEvalSpec struct {
 	Trigger Trigger `json:"trigger,omitempty"`
 }
 
+// TierStatuses holds the outcome of the three SkillEvaluator tiers. An empty
+// value means the runner did not report the tier.
+type TierStatuses struct {
+	// Tier1 is the static, security and quality tier.
+	// +optional
+	Tier1 string `json:"tier1,omitempty"`
+	// Tier2 is the deduplication tier.
+	// +optional
+	Tier2 string `json:"tier2,omitempty"`
+	// Tier3 is the live with and without skill evaluation.
+	// +optional
+	Tier3 string `json:"tier3,omitempty"`
+}
+
 // SkillEvalStatus is the observed state of a SkillEval.
 type SkillEvalStatus struct {
 	// Phase is the lifecycle phase.
@@ -107,8 +135,19 @@ type SkillEvalStatus struct {
 	// Lift is WithSkill minus WithoutSkill, signed, two decimals.
 	Lift string `json:"lift,omitempty"`
 	// Verdict classifies the lift.
-	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete;Regressed
+	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete;Regressed;Rejected
 	Verdict Verdict `json:"verdict,omitempty"`
+	// Tiers is the outcome of the three SkillEvaluator tiers; absent when the
+	// runner is older than the tiers.
+	// +optional
+	Tiers *TierStatuses `json:"tiers,omitempty"`
+	// Publication is SkillEvaluator's publication assessment: passed, failed or incomplete.
+	// +optional
+	Publication string `json:"publication,omitempty"`
+	// Findings names the failing tier and check, at most five short strings.
+	// +optional
+	// +listType=atomic
+	Findings []string `json:"findings,omitempty"`
 	// ReportDigest is the digest of the eval report attached to the skill in the registry.
 	ReportDigest string `json:"reportDigest,omitempty"`
 	// Message is a human readable detail, for example a failure reason.
@@ -133,6 +172,8 @@ type SkillEvalStatus struct {
 // +kubebuilder:printcolumn:name="Without",type=string,JSONPath=`.status.withoutSkill`
 // +kubebuilder:printcolumn:name="Lift",type=string,JSONPath=`.status.lift`
 // +kubebuilder:printcolumn:name="Verdict",type=string,JSONPath=`.status.verdict`
+// +kubebuilder:printcolumn:name="Tier1",type=string,JSONPath=`.status.tiers.tier1`
+// +kubebuilder:printcolumn:name="Publication",type=string,priority=1,JSONPath=`.status.publication`
 // +kubebuilder:printcolumn:name="Report",type=string,priority=1,JSONPath=`.status.reportDigest`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type SkillEval struct {

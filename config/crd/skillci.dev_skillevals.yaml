@@ -41,6 +41,13 @@ spec:
     - jsonPath: .status.verdict
       name: Verdict
       type: string
+    - jsonPath: .status.tiers.tier1
+      name: Tier1
+      type: string
+    - jsonPath: .status.publication
+      name: Publication
+      priority: 1
+      type: string
     - jsonPath: .status.reportDigest
       name: Report
       priority: 1
@@ -184,6 +191,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              findings:
+                description: Findings names the failing tier and check, at most five
+                  short strings.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
               jobName:
                 description: JobName is the runner Job.
                 type: string
@@ -203,10 +217,29 @@ spec:
                 - Failed
                 - Planned
                 type: string
+              publication:
+                description: 'Publication is SkillEvaluator''s publication assessment:
+                  passed, failed or incomplete.'
+                type: string
               reportDigest:
                 description: ReportDigest is the digest of the eval report attached
                   to the skill in the registry.
                 type: string
+              tiers:
+                description: |-
+                  Tiers is the outcome of the three SkillEvaluator tiers; absent when the
+                  runner is older than the tiers.
+                properties:
+                  tier1:
+                    description: Tier1 is the static, security and quality tier.
+                    type: string
+                  tier2:
+                    description: Tier2 is the deduplication tier.
+                    type: string
+                  tier3:
+                    description: Tier3 is the live with and without skill evaluation.
+                    type: string
+                type: object
               verdict:
                 description: Verdict classifies the lift.
                 enum:
@@ -215,6 +248,7 @@ spec:
                 - Hurts
                 - Obsolete
                 - Regressed
+                - Rejected
                 type: string
               withSkill:
                 description: WithSkill is the score with the skill, two decimals.

@@ -74,6 +74,13 @@ type Run struct {
 	Conditions []Condition
 	// Regressed is the message of the Regressed condition, empty when absent.
 	Regressed string
+	// Tier1, Tier2 and Tier3 are the tier statuses the runner reported;
+	// empty when it did not (runs before the tiers existed).
+	Tier1, Tier2, Tier3 string
+	// Publication is SkillEvaluator's publication assessment, empty when not reported.
+	Publication string
+	// Findings are the short strings naming the failing tier and check.
+	Findings []string
 }
 
 func newRun(se *v1alpha1.SkillEval) Run {
@@ -85,6 +92,10 @@ func newRun(se *v1alpha1.SkillEval) Run {
 		JobName: se.Status.JobName, Message: se.Status.Message, ReportDigest: se.Status.ReportDigest,
 		Created: se.CreationTimestamp.UTC(),
 	}
+	if t := se.Status.Tiers; t != nil {
+		r.Tier1, r.Tier2, r.Tier3 = t.Tier1, t.Tier2, t.Tier3
+	}
+	r.Publication, r.Findings = se.Status.Publication, se.Status.Findings
 	if r.Phase == "" {
 		r.Phase = string(v1alpha1.PhasePending)
 	}
@@ -150,7 +161,7 @@ func (r Run) VerdictStatus() Status {
 	switch v1alpha1.Verdict(r.Verdict) {
 	case v1alpha1.VerdictHelps:
 		return Status{"pass", r.Verdict}
-	case v1alpha1.VerdictHurts:
+	case v1alpha1.VerdictHurts, v1alpha1.VerdictRejected:
 		return Status{"failed", r.Verdict}
 	case v1alpha1.VerdictRegressed:
 		return Status{"regressed", r.Verdict}
@@ -158,6 +169,117 @@ func (r Run) VerdictStatus() Status {
 		return Status{"neutral", r.Verdict}
 	default:
 		return Status{}
+	}
+}
+
+// tierInfo names the three tiers and says what each one covers.
+var tierInfo = [3]struct{ Short, Name, Covers string }{
+	{"T1", "Tier 1", "Static checks: schema, security, PII, license, code integrity, unicode, version, quality and lint. Runs before any live trial."},
+	{"T2", "Tier 2", "Deduplication against the other skills in Harbor. Runs before any live trial."},
+	{"T3", "Tier 3", "Live trials with and without the skill: the scores, lift and the six dimensions. Runs only when Tier 1 and Tier 2 pass."},
+}
+
+// tierShort says in a few words what a tier is, for tooltips.
+var tierShort = [3]string{"static checks", "deduplication", "live trials"}
+
+// TierMarker is one tier of a run, ready to render.
+type TierMarker struct {
+	// Short is the compact label, T1 to T3.
+	Short string
+	// Name is the full name, Tier 1 to Tier 3.
+	Name string
+	// Covers says what the tier checks.
+	Covers string
+	// Value is the status the runner reported; empty when unknown.
+	Value string
+	// Status is the marker kind and its capitalised text; empty when unknown.
+	Status Status
+	// Text is the accessible description, for example "Tier 1 (static checks): failed".
+	Text string
+}
+
+// tierStatus maps a reported tier or publication value to a status. Passed
+// is green, failed red, incomplete amber and skipped quiet; anything else is
+// unknown and gives an empty status, which renders a dash.
+func tierStatus(value string) Status {
+	switch value {
+	case v1alpha1.TierPassed:
+		return Status{"pass", "Passed"}
+	case v1alpha1.TierFailed:
+		return Status{"failed", "Failed"}
+	case v1alpha1.TierIncomplete:
+		return Status{"regressed", "Incomplete"}
+	case v1alpha1.TierSkipped:
+		return Status{"neutral", "Skipped"}
+	default:
+		return Status{}
+	}
+}
+
+// TierMarkers returns the three tiers of the run in order.
+func (r Run) TierMarkers() []TierMarker {
+	values := [3]string{r.Tier1, r.Tier2, r.Tier3}
+	out := make([]TierMarker, len(values))
+	for i, v := range values {
+		st := tierStatus(v)
+		text := tierInfo[i].Name + " (" + tierShort[i] + "): not reported"
+		if st.Kind != "" {
+			text = tierInfo[i].Name + " (" + tierShort[i] + "): " + strings.ToLower(st.Label)
+		}
+		out[i] = TierMarker{Short: tierInfo[i].Short, Name: tierInfo[i].Name, Covers: tierInfo[i].Covers, Value: v, Status: st, Text: text}
+	}
+	return out
+}
+
+// TiersKnown reports whether the runner reported any tier.
+func (r Run) TiersKnown() bool { return r.Tier1 != "" || r.Tier2 != "" || r.Tier3 != "" }
+
+// PublicationStatus maps SkillEvaluator's publication assessment to a status.
+func (r Run) PublicationStatus() Status { return tierStatus(r.Publication) }
+
+// Rejected reports whether Tier 1 or Tier 2 failed for this run.
+func (r Run) Rejected() bool {
+	return r.Tier1 == v1alpha1.TierFailed || r.Tier2 == v1alpha1.TierFailed || r.Verdict == string(v1alpha1.VerdictRejected)
+}
+
+// RejectedBy names the tiers that failed, for example "Tier 1" or "Tier 1 and Tier 2".
+func (r Run) RejectedBy() string {
+	switch {
+	case r.Tier1 == v1alpha1.TierFailed && r.Tier2 == v1alpha1.TierFailed:
+		return "Tier 1 and Tier 2"
+	case r.Tier1 == v1alpha1.TierFailed:
+		return "Tier 1"
+	case r.Tier2 == v1alpha1.TierFailed:
+		return "Tier 2"
+	default:
+		return "Tier 1 or Tier 2"
+	}
+}
+
+// FirstFinding returns the first finding, empty when there is none.
+func (r Run) FirstFinding() string {
+	if len(r.Findings) == 0 {
+		return ""
+	}
+	return r.Findings[0]
+}
+
+// NoScores reports whether the run finished without scores, which is what
+// happens when Tier 3 did not run.
+func (r Run) NoScores() bool {
+	return r.Phase == string(v1alpha1.PhaseSucceeded) && (!r.With.OK || !r.Without.OK)
+}
+
+// Tier3Note explains in a sentence why the live trials did not run; empty
+// when they ran or the runner did not say.
+func (r Run) Tier3Note() string {
+	switch {
+	case r.Tier3 != v1alpha1.TierSkipped && (!r.NoScores() || !r.Rejected()):
+		return ""
+	case r.Rejected():
+		return "Tier 3 not run: " + r.RejectedBy() + " rejected this version, so no live trials were spent."
+	default:
+		return "Tier 3 not run: the runner skipped the live trials."
 	}
 }
 
@@ -186,6 +308,8 @@ func (r Run) NoReportReason() string {
 		return "The report is attached when the run finishes."
 	case r.Phase == string(v1alpha1.PhasePlanned):
 		return "No report: a dry run creates no Job."
+	case r.TiersKnown():
+		return "No report stored for this run."
 	default:
 		return "No report stored for this run. Runs on runner versions before 0.3.0 did not attach one."
 	}

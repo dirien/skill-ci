@@ -1,4 +1,5 @@
 {{define "status"}}{{if .Kind}}<span class="status {{.Kind}}"><i aria-hidden="true"></i>{{.Label}}</span>{{else}}<span class="muted">–</span>{{end}}{{end}}
+{{define "tiers"}}{{if .TiersKnown}}<span class="tiers">{{range .TierMarkers}}{{if .Status.Kind}}<span class="status tier {{.Status.Kind}}" role="img" aria-label="{{.Text}}" title="{{.Text}}"><i aria-hidden="true"></i>{{.Short}}</span>{{else}}<span class="muted tier" role="img" aria-label="{{.Text}}" title="{{.Text}}">{{.Short}}&nbsp;–</span>{{end}}{{end}}</span>{{else}}<span class="muted" title="The runner did not report tiers">–</span>{{end}}{{end}}
 {{define "tags"}}{{range .}}<span class="tag {{.}}">{{.}}</span> {{else}}<span class="muted">–</span>{{end}}{{end}}
 
 {{define "select"}}<label>{{.Label}}
@@ -13,5 +14,8 @@
   <li><strong>Lift</strong> is the with-skill score minus the without-skill score.</li>
   <li><strong>Helps</strong> at lift {{signed .Helps}} or more. <strong>Hurts</strong> at {{signed .Hurts}} or less. Otherwise <strong>Neutral</strong>, or <strong>Obsolete</strong> when the without-skill score is already {{num .Obsolete}} or more.</li>
   <li><strong>Stable</strong> needs lift {{signed .Promote}} on every required model and no regression. Stable is removed at {{signed .Demote}} or less on any required model.</li>
+  <li><strong>Tiers</strong>: <strong>T1</strong> static, security and quality checks, <strong>T2</strong> deduplication, <strong>T3</strong> live trials with and without the skill. T1 and T2 run first; if either fails, T3 is skipped and no trials are spent. Markers: filled circle passed, square failed, triangle incomplete (a check could not produce trustworthy evidence), hollow circle skipped.</li>
+  <li><strong>Rejected</strong>: Tier 1 or Tier 2 failed on a required model. The version never gets <code>beta</code> or <code>stable</code>, and loses <code>stable</code> if it had it.</li>
+  <li><strong>Publication</strong> is SkillEvaluator's assessment across all three tiers: passed, failed or incomplete.</li>
   <li><strong>Regressed</strong>: the with-skill score fell more than {{num .Regression}} below the stable version on a required model. The version keeps <code>beta</code> and does not replace stable.</li>
 </ul>{{end}}

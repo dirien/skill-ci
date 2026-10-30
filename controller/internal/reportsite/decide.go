@@ -53,6 +53,15 @@ func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 		return Decision{Kind: "failed", Headline: "Eval failed", Detail: fmt.Sprintf("An eval failed on %s, so the policy did not decide.", models(failed))}
 	}
 	for _, r := range required {
+		if r.Rejected() {
+			detail := "Rejected by " + r.RejectedBy()
+			if f := r.FirstFinding(); f != "" {
+				detail += ": " + f
+			}
+			return Decision{Kind: "failed", Headline: "Rejected", Detail: detail}
+		}
+	}
+	for _, r := range required {
 		if r.Regressed != "" {
 			return Decision{Kind: "regressed", Headline: "Held back", Detail: r.Regressed}
 		}
