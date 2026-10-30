@@ -1,0 +1,45 @@
+{
+  "skill_name": "python-docstrings",
+  "evals": [
+    {
+      "id": "docstring-function",
+      "prompt": "Write a Python function parse_duration(text: str) -> int in a file named duration.py. It converts strings like '1h30m' or '45s' into a number of seconds and raises ValueError when the text is not a valid duration. Document it.",
+      "expected_output": "duration.py containing parse_duration with a Google-style docstring: an imperative one-line summary ending with a period, an Args section for text, a Returns section, and a Raises section for ValueError.",
+      "assertions": [
+        "duration.py exists and defines parse_duration",
+        "The docstring starts with a one-line summary in the imperative mood that ends with a period",
+        "The docstring has an 'Args:' section that documents the parameter text",
+        "The docstring has a 'Returns:' section",
+        "The docstring has a 'Raises:' section that mentions ValueError",
+        "The docstring does not repeat parameter types that are already in the signature"
+      ],
+      "expected_skill": "python-docstrings"
+    },
+    {
+      "id": "docstring-class",
+      "prompt": "Write a token bucket rate limiter as a class RateLimiter in a file named ratelimit.py. The constructor takes rate (tokens per second) and capacity. The public method allow() returns True when a request may proceed. Add documentation for the class and its public API.",
+      "expected_output": "ratelimit.py containing RateLimiter with a class docstring that documents the constructor parameters under Args, and a Google-style docstring on allow() with a Returns section.",
+      "assertions": [
+        "ratelimit.py exists and defines RateLimiter",
+        "The class has a docstring with an imperative or descriptive one-line summary that ends with a period",
+        "The constructor parameters rate and capacity are documented in an 'Args:' section",
+        "allow() has its own docstring with a 'Returns:' section",
+        "No docstring uses reStructuredText fields such as ':param' or ':returns:'"
+      ],
+      "expected_skill": "python-docstrings"
+    },
+    {
+      "id": "docstring-generator",
+      "prompt": "Write a generator function chunked(items: list, size: int) in a file named chunks.py that yields successive lists of at most size items, and raises ValueError when size is smaller than 1. Add a docstring.",
+      "expected_output": "chunks.py containing chunked with a Google-style docstring that uses Yields instead of Returns and documents ValueError under Raises.",
+      "assertions": [
+        "chunks.py exists and defines chunked",
+        "The docstring has an 'Args:' section that documents items and size",
+        "The docstring has a 'Yields:' section instead of a 'Returns:' section",
+        "The docstring has a 'Raises:' section that mentions ValueError",
+        "The first line of the docstring is an imperative one-line summary ending with a period"
+      ],
+      "expected_skill": "python-docstrings"
+    }
+  ]
+}

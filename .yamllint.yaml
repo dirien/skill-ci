@@ -1,0 +1,21 @@
+# Accepts Pulumi YAML and Kubernetes manifests: long lines, no document start marker.
+extends: default
+
+ignore: |
+  .git/
+  controller/
+  runner/
+  harbor-agent-sandbox/
+  skillevaluator-patch/
+
+rules:
+  line-length: disable
+  document-start: disable
+  truthy:
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: {}
+  indentation:
+    spaces: 2
+    indent-sequences: consistent

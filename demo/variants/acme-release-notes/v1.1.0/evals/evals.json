@@ -1,0 +1,46 @@
+{
+  "skill_name": "acme-release-notes",
+  "evals": [
+    {
+      "id": "rn-basic",
+      "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+      "expected_output": "RELEASE_NOTES.md whose first line is 'ACME-RN/2 1.4.0', followed by '## Added' with the CSV export bullet ending in [ACME-101] and '## Fixed' with the login timeout bullet ending in [ACME-117], and no other sections.",
+      "assertions": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "There are exactly two sections, '## Added' then '## Fixed'",
+        "Each bullet ends with its ticket ID in square brackets"
+      ],
+      "expected_skill": "acme-release-notes"
+    },
+    {
+      "id": "rn-multiple",
+      "prompt": "Write the release notes for version 2.0.1 into a file named RELEASE_NOTES.md. Changes: added dark mode (ticket ACME-210), added audit log export (ticket ACME-214), fixed a crash on empty carts (ticket ACME-222), fixed wrong totals with discount codes (ticket ACME-225).",
+      "expected_output": "RELEASE_NOTES.md whose first line is 'ACME-RN/2 2.0.1', followed by '## Added' with two bullets ending in [ACME-210] and [ACME-214], and '## Fixed' with two bullets ending in [ACME-222] and [ACME-225].",
+      "assertions": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 2.0.1'",
+        "The '## Added' section comes first and has two bullets",
+        "The '## Fixed' section comes second and has two bullets",
+        "Each bullet ends with its own ticket ID in square brackets",
+        "There is no intro text and there are no emojis",
+        "Bullets in each section are sorted by ticket ID, lowest first"
+      ],
+      "expected_skill": "acme-release-notes"
+    },
+    {
+      "id": "rn-fixes-only",
+      "prompt": "Write the release notes for version 1.4.1 into a file named RELEASE_NOTES.md. This is a patch release with a single change: fixed a memory leak in the report exporter (ticket ACME-231).",
+      "expected_output": "RELEASE_NOTES.md whose first line is 'ACME-RN/2 1.4.1', followed by the two sections '## Added' and '## Fixed' in that order, with the memory leak bullet ending in [ACME-231] under '## Fixed'. The '## Added' section holds the single bullet '- None [ACME-0]'.",
+      "assertions": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 1.4.1'",
+        "Both '## Added' and '## Fixed' sections are present, in that order",
+        "The memory leak bullet is under '## Fixed' and ends with [ACME-231]",
+        "No other sections, intro text, or emojis appear",
+        "The '## Added' section contains exactly the bullet '- None [ACME-0]'"
+      ],
+      "expected_skill": "acme-release-notes"
+    }
+  ]
+}

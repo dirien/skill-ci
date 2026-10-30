@@ -12,8 +12,28 @@ config:
   buildkitVersion:
     type: string
     default: v0.34.1
+  harborChartVersion:
+    type: string
+    default: 1.19.4
+  orasVersion:
+    type: string
+    default: v1.3.0
+  curlVersion:
+    type: string
+    default: 8.14.1
+  kubePrometheusStackVersion:
+    type: string
+    default: 92.10.1
 
 variables:
+  # The Harbor setup script is also a Job input, so editing it re-runs the Job.
+  harborSetupScript:
+    fn::readFile: ./harbor-setup.sh
+  # Initial model list. Pulumi only seeds it, see the skill-ci-models resource.
+  initialModels:
+    fn::readFile: ../demo/models.yaml
+  skillCiDashboard:
+    fn::readFile: ./dashboards/skill-ci.json
   k8sVersion:
     fn::invoke:
       function: digitalocean:getKubernetesVersions
@@ -26,7 +46,7 @@ resources:
     type: digitalocean:ContainerRegistry
     properties:
       name: skill-ci-dirien
-      subscriptionTierSlug: basic
+      subscriptionTierSlug: professional
       region: ${region}
 
   cluster:
@@ -142,7 +162,7 @@ resources:
     properties:
       name: harbor
       chart: harbor
-      version: 1.19.4
+      version: ${harborChartVersion}
       namespace: harbor
       createNamespace: true
       repositoryOpts:
@@ -152,57 +172,334 @@ resources:
           type: clusterIP
           tls:
             enabled: false
-        externalURL: http://127.0.0.1:8085
+        # Pods authenticate against the token service at this URL, so it has to resolve in the cluster.
+        # Reach Harbor from outside only through in-cluster tooling (toolbox pod, kubectl port-forward svc/harbor).
+        externalURL: http://harbor.harbor.svc.cluster.local
         harborAdminPassword: ${harborAdminPassword.result}
         trivy:
           enabled: false
     options:
       provider: ${k8s}
 
-  # Logs every webhook Harbor sends, so the trigger can be checked.
-  webhookReceiver:
-    type: kubernetes:apps/v1:Deployment
+  # Shared secret between Harbor's webhook policy and the controller.
+  harborWebhookToken:
+    type: random:RandomPassword
+    properties:
+      length: 40
+      special: false
+
+  # Admin credentials for the controller's Harbor REST calls.
+  # A project-scoped robot account is the production choice. Admin keeps the demo reproducible.
+  harborCredentialsSecret:
+    type: kubernetes:core/v1:Secret
     properties:
       metadata:
-        name: webhook-receiver
+        name: harbor-credentials
         namespace: ${ns.metadata.name}
-      spec:
-        selector:
-          matchLabels:
-            app: webhook-receiver
-        template:
-          metadata:
-            labels:
-              app: webhook-receiver
-          spec:
-            containers:
-              - name: receiver
-                image: python:3.12-alpine
-                command: ["python", "-u", "-c"]
-                args:
-                  - |
-                    from http.server import BaseHTTPRequestHandler, HTTPServer
-                    class H(BaseHTTPRequestHandler):
-                        def do_POST(self):
-                            print(self.rfile.read(int(self.headers["Content-Length"])).decode(), flush=True)
-                            self.send_response(200); self.end_headers()
-                    HTTPServer(("", 8080), H).serve_forever()
-                ports:
-                  - containerPort: 8080
+      stringData:
+        username: admin
+        password: ${harborAdminPassword.result}
     options:
       provider: ${k8s}
 
-  webhookReceiverService:
-    type: kubernetes:core/v1:Service
+  # Registry config for oras pulls and pushes against the in-cluster Harbor.
+  harborPullSecret:
+    type: kubernetes:core/v1:Secret
     properties:
       metadata:
-        name: webhook-receiver
+        name: harbor-pull
+        namespace: ${ns.metadata.name}
+      type: kubernetes.io/dockerconfigjson
+      stringData:
+        .dockerconfigjson:
+          fn::toJSON:
+            auths:
+              harbor.harbor.svc.cluster.local:
+                username: admin
+                password: ${harborAdminPassword.result}
+                auth:
+                  fn::toBase64: admin:${harborAdminPassword.result}
+    options:
+      provider: ${k8s}
+
+  harborWebhookSecret:
+    type: kubernetes:core/v1:Secret
+    properties:
+      metadata:
+        name: harbor-webhook
+        namespace: ${ns.metadata.name}
+      stringData:
+        token: ${harborWebhookToken.result}
+    options:
+      provider: ${k8s}
+
+  # Changes whenever an input of the setup Job changes. It names the Job, so a new Job runs instead of a stale one.
+  harborSetupRun:
+    type: random:RandomId
+    properties:
+      byteLength: 3
+      keepers:
+        script: ${harborSetupScript}
+        image: curlimages/curl:${curlVersion}
+        adminPassword: ${harborAdminPassword.result}
+        webhookToken: ${harborWebhookToken.result}
+
+  # Idempotent: waits for Harbor, creates project "skills", creates or updates the webhook policy.
+  harborSetup:
+    type: kubernetes:batch/v1:Job
+    properties:
+      metadata:
+        name: harbor-setup-${harborSetupRun.hex}
         namespace: ${ns.metadata.name}
       spec:
+        backoffLimit: 4
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: setup
+                image: curlimages/curl:${curlVersion}
+                command: ["/bin/sh", "-c"]
+                args:
+                  - ${harborSetupScript}
+                env:
+                  - name: HARBOR_URL
+                    value: http://harbor.harbor.svc.cluster.local
+                  - name: WEBHOOK_URL
+                    value: http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor
+                  - name: HARBOR_ADMIN_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: ${harborCredentialsSecret.metadata.name}
+                        key: password
+                  - name: WEBHOOK_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: ${harborWebhookSecret.metadata.name}
+                        key: token
+    options:
+      provider: ${k8s}
+      dependsOn:
+        - ${harbor}
+
+  # Pushes skills from inside the cluster (Harbor is only reachable there). Used by demo/*.sh via kubectl exec.
+  toolbox:
+    type: kubernetes:apps/v1:Deployment
+    properties:
+      metadata:
+        name: toolbox
+        namespace: ${ns.metadata.name}
+      spec:
+        replicas: 1
         selector:
-          app: webhook-receiver
-        ports:
-          - port: 8080
+          matchLabels:
+            app: toolbox
+        template:
+          metadata:
+            labels:
+              app: toolbox
+            annotations:
+              kubectl.kubernetes.io/default-container: oras
+          spec:
+            containers:
+              - name: oras
+                image: ghcr.io/oras-project/oras:${orasVersion}
+                command: ["sleep", "2147483647"]
+                workingDir: /workspace
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 32Mi
+                  limits:
+                    memory: 256Mi
+                volumeMounts:
+                  - name: harbor-pull
+                    mountPath: /auth
+                    readOnly: true
+              # curl for Harbor's REST API (tag listing and cleanup), with the admin password in its env.
+              - name: harbor-api
+                image: curlimages/curl:${curlVersion}
+                command: ["sleep", "2147483647"]
+                env:
+                  - name: HARBOR_ADMIN_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: ${harborCredentialsSecret.metadata.name}
+                        key: password
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 16Mi
+                  limits:
+                    memory: 128Mi
+            volumes:
+              - name: harbor-pull
+                secret:
+                  secretName: ${harborPullSecret.metadata.name}
+                  items:
+                    - key: .dockerconfigjson
+                      path: config.json
+    options:
+      provider: ${k8s}
+
+  # Seeds the model list. The demo edits it live (make demo-model-swap), so Pulumi ignores later changes to data.
+  # Source of truth for the initial content and for make reset: demo/models.yaml.
+  modelsConfigMap:
+    type: kubernetes:core/v1:ConfigMap
+    properties:
+      metadata:
+        name: skill-ci-models
+        namespace: ${ns.metadata.name}
+      data:
+        models.yaml: ${initialModels}
+    options:
+      provider: ${k8s}
+      ignoreChanges:
+        - data
+
+  # Metrics and dashboards: Prometheus + Grafana, trimmed to what the controller needs.
+  monitoringNs:
+    type: kubernetes:core/v1:Namespace
+    properties:
+      metadata:
+        name: monitoring
+    options:
+      provider: ${k8s}
+
+  grafanaAdminPassword:
+    type: random:RandomPassword
+    properties:
+      length: 20
+      special: false
+
+  grafanaAdminSecret:
+    type: kubernetes:core/v1:Secret
+    properties:
+      metadata:
+        name: grafana-admin
+        namespace: ${monitoringNs.metadata.name}
+      stringData:
+        admin-user: admin
+        admin-password: ${grafanaAdminPassword.result}
+    options:
+      provider: ${k8s}
+
+  kubePrometheusStack:
+    type: kubernetes:helm.sh/v3:Release
+    properties:
+      name: kps
+      chart: kube-prometheus-stack
+      version: ${kubePrometheusStackVersion}
+      namespace: ${monitoringNs.metadata.name}
+      repositoryOpts:
+        repo: https://prometheus-community.github.io/helm-charts
+      values:
+        defaultRules:
+          create: false
+        alertmanager:
+          enabled: false
+        nodeExporter:
+          enabled: false
+        kubeStateMetrics:
+          enabled: false
+        kubeApiServer:
+          enabled: false
+        kubelet:
+          enabled: false
+        coreDns:
+          enabled: false
+        kubeDns:
+          enabled: false
+        kubeEtcd:
+          enabled: false
+        kubeScheduler:
+          enabled: false
+        kubeControllerManager:
+          enabled: false
+        kubeProxy:
+          enabled: false
+        prometheusOperator:
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+        prometheus:
+          prometheusSpec:
+            # Pick up ServiceMonitors from every namespace without a Helm release label.
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            retention: 24h
+            scrapeInterval: 15s
+            resources:
+              requests:
+                cpu: 100m
+                memory: 400Mi
+              limits:
+                memory: 800Mi
+        grafana:
+          enabled: true
+          defaultDashboardsEnabled: false
+          admin:
+            existingSecret: ${grafanaAdminSecret.metadata.name}
+            userKey: admin-user
+            passwordKey: admin-password
+          sidecar:
+            dashboards:
+              enabled: true
+              label: grafana_dashboard
+              labelValue: "1"
+              searchNamespace: ALL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+    options:
+      provider: ${k8s}
+
+  # Scrapes the controller's /metrics. The Service itself ships with the controller manifests (config/).
+  controllerServiceMonitor:
+    type: kubernetes:yaml/v2:ConfigGroup
+    properties:
+      objs:
+        - apiVersion: monitoring.coreos.com/v1
+          kind: ServiceMonitor
+          metadata:
+            name: skill-ci-controller
+            namespace: skill-ci
+            labels:
+              app.kubernetes.io/name: skill-ci-controller
+          spec:
+            namespaceSelector:
+              matchNames:
+                - skill-ci
+            selector:
+              matchLabels:
+                app.kubernetes.io/name: skill-ci-controller
+            endpoints:
+              - port: metrics
+                path: /metrics
+                interval: 15s
+    options:
+      provider: ${k8s}
+      dependsOn:
+        - ${kubePrometheusStack}
+        - ${ns}
+
+  # Picked up by the Grafana sidecar through the grafana_dashboard label.
+  skillCiDashboardConfigMap:
+    type: kubernetes:core/v1:ConfigMap
+    properties:
+      metadata:
+        name: skill-ci-dashboard
+        namespace: ${monitoringNs.metadata.name}
+        labels:
+          grafana_dashboard: "1"
+      data:
+        skill-ci.json: ${skillCiDashboard}
     options:
       provider: ${k8s}
 
@@ -213,3 +510,6 @@ outputs:
   k8sVersion: ${k8sVersion}
   harborAdminPassword:
     fn::secret: ${harborAdminPassword.result}
+  grafanaAdminPassword:
+    fn::secret: ${grafanaAdminPassword.result}
+  grafanaService: kps-grafana

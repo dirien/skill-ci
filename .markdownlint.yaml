@@ -1,0 +1,6 @@
+# Prose lines are not wrapped, and the README uses inline HTML nowhere but allow it anyway.
+default: true
+MD013: false
+MD033: false
+MD024:
+  siblings_only: true
