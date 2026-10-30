@@ -68,6 +68,11 @@ updates:
       day: "monday"
     labels:
       - "dependencies"
+    # Python stays on 3.12: the pinned SkillSpector needs <3.15, and the verifier packages
+    # (ragas, langchain-community) do not install on 3.15. Patch releases still come in.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   # The sandbox image's base image. The agent CLI, Node and nvm pins are ARGs in
   # sandbox/Dockerfile, bumped by hand together with runner/skill_eval.py.
@@ -78,3 +83,8 @@ updates:
       day: "monday"
     labels:
       - "dependencies"
+    # Python stays on 3.12: the pinned SkillSpector needs <3.15, and the verifier packages
+    # (ragas, langchain-community) do not install on 3.15. Patch releases still come in.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
