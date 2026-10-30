@@ -7,7 +7,7 @@
 # releases, so a trial does not install them (Harbor skips the install when the CLI is there).
 #
 # Build context: sandbox/. Published as ghcr.io/dirien/skill-ci-sandbox:<release> (linux/amd64).
-FROM python:3.12.16-slim-bookworm
+FROM python:3.15.0-slim-bookworm
 
 ARG NVM_VERSION=v0.40.2
 ARG NODE_RELEASE=22.23.3
