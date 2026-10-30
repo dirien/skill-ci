@@ -110,7 +110,9 @@ Ten minutes before, open these. Large font, dark theme, one task per terminal:
 | Terminal 2 | Watch | `kubectl -n skill-ci get skillevals -w` |
 | Terminal 3 | Controller log | `kubectl -n skill-ci logs deploy/skill-ci-controller -f` |
 | Terminal 4 | Grafana port-forward, leave it running | `make dashboard` |
+| Terminal 5 | Reporting site port-forward, leave it running | `make reports-ui` |
 | Browser tab 1 | Grafana, dashboard `skill-ci` | `http://localhost:3000`, user `admin` |
+| Browser tab 4 | Reporting site, the closing screen | `http://localhost:8082` |
 | Browser tab 2 | Fallback: the published run report | <https://claude.ai/artifact/YNMduYoqFyxCMrsjvmywZp> |
 | Browser tab 3 | One local report | `reports/acme-release-notes-v1.1.0-claude-opus-5-5/report.html` |
 
@@ -241,6 +243,8 @@ The audience sees a table of three report referrers (sha256 digest, creation tim
 
 Say: the full SkillEvaluator report is attached to the skill digest as an OCI referrer, so it survives the pod and travels with the artifact.
 
+Then the closing screen, browser tab 4, the reporting site served by the controller (`make reports-ui`): the runs list with every SkillEval, the release channels, and a skill page (`/skills/acme-release-notes`) that says in words why v1.2.0 is held back and v1.1.0 is on stable. Open the run `acme-release-notes-v1-1-0-claude-haiku-5-5` for the six dimensions and the full SkillEvaluator report. Only runs from runner 0.3.0 or newer have a report; the others say "not stored". Needs controller image 0.3.0 or newer.
+
 ### Close
 
 Return to the first slide of the stack: Harbor, a controller, Jobs, sandboxes. The summary line: the same pipeline you already run for packages, applied to skills.
@@ -249,6 +253,7 @@ Return to the first slide of the stack: Harbor, a controller, Jobs, sandboxes. T
 
 If the cluster or the network fails, do not debug on stage.
 
+0. If only the reporting site is down, run `make report-page` and open `reports/index.html`, the offline version of the same content.
 1. Switch to browser tab 2, the published run report: <https://claude.ai/artifact/YNMduYoqFyxCMrsjvmywZp>. It has the lift matrix, the release channels and what the policy decided. Careful: it was published while the controller was flapping, so its "Release channels" table can disagree with its own "v1.1.0 promoted to stable" text. Talk to the decisions and the matrix, not the channels table.
 2. Open the local reports from `reports/`, which need no network.
 3. Show the table in "The state the beats rely on" from this file.
@@ -258,6 +263,7 @@ If the cluster or the network fails, do not debug on stage.
 | Symptom | Fix |
 | --- | --- |
 | `make status` hangs or errors on the Harbor block | The toolbox pod is not ready: `kubectl -n skill-ci rollout status deploy/toolbox`. The SkillEval block works without it: `kubectl -n skill-ci get skillevals -o wide` |
+| Reporting site unreachable | The port-forward died, or the controller image is older than 0.3.0 (no `--reports-addr`). Run `make reports-ui` again, or use `make report-page` |
 | Grafana unreachable | The port-forward died. Stop terminal 4 and run `make dashboard` again |
 | Dashboard empty | `kubectl -n skill-ci rollout restart deploy/skill-ci-controller`, wait a minute, refresh |
 | `stable` moving back and forth in the controller log | The controller is older than 0.2.1. Run `make build deploy` (see "Controller version check") |

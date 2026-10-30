@@ -10,7 +10,7 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-CONTROLLER_TAG ?= 0.2.1
+CONTROLLER_TAG ?= 0.3.0
 RUNNER_TAG ?= 0.3.0
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
@@ -83,6 +83,10 @@ report-page: ## Build the run report page with every SkillEval and the SkillEval
 .PHONY: dashboard
 dashboard: ## Port-forward Grafana and print the login
 	@demo/dashboard.sh
+
+.PHONY: reports-ui
+reports-ui: ## Port-forward the controller's reporting site and print its URL (PORT=8082)
+	@demo/reports-ui.sh
 
 .PHONY: reset
 reset: ## Back to the start: delete SkillEvals and Jobs, reset tags, restore the model list

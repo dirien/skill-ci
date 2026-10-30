@@ -22,6 +22,8 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/metrics"
 	"github.com/dirien/skill-ci/controller/internal/policy"
+	"github.com/dirien/skill-ci/controller/internal/reportsite"
+	"github.com/dirien/skill-ci/controller/internal/reportstore"
 	"github.com/dirien/skill-ci/controller/internal/runner"
 	"github.com/dirien/skill-ci/controller/internal/webhook"
 )
@@ -33,13 +35,33 @@ func main() {
 	}
 }
 
+// newReportSite builds the read-only reporting website over the manager's
+// cached client, the Harbor API and the report referrers in the registry.
+func newReportSite(mgr ctrl.Manager, addr, harborURL string, cfg controller.Config, registry harbor.Client) (*reportsite.Server, error) {
+	reports, err := reportstore.New(reportstore.Options{
+		RegistryURL: harborURL, Project: cfg.Project,
+		Username: os.Getenv("HARBOR_USERNAME"), Password: os.Getenv("HARBOR_PASSWORD"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating report store: %w", err)
+	}
+	site, err := reportsite.New(reportsite.Config{
+		Addr: addr, Reader: mgr.GetClient(), Namespace: cfg.Namespace, Project: cfg.Project,
+		Harbor: registry, Reports: reports, Thresholds: cfg.Thresholds, Log: ctrl.Log.WithName("reports"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating reports site: %w", err)
+	}
+	return site, nil
+}
+
 func run() error {
 	th := policy.DefaultThresholds()
 	cfg := controller.Config{Thresholds: th}
 	var (
-		harborURL, runnerImage, modelsCM, webhookAddr, metricsAddr string
-		trialBudget                                                int
-		leaderElect                                                bool
+		harborURL, runnerImage, modelsCM, webhookAddr, metricsAddr, reportsAddr string
+		trialBudget                                                             int
+		leaderElect                                                             bool
 	)
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
@@ -58,6 +80,7 @@ func run() error {
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Mark SkillEvals Planned and create no Jobs.")
 	flag.StringVar(&webhookAddr, "webhook-addr", ":8080", "Address for the webhook and health endpoints.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")
+	flag.StringVar(&reportsAddr, "reports-addr", ":8082", "Address for the reporting website; empty disables it.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election (needed only with several replicas).")
 	logOpts := zap.Options{Development: false}
 	logOpts.BindFlags(flag.CommandLine)
@@ -105,12 +128,26 @@ func run() error {
 		return fmt.Errorf("registering models controller: %w", err)
 	}
 
+	if err := mgr.Add(&controller.PhaseGauge{Reader: mgr.GetClient(), Namespace: cfg.Namespace}); err != nil {
+		return fmt.Errorf("adding phase gauge: %w", err)
+	}
+
 	hook := &webhook.Handler{
 		Client: mgr.GetClient(), Namespace: cfg.Namespace, Project: cfg.Project, ModelsConfigMap: modelsCM,
 		Token: os.Getenv("WEBHOOK_TOKEN"), Attempts: cfg.Attempts, Log: ctrl.Log.WithName("webhook"),
 	}
 	if err := mgr.Add(webhook.NewServer(webhookAddr, hook)); err != nil {
 		return fmt.Errorf("adding webhook server: %w", err)
+	}
+
+	if reportsAddr != "" {
+		site, err := newReportSite(mgr, reportsAddr, harborURL, cfg, registry)
+		if err != nil {
+			return err
+		}
+		if err := mgr.Add(site); err != nil {
+			return fmt.Errorf("adding reports site: %w", err)
+		}
 	}
 
 	setupLog.Info("starting manager", "namespace", cfg.Namespace, "dryRun", cfg.DryRun, "runnerImage", runnerImage)

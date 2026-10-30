@@ -1,0 +1,105 @@
+{{define "content"}}
+<h1>Runs</h1>
+<p class="lede">Every SkillEval in <code>{{.Namespace}}</code>, newest first. Scores are on a 0 to 1 scale.</p>
+
+<dl class="stats" aria-label="Summary">
+  <div><dt>Runs</dt><dd>{{.Stats.Runs}}</dd></div>
+  <div><dt>Succeeded</dt><dd>{{.Stats.Succeeded}}</dd></div>
+  <div><dt>Failed</dt><dd>{{.Stats.Failed}}</dd></div>
+  <div><dt>Skills</dt><dd>{{.Stats.Skills}}</dd></div>
+  <div><dt>Versions on stable</dt><dd>{{if .ChannelsOK}}{{.Stats.OnStable}}{{else}}–{{end}}</dd></div>
+  <div><dt>Held back</dt><dd>{{.Stats.HeldBack}}</dd></div>
+</dl>
+
+<section aria-labelledby="channels-h">
+  <h2 id="channels-h">Release channels</h2>
+  {{if .ChannelsErr}}<p class="notice">Release channels unavailable: {{.ChannelsErr}}</p>{{end}}
+  {{if .Channels}}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th scope="col">Skill</th><th scope="col">Stable</th><th scope="col">Beta</th><th scope="col">Held back</th><th scope="col" class="num">Versions evaluated</th></tr>
+      </thead>
+      <tbody>
+        {{range .Channels}}
+        <tr>
+          <th scope="row"><a href="/skills/{{.Skill}}">{{.Skill}}</a></th>
+          <td>{{dash .Stable}}</td>
+          <td>{{dash .Beta}}</td>
+          <td>{{if .HeldBack}}{{range .HeldBack}}<span class="status regressed"><i aria-hidden="true"></i>{{.}}</span> {{end}}{{else}}<span class="muted">–</span>{{end}}</td>
+          <td class="num">{{.Versions}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p class="empty">No skills yet. Push a skill version to the <code>{{.Project}}</code> project in Harbor to start an evaluation.</p>
+  {{end}}
+</section>
+
+<section aria-labelledby="runs-h">
+  <h2 id="runs-h">All runs</h2>
+  <form class="filters" method="get" action="/">
+    {{template "select" (sel "skill" "Skill" .Filter.Skill .Options.Skills)}}
+    {{template "select" (sel "model" "Model" .Filter.Model .Options.Models)}}
+    {{template "select" (sel "verdict" "Verdict" .Filter.Verdict .Options.Verdicts)}}
+    {{template "select" (sel "phase" "Phase" .Filter.Phase .Options.Phases)}}
+    <button type="submit">Apply</button>
+    {{if .Filter.Active}}<a href="/">Clear filters</a>{{end}}
+    <span class="count" role="status">{{if .Filter.Active}}{{len .Runs}} of {{.Stats.Runs}} runs{{else}}{{.Stats.Runs}} runs{{end}}</span>
+  </form>
+  {{if .Runs}}
+  <div class="table-wrap tall">
+    <table class="runs">
+      <thead>
+        <tr>
+          <th scope="col">Started (UTC)</th>
+          <th scope="col">Age</th>
+          <th scope="col">Skill</th>
+          <th scope="col">Version</th>
+          <th scope="col">Model</th>
+          <th scope="col">Trigger</th>
+          <th scope="col">Phase</th>
+          <th scope="col" class="num">With</th>
+          <th scope="col" class="num">Without</th>
+          <th scope="col" class="num">Lift</th>
+          <th scope="col">Verdict</th>
+          <th scope="col" class="num">Duration</th>
+          <th scope="col">Report</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Runs}}
+        <tr>
+          <td class="nowrap"><a href="/runs/{{.Name}}"><time datetime="{{rfc .Created}}" title="{{tsSec .Created}} UTC">{{ts .Created}}</time></a></td>
+          <td class="nowrap muted" title="{{age .Created}}">{{ageShort .Created}}</td>
+          <td class="nowrap"><a href="/skills/{{.Skill}}">{{.Skill}}</a></td>
+          <td class="nowrap">{{.Version}}</td>
+          <td class="nowrap"><span{{if not .Required}} title="Optional model: never gates promotion"{{end}}>{{.Model}}</span></td>
+          <td class="nowrap">{{dash .Trigger}}</td>
+          <td class="nowrap"{{if .Message}} title="{{.Message}}"{{end}}>{{template "status" .PhaseStatus}}</td>
+          <td class="num">{{dash .With.Text}}</td>
+          <td class="num">{{dash .Without.Text}}</td>
+          <td class="num">{{dash .Lift.Text}}</td>
+          <td class="nowrap">{{template "status" .VerdictStatus}}</td>
+          <td class="num nowrap">{{dur .Duration}}</td>
+          <td class="nowrap">{{if .HasReport}}<a href="/runs/{{.Name}}/report">Open</a>{{else}}<span class="muted">not stored</span>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else if .Filter.Active}}
+  <p class="empty">No runs match these filters. <a href="/">Clear filters</a></p>
+  {{else}}
+  <p class="empty">No SkillEvals in <code>{{.Namespace}}</code> yet. A run appears when a <code>vX.Y.Z</code> skill version is pushed to Harbor or the model list changes.</p>
+  {{end}}
+  {{if .Refresh}}<p class="note">This page reloads every {{.Refresh}} s while runs are pending or running.</p>{{end}}
+</section>
+
+<section class="legend" aria-labelledby="legend-h">
+  <h2 id="legend-h">How to read this</h2>
+  {{template "legend" .Thresholds}}
+</section>
+{{end}}

@@ -12,7 +12,7 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 | [BuildKit](https://github.com/moby/buildkit) | Builds task images in the cluster | v0.34.1 |
 | DOKS + DOCR | Cluster and image registry (DOCR professional tier) | Kubernetes 1.36.5 |
 | [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
-| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.2.1 (Helm chart `charts/skill-ci-controller`) |
+| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.3.0 (Helm chart `charts/skill-ci-controller`) |
 | skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator, report upload | 0.3.0 |
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
@@ -52,6 +52,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | `make demo-model-swap` | Changes the model list live (`MODE=add` adds `claude-code/claude-opus-5-5`, `swap` replaces sonnet with opus, `restore` resets) |
 | `make status` | `kubectl get skillevals -o wide` plus tags and digests per skill from the Harbor API |
 | `make report` | Downloads the eval reports attached to a skill version in Harbor (`SKILL=acme-release-notes VERSION=v1.1.0 [MODEL=...] OUT=reports/`) |
+| `make reports-ui` | Port-forwards the controller's reporting site to `localhost:8082` and prints the URL |
 | `make dashboard` | Port-forwards Grafana to `localhost:3000` and prints the login hint |
 | `make reset` | Deletes SkillEvals and Jobs, removes `beta`/`stable` tags and demo versions from Harbor, restores the model list |
 | `make down` | Refuses on purpose. Destroying the stack deletes the cluster, run `pulumi destroy` by hand |
@@ -66,6 +67,16 @@ Demo beats after that (a SkillEval takes 11 to 13 minutes and three run at a tim
 2. **Push a regression.** `make demo-push VERSION=v1.2.0` publishes a version whose rules contradict its own evals. The regression gate holds it at `beta` (see below).
 3. **Change the model list.** `make demo-model-swap` adds a model. The controller evaluates the current `beta`/`stable` digests against it.
 4. **Show the metrics and reports.** `make dashboard`, then open the `skill-ci` dashboard. `make report SKILL=acme-release-notes VERSION=v1.1.0` pulls the SkillEvaluator reports attached to that version.
+
+## Reporting site
+
+The controller serves a read-only reporting site on port 8082 (`--reports-addr`, empty disables it; Helm `reports.enabled`). `make reports-ui` port-forwards it to <http://localhost:8082>.
+
+- `/` lists every run (SkillEval) newest first, with release channels per skill and filters (`?skill=`, `?model=`, `?verdict=`, `?phase=`).
+- `/skills/<skill>` shows versions against models with the lift, the channel tags and the policy decision per version in plain words.
+- `/runs/<name>` shows one run: scores, conditions and, when a report is stored, the six SkillEvaluator dimensions with and without the skill. The full SkillEvaluator report and `result.json` open from there.
+
+Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. `make report-page` builds the offline equivalent.
 
 ## Policy in short
 

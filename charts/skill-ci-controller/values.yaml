@@ -78,6 +78,14 @@ controller:
 ports:
   webhook: 8080
   metrics: 8081
+  # Reporting website, see reports.enabled.
+  reports: 8082
+
+# Read-only reporting website served by the controller (--reports-addr): runs, release
+# channels, policy decisions and the stored SkillEvaluator reports. Needs controller
+# image 0.3.0 or newer, older images exit on the unknown flag.
+reports:
+  enabled: true
 
 # Additional raw arguments, for example ["--zap-stacktrace-level=error"].
 extraArgs: []
@@ -130,6 +138,7 @@ service:
   type: ClusterIP
   webhookPort: 8080
   metricsPort: 8081
+  reportsPort: 8082
   annotations: {}
   labels: {}
 

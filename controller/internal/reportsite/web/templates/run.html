@@ -1,0 +1,91 @@
+{{define "content"}}
+<h1>{{.Run.Skill}} {{.Run.Version}} on {{.Run.Model}}</h1>
+<p class="lede"><code>{{.Run.Name}}</code></p>
+
+<section aria-labelledby="summary-h">
+  <h2 id="summary-h">Result</h2>
+  <dl class="stats">
+    <div><dt>With skill</dt><dd>{{dash .Run.With.Text}}</dd></div>
+    <div><dt>Without skill</dt><dd>{{dash .Run.Without.Text}}</dd></div>
+    <div><dt>Lift</dt><dd>{{dash .Run.Lift.Text}}</dd></div>
+    <div><dt>Verdict</dt><dd class="status-dd">{{template "status" .Run.VerdictStatus}}</dd></div>
+    <div><dt>Phase</dt><dd class="status-dd">{{template "status" .Run.PhaseStatus}}</dd></div>
+  </dl>
+  {{if .Run.Message}}<p class="notice{{if eq .Run.Phase "Failed"}} failed{{end}}">{{.Run.Message}}</p>{{end}}
+</section>
+
+<section aria-labelledby="details-h">
+  <h2 id="details-h">Details</h2>
+  <dl class="facts">
+    <div><dt>Skill</dt><dd><a href="/skills/{{.Run.Skill}}">{{.Run.Skill}}</a></dd></div>
+    <div><dt>Version</dt><dd>{{.Run.Version}} {{template "tags" .Channels}}</dd></div>
+    <div><dt>Digest</dt><dd class="mono wrap">{{.Run.Digest}}</dd></div>
+    <div><dt>Model</dt><dd>{{.Run.Model}} <span class="muted">({{if .Run.Required}}required{{else}}optional, never gates{{end}})</span></dd></div>
+    <div><dt>Agent</dt><dd>{{.Run.Agent}}</dd></div>
+    <div><dt>Attempts</dt><dd>{{.Run.Attempts}} per arm</dd></div>
+    <div><dt>Trigger</dt><dd>{{dash .Run.Trigger}}</dd></div>
+    <div><dt>Started</dt><dd><time datetime="{{rfc .Run.Created}}">{{tsSec .Run.Created}} UTC</time> <span class="muted">{{age .Run.Created}}</span></dd></div>
+    <div><dt>Completed</dt><dd>{{if .Run.Completed.IsZero}}<span class="muted">not yet</span>{{else}}<time datetime="{{rfc .Run.Completed}}">{{tsSec .Run.Completed}} UTC</time> <span class="muted">{{age .Run.Completed}}</span>{{end}}</dd></div>
+    <div><dt>Duration</dt><dd>{{dur .Run.Duration}} <span class="muted">from creation to completion</span></dd></div>
+    <div><dt>Job</dt><dd class="mono">{{dash .Run.JobName}}</dd></div>
+  </dl>
+</section>
+
+<section aria-labelledby="conditions-h">
+  <h2 id="conditions-h">Conditions</h2>
+  {{if .Run.Conditions}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Reason</th><th scope="col">Message</th><th scope="col">Changed (UTC)</th></tr></thead>
+      <tbody>
+        {{range .Run.Conditions}}
+        <tr>
+          <th scope="row">{{.Type}}</th>
+          <td>{{.Status}}</td>
+          <td>{{dash .Reason}}</td>
+          <td class="wrap">{{dash .Message}}</td>
+          <td class="nowrap"><time datetime="{{rfc .Changed}}" title="{{age .Changed}}">{{tsSec .Changed}}</time></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p class="empty">No conditions yet. The tag policy writes them after a result exists.</p>
+  {{end}}
+</section>
+
+<section aria-labelledby="report-h">
+  <h2 id="report-h">SkillEvaluator report</h2>
+  {{if eq .Report.State "none"}}
+  <p class="empty">{{.Run.NoReportReason}}</p>
+  {{else if eq .Report.State "missing"}}
+  <p class="empty">The report is no longer in Harbor. Referrer <code class="mono wrap">{{.Run.ReportDigest}}</code> was not found.</p>
+  {{else if eq .Report.State "error"}}
+  <p class="notice">Could not read the report from Harbor: {{.Report.Err}}</p>
+  {{else}}
+  <p class="actions">
+    <a class="button primary" href="/runs/{{.Run.Name}}/report" target="_blank" rel="noopener">Open full SkillEvaluator report</a>
+    <a class="button" href="/runs/{{.Run.Name}}/result.json" download>Download result.json</a>
+  </p>
+  <p class="sub">Six SkillEvaluator dimensions, scored 0 to 1 with and without the skill.{{if .Report.Result.Activation.Status}} Skill activation: {{.Report.Result.Activation.Status}} ({{.Report.Result.Activation.Activated}} of {{.Report.Result.Activation.Positive}} trials).{{end}}</p>
+  <div class="table-wrap">
+    <table class="dims">
+      <thead>
+        <tr><th scope="col">Dimension</th><th scope="col">With skill</th><th scope="col">Without skill</th><th scope="col" class="num">Change</th></tr>
+      </thead>
+      <tbody>
+        {{range .Report.Result.Dimensions}}
+        <tr{{if .Overall}} class="total"{{end}}>
+          <th scope="row">{{.Label}}</th>
+          <td><span class="meter"><span class="bar" aria-hidden="true"><span class="fill with" style="width: {{.WithPct}}%"></span></span><span class="val">{{num .With}}</span></span></td>
+          <td><span class="meter"><span class="bar" aria-hidden="true"><span class="fill without" style="width: {{.WithoutPct}}%"></span></span><span class="val">{{num .Without}}</span></span></td>
+          <td class="num">{{signed .Delta}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+</section>
+{{end}}

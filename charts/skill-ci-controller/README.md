@@ -89,7 +89,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.2.1`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.3.0`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[{name: docr}]` | |
@@ -112,7 +112,8 @@ keys are rejected.
 | `controller.dryRun` | `false` | `--dry-run` |
 | `controller.leaderElect` | `false` | `--leader-elect` |
 | `controller.logging.level`, `.encoder`, `.development` | `""`, `""`, `false` | `--zap-log-level`, `--zap-encoder`, `--zap-devel` |
-| `ports.webhook`, `ports.metrics` | `8080`, `8081` | Container ports, `--webhook-addr`, `--metrics-addr` |
+| `ports.webhook`, `ports.metrics`, `ports.reports` | `8080`, `8081`, `8082` | Container ports, `--webhook-addr`, `--metrics-addr`, `--reports-addr` |
+| `reports.enabled` | `true` | Serve the reporting website on `ports.reports` (needs controller image 0.3.0 or newer; `false` passes an empty `--reports-addr`) |
 | `extraArgs`, `extraEnv`, `extraVolumes`, `extraVolumeMounts` | `[]` | Escape hatches |
 | `secrets.harborCredentials.existingSecret` | `harbor-credentials` | Keys `usernameKey: username`, `passwordKey: password` |
 | `secrets.harborWebhook.existingSecret` | `harbor-webhook` | Key `tokenKey: token`; `optional: true` |
@@ -122,7 +123,7 @@ keys are rejected.
 | `runner.serviceAccount.name` | `skill-eval-runner` | Hardcoded in the controller |
 | `runner.pullSecretName` | `docr` | Secret the runner may `get` |
 | `runner.extraRules` | `[]` | |
-| `service.type`, `.webhookPort`, `.metricsPort` | `ClusterIP`, `8080`, `8081` | |
+| `service.type`, `.webhookPort`, `.metricsPort`, `.reportsPort` | `ClusterIP`, `8080`, `8081`, `8082` | |
 | `service.annotations`, `service.labels` | `{}` | |
 | `serviceMonitor.enabled` | `false` | Prometheus Operator ServiceMonitor |
 | `serviceMonitor.namespace`, `.labels`, `.interval`, `.scrapeTimeout`, `.path`, `.relabelings`, `.metricRelabelings` | `""`, `{}`, `15s`, `""`, `/metrics`, `[]`, `[]` | Set `labels.release` for kube-prometheus-stack |

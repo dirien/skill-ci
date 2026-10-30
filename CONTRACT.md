@@ -134,7 +134,22 @@ Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repo
 
 ## Metrics (controller `:8081/metrics`)
 
-Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Counter `skillci_skillevals_total{phase}`.
+Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Counter `skillci_skillevals_total{phase}` counts phase transitions. Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_stable`, `skillci_obsolete` and `skillci_regressed` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
+
+## Reporting site (controller `:8082`)
+
+Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEvals from the manager's cache, channel tags from the Harbor REST API (cached 5 s), reports from the OCI referrers named by `status.reportDigest` (fetched with the registry API using `HARBOR_USERNAME`/`HARBOR_PASSWORD`, cached in memory by digest, 32 MiB). A run without `reportDigest` shows "not stored".
+
+| Route | Content |
+|---|---|
+| `/` | Counts, release channels per skill, all runs newest first. Filters: `skill`, `model`, `verdict`, `phase` |
+| `/skills/{skill}` | Versions x models (with, without, lift, verdict), channel tags, policy decision per version |
+| `/runs/{name}` | One SkillEval: scores, conditions, the six SkillEvaluator dimensions when a report is stored |
+| `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
+| `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
+| `/healthz` | `ok` |
+
+Unknown runs and skills give a 404 page. Policy decisions use the controller thresholds.
 
 ## Webhook auth
 
@@ -146,7 +161,7 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 - `runner/Dockerfile`, build context repo root.
 - Images are built by the in-cluster BuildKit (`buildctl --addr tcp://127.0.0.1:1234` through `kubectl -n skill-ci port-forward svc/buildkitd 1234:1234`).
 - All controller-side manifests (CRD, controller Deployment and Service, RBAC, runner ServiceAccount and Role) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/`.
-- Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`; pod label `app.kubernetes.io/name: skill-ci-controller`.
+- Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`, port `8082` named `reports` (the reporting site, flag `--reports-addr`, empty disables it; Helm `reports.enabled`); pod label `app.kubernetes.io/name: skill-ci-controller`.
 
 ## Cost guard
 

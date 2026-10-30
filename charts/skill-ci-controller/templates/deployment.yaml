@@ -59,6 +59,7 @@ spec:
             - --dry-run={{ $ctl.dryRun }}
             - --webhook-addr=:{{ .Values.ports.webhook }}
             - --metrics-addr=:{{ .Values.ports.metrics }}
+            - --reports-addr={{ if .Values.reports.enabled }}:{{ .Values.ports.reports }}{{ end }}
             - --leader-elect={{ $ctl.leaderElect }}
             {{- with $ctl.logging.level }}
             - --zap-log-level={{ . }}
@@ -102,6 +103,10 @@ spec:
               containerPort: {{ .Values.ports.webhook }}
             - name: metrics
               containerPort: {{ .Values.ports.metrics }}
+            {{- if .Values.reports.enabled }}
+            - name: reports
+              containerPort: {{ .Values.ports.reports }}
+            {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:

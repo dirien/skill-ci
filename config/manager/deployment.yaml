@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.2.1
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.3.0
           args:
             - --namespace=skill-ci
             - --harbor-url=http://harbor.harbor.svc.cluster.local
@@ -45,6 +45,7 @@ spec:
             - --dry-run=false
             - --webhook-addr=:8080
             - --metrics-addr=:8081
+            - --reports-addr=:8082
             - --leader-elect=false
           env:
             - name: HARBOR_USERNAME
@@ -69,6 +70,8 @@ spec:
               containerPort: 8080
             - name: metrics
               containerPort: 8081
+            - name: reports
+              containerPort: 8082
           livenessProbe:
             httpGet:
               path: /healthz

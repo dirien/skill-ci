@@ -22,6 +22,11 @@ Try it:
 Harbor webhook target (payload format Default, event PUSH_ARTIFACT):
   http://{{ include "skill-ci-controller.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.webhookPort }}/webhook/harbor
 
+{{- if .Values.reports.enabled }}
+Reporting site (runs, release channels, policy decisions, stored reports):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "skill-ci-controller.fullname" . }} {{ .Values.service.reportsPort }}:{{ .Values.service.reportsPort }}
+  open http://localhost:{{ .Values.service.reportsPort }}
+{{ end }}
 Metrics: http://{{ include "skill-ci-controller.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.metricsPort }}/metrics{{ if not .Values.serviceMonitor.enabled }}
 (set serviceMonitor.enabled=true to scrape them with the Prometheus Operator){{ end }}
 {{- if .Values.controller.dryRun }}

@@ -23,3 +23,8 @@ spec:
     - name: metrics
       port: {{ .Values.service.metricsPort }}
       targetPort: metrics
+    {{- if .Values.reports.enabled }}
+    - name: reports
+      port: {{ .Values.service.reportsPort }}
+      targetPort: reports
+    {{- end }}

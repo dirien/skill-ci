@@ -65,6 +65,9 @@ func (r *SkillEvalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *SkillEvalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var se v1alpha1.SkillEval
 	if err := r.Get(ctx, req.NamespacedName, &se); err != nil {
+		if apierrors.IsNotFound(err) {
+			metrics.Forget(req.Namespace, req.Name) // deleted: its series must not outlive it
+		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	res, err := r.reconcile(ctx, &se)

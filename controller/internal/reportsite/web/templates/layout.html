@@ -1,0 +1,34 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+{{if .Refresh}}<meta http-equiv="refresh" content="{{.Refresh}}">
+{{end}}<title>{{.Title}} - skill-ci</title>
+<style>{{template "css"}}</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">skill-ci</a>
+    <span class="meta">namespace <code>{{.Namespace}}</code> · Harbor project <code>{{.Project}}</code></span>
+  </div>
+</header>
+<nav class="crumbs" aria-label="Breadcrumb">
+  <ol>
+    {{range .Crumbs}}{{if .Href}}<li><a href="{{.Href}}">{{.Label}}</a></li>{{else}}<li aria-current="page">{{.Label}}</li>{{end}}
+    {{end}}
+  </ol>
+</nav>
+<main id="main">
+{{template "content" .}}
+</main>
+<footer class="foot">
+  <span>Read-only view. SkillEvals from the cluster, tags from Harbor, reports from OCI referrers.</span>
+  <span>Generated <time datetime="{{rfc .Generated}}">{{tsSec .Generated}} UTC</time></span>
+</footer>
+</body>
+</html>
+{{end}}

@@ -249,7 +249,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "SkillEvals by phase",
+      "title": "SkillEvals by phase (now)",
       "description": "skillci_skillevals_total (counter, since controller start).",
       "datasource": {
         "type": "prometheus",
@@ -267,7 +267,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (phase) (skillci_skillevals_total)",
+          "expr": "sum by (phase) (skillci_skillevals)",
           "refId": "A",
           "legendFormat": "{{phase}}",
           "format": "time_series",
@@ -542,7 +542,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (phase) (skillci_skillevals_total)",
+          "expr": "sum by (phase) (skillci_skillevals)",
           "refId": "A",
           "legendFormat": "{{phase}}",
           "format": "time_series"
