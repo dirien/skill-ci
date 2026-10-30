@@ -24,13 +24,13 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: ghcr.io/dirien/skill-ci-controller:0.6.0
+          image: ghcr.io/dirien/skill-ci-controller:0.7.0
           args:
             - --namespace=skill-ci
             - --harbor-url=http://harbor.harbor.svc.cluster.local
             - --harbor-project=skills
-            - --runner-image=ghcr.io/dirien/skill-ci-runner:0.6.0
-            - --sandbox-image=ghcr.io/dirien/skill-ci-sandbox:0.6.0
+            - --runner-image=ghcr.io/dirien/skill-ci-runner:0.7.0
+            - --sandbox-image=ghcr.io/dirien/skill-ci-sandbox:0.7.0
             - --models-configmap=skill-ci-models
             - --default-attempts=3
             - --helps-threshold=0.05

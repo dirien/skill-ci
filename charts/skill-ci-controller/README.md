@@ -95,7 +95,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `ghcr.io/dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.6.0`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.7.0`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | Pull Secrets of the controller pod; the names are also passed as `--image-pull-secrets` and used for the runner Jobs and the sandboxes. Set for private GHCR packages |
