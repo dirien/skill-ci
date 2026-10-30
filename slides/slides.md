@@ -235,9 +235,9 @@ measured it.
 <div class="grid grid-cols-3 gap-8 mt-6 zm">
   <div class="gpu-card gpu-card--primary ev" v-click>
     <div class="gpu-caption gpu-caption--accent">SkillsBench</div>
-    <div class="ev__big">16 of 84</div>
-    <p>tasks got worse with skills, up to −39 points on one task</p>
-    <div class="src">arxiv.org/abs/2602.12670v1</div>
+    <div class="ev__big">13 of 87</div>
+    <p>tasks got worse with curated skills, while the average rose 16.6 points</p>
+    <div class="src">arxiv.org/abs/2602.12670v4</div>
   </div>
   <div class="gpu-card gpu-card--primary ev" v-click>
     <div class="gpu-caption gpu-caption--accent">SWE-Skills-Bench</div>
@@ -248,8 +248,8 @@ measured it.
   <div class="gpu-card gpu-card--primary ev" v-click>
     <div class="gpu-caption gpu-caption--accent">Nick Nisi, WorkOS</div>
     <div class="ev__big">97% → 77%</div>
-    <p>correct without the skill, then with it</p>
-    <div class="src">paulund.co.uk, Measure your agent skills or delete them</div>
+    <p>success on one task without the skill, then with it</p>
+    <div class="src">AI Engineer Europe 2026, youtu.be/vy7o1g2iHY8</div>
   </div>
 </div>
 
@@ -264,27 +264,25 @@ measured it.
 
 Three data points, all public.
 
-[click] SkillsBench: curated skills lift the average by 16.2 points, and still
-16 of 84 tasks got worse. The worst example in the paper is taxonomy-tree-merge
-at minus 39.3 points. Averages hide the tasks where the skill hurts.
+[click] SkillsBench, the June 2026 version: 87 tasks, 18 model and harness
+configurations. Curated skills lift the average pass rate from 33.9 to 50.5
+percent, plus 16.6 points, and still 13 of 87 tasks got worse. The worst are
+exam-block-sequencing and suricata-custom-exfil at minus 7.4 points. Averages
+hide the tasks where the skill hurts. (The February version said 16 of 84
+tasks and plus 16.2 points; quote the current one.)
 
 [click] SWE-Skills-Bench: 98 skills, and 92 of them have no statistically
 significant effect. The average pass ratio moves from 76.6 to 76.9 percent.
 Individual swings reach plus 17.7 and minus 17.0 points.
 
-[click] Nick Nisi from WorkOS: 97 percent correct without the skill, 77
-percent with it. He deleted most of his skills afterwards. Note that this one
-is a practitioner report, not a paper.
+[click] Nick Nisi from WorkOS, at AI Engineer Europe 2026: one task
+succeeded 97 percent of the time without the skill and 77 percent with it. He
+then deleted 95 percent of his skills, replaced more than 10,000 generated
+lines with 553 lines of hand-written gotchas, and his eval runs went from 68
+minutes to 6. This one is a practitioner talk, not a paper.
 
 Sources are on the slide. None of these are statements about your
 skills. They say you cannot know without measuring.
-
-TODO before the talk:
-- SkillsBench: the latest arXiv version's abstract says 87 tasks and +16.6
-  points; the 16 of 84 figure and the 16.2 points come from v1. Re-read and
-  decide which version to quote.
-- Nick Nisi: I only found a secondary write-up (paulund.co.uk). Find his
-  original post or talk and link that instead.
 -->
 
 ---
