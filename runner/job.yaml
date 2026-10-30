@@ -1,0 +1,110 @@
+# One SkillEval run: SkillEvaluator's live tier for one skill and one pinned model.
+# Trials run as Agent Sandboxes in the same namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["docr"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: skill-eval-runner
+  namespace: skill-ci
+subjects:
+  - kind: ServiceAccount
+    name: skill-eval-runner
+    namespace: skill-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: skill-eval-runner
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skilleval-acme-release-notes-haiku
+  namespace: skill-ci
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      serviceAccountName: skill-eval-runner
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: docr
+      initContainers:
+        # Pull the skill version under test from the registry.
+        - name: pull-skill
+          image: ghcr.io/oras-project/oras:v1.3.0
+          workingDir: /skills
+          args:
+            - pull
+            - --registry-config=/auth/config.json
+            - registry.digitalocean.com/skill-ci-dirien/skill-acme-release-notes:v1.0.0
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
+            - name: registry-auth
+              mountPath: /auth
+              readOnly: true
+      containers:
+        - name: skillevaluator
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.1.0
+          args:
+            - tier3
+            - evaluate
+            - /skills/acme-release-notes
+            - --agents=claude-code
+            - --env-mode=ack
+            - --ek=namespace=skill-ci
+            - --ek=registry=registry.digitalocean.com/skill-ci-dirien
+            - --ek=image_pull_secret=docr
+            - --ek=skip_image_check=false
+            - --agent-model=claude-code=claude-haiku-5-5
+            - --n-attempts=1
+            - --results-dir=/results
+            - --progress=plain
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-keys
+                  key: anthropic
+          volumeMounts:
+            - name: skills
+              mountPath: /skills
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: skills
+          emptyDir: {}
+        - name: registry-auth
+          secret:
+            secretName: docr
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: results
+          emptyDir: {}

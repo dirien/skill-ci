@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.ruff_cache/
+.pytest_cache/
+# Go
+controller/bin/
+# Local results and secrets
+results/
+*.kubeconfig

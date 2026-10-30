@@ -1,0 +1,215 @@
+name: skill-ci-doks
+description: Test cluster for skill CI (DOKS + DOCR + Agent Sandbox)
+runtime: yaml
+
+config:
+  region:
+    type: string
+    default: fra1
+  agentSandboxVersion:
+    type: string
+    default: v1.0.9
+  buildkitVersion:
+    type: string
+    default: v0.34.1
+
+variables:
+  k8sVersion:
+    fn::invoke:
+      function: digitalocean:getKubernetesVersions
+      arguments:
+        versionPrefix: "1.36."
+      return: latestVersion
+
+resources:
+  registry:
+    type: digitalocean:ContainerRegistry
+    properties:
+      name: skill-ci-dirien
+      subscriptionTierSlug: basic
+      region: ${region}
+
+  cluster:
+    type: digitalocean:KubernetesCluster
+    properties:
+      name: skill-ci
+      region: ${region}
+      version: ${k8sVersion}
+      registryIntegration: true
+      nodePool:
+        name: default
+        size: s-4vcpu-8gb
+        nodeCount: 2
+    options:
+      dependsOn:
+        - ${registry}
+
+  registryCreds:
+    type: digitalocean:ContainerRegistryDockerCredentials
+    properties:
+      registryName: ${registry.name}
+      write: true
+
+  k8s:
+    type: pulumi:providers:kubernetes
+    properties:
+      kubeconfig: ${cluster.kubeConfigs[0].rawConfig}
+
+  ns:
+    type: kubernetes:core/v1:Namespace
+    properties:
+      metadata:
+        name: skill-ci
+    options:
+      provider: ${k8s}
+
+  # Harbor's ACK backend reads push credentials from this pull secret.
+  docrSecret:
+    type: kubernetes:core/v1:Secret
+    properties:
+      metadata:
+        name: docr
+        namespace: ${ns.metadata.name}
+      type: kubernetes.io/dockerconfigjson
+      stringData:
+        .dockerconfigjson: ${registryCreds.dockerCredentials}
+    options:
+      provider: ${k8s}
+
+  agentSandbox:
+    type: kubernetes:yaml/v2:ConfigFile
+    properties:
+      file: https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${agentSandboxVersion}/sandbox-with-extensions.yaml
+    options:
+      provider: ${k8s}
+
+  # Shared image builder for task environments (Harbor's ack backend, use_buildkit=true).
+  buildkitd:
+    type: kubernetes:apps/v1:Deployment
+    properties:
+      metadata:
+        name: buildkitd
+        namespace: ${ns.metadata.name}
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: buildkitd
+        template:
+          metadata:
+            labels:
+              app: buildkitd
+          spec:
+            containers:
+              - name: buildkitd
+                image: moby/buildkit:${buildkitVersion}
+                args: ["--addr", "tcp://0.0.0.0:1234"]
+                securityContext:
+                  privileged: true
+                ports:
+                  - containerPort: 1234
+                readinessProbe:
+                  exec:
+                    command: ["buildctl", "--addr", "tcp://127.0.0.1:1234", "debug", "workers"]
+                  periodSeconds: 10
+    options:
+      provider: ${k8s}
+
+  buildkitdService:
+    type: kubernetes:core/v1:Service
+    properties:
+      metadata:
+        name: buildkitd
+        namespace: ${ns.metadata.name}
+      spec:
+        selector:
+          app: buildkitd
+        ports:
+          - port: 1234
+            targetPort: 1234
+    options:
+      provider: ${k8s}
+
+  # goharbor: stores skills as OCI artifacts and fires PUSH_ARTIFACT webhooks.
+  harborAdminPassword:
+    type: random:RandomPassword
+    properties:
+      length: 24
+      special: false
+
+  harbor:
+    type: kubernetes:helm.sh/v3:Release
+    properties:
+      name: harbor
+      chart: harbor
+      version: 1.19.4
+      namespace: harbor
+      createNamespace: true
+      repositoryOpts:
+        repo: https://helm.goharbor.io
+      values:
+        expose:
+          type: clusterIP
+          tls:
+            enabled: false
+        externalURL: http://127.0.0.1:8085
+        harborAdminPassword: ${harborAdminPassword.result}
+        trivy:
+          enabled: false
+    options:
+      provider: ${k8s}
+
+  # Logs every webhook Harbor sends, so the trigger can be checked.
+  webhookReceiver:
+    type: kubernetes:apps/v1:Deployment
+    properties:
+      metadata:
+        name: webhook-receiver
+        namespace: ${ns.metadata.name}
+      spec:
+        selector:
+          matchLabels:
+            app: webhook-receiver
+        template:
+          metadata:
+            labels:
+              app: webhook-receiver
+          spec:
+            containers:
+              - name: receiver
+                image: python:3.12-alpine
+                command: ["python", "-u", "-c"]
+                args:
+                  - |
+                    from http.server import BaseHTTPRequestHandler, HTTPServer
+                    class H(BaseHTTPRequestHandler):
+                        def do_POST(self):
+                            print(self.rfile.read(int(self.headers["Content-Length"])).decode(), flush=True)
+                            self.send_response(200); self.end_headers()
+                    HTTPServer(("", 8080), H).serve_forever()
+                ports:
+                  - containerPort: 8080
+    options:
+      provider: ${k8s}
+
+  webhookReceiverService:
+    type: kubernetes:core/v1:Service
+    properties:
+      metadata:
+        name: webhook-receiver
+        namespace: ${ns.metadata.name}
+      spec:
+        selector:
+          app: webhook-receiver
+        ports:
+          - port: 8080
+    options:
+      provider: ${k8s}
+
+outputs:
+  kubeconfig:
+    fn::secret: ${cluster.kubeConfigs[0].rawConfig}
+  registryEndpoint: ${registry.endpoint}
+  k8sVersion: ${k8sVersion}
+  harborAdminPassword:
+    fn::secret: ${harborAdminPassword.result}
