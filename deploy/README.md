@@ -343,8 +343,8 @@ push a skill. If you skipped monitoring, there is no ServiceMonitor.
 ## Run the demo
 
 The demo scripts in [`demo/`](../demo/) talk to the cluster with `kubectl` only, so the same `make` targets work here.
-Run them from the repository root with `KUBECONFIG` exported. Targets that need Pulumi or DOCR (`make up`,
-`make preview`, `make docr-login`, `make build`, `make deploy`, `make down`) are replaced by this guide.
+Run them from the repository root with `KUBECONFIG` exported. The Pulumi targets (`make up`, `make preview`,
+`make down`) and `make deploy` are replaced by this guide.
 
 ```bash
 make seed                    # push the three sample skills as v1.0.0 and start their first evaluations
