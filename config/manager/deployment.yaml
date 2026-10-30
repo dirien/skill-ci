@@ -26,7 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: manager
-          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.2.0
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.2.1
           args:
             - --namespace=skill-ci
             - --harbor-url=http://harbor.harbor.svc.cluster.local

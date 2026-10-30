@@ -17,6 +17,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -46,10 +47,13 @@ type SkillEvalReconciler struct {
 
 // SetupWithManager registers the reconciler. Status writes do not change the
 // generation, so only spec changes and owned Job updates trigger a reconcile.
+// A second watch on SkillEvals re-enqueues the finished siblings of a skill
+// when one of them reaches Succeeded or the policy changes tags (see siblings.go).
 func (r *SkillEvalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.SkillEval{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Owns(&batchv1.Job{}).
+		Watches(&v1alpha1.SkillEval{}, handler.EnqueueRequestsFromMapFunc(r.siblingRequests), builder.WithPredicates(resultChanged())).
 		Complete(r)
 	if err != nil {
 		return fmt.Errorf("setting up skilleval controller: %w", err)

@@ -86,6 +86,8 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 	reg := regressionOf(r.Config.Thresholds, byDigest, arts, digest)
 	if reg != nil {
 		out = out.Block(reg.regs)
+	} else if out.Promote && yieldsToStable(r.Config.Thresholds, byDigest, arts, digest) {
+		out.Promote = false
 	}
 	ops := policy.Plan(out, digest, digest == newest, arts)
 	for _, op := range ops {
@@ -126,6 +128,25 @@ func regressionOf(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillEva
 		return &regression{regs: regs, message: strings.Join(msgs, "; ") + fmt.Sprintf(" (tolerance %.2f)", th.Regression)}
 	}
 	return nil
+}
+
+// yieldsToStable reports whether the digest is older than the current stable
+// digest and the stable one does not score worse than it. An older version
+// then must not take stable over: two equally good versions would otherwise
+// swap the tag every time one of them is reconciled. An older version still
+// wins when the newer stable one regresses against it.
+func yieldsToStable(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillEval, arts []harbor.Artifact, digest string) bool {
+	for _, a := range arts {
+		stable := byDigest[a.Digest]
+		if a.Digest == digest || !a.HasTag(policy.TagStable) || len(stable) == 0 {
+			continue
+		}
+		if semver.Compare(stable[0].Spec.Version, byDigest[digest][0].Spec.Version) <= 0 {
+			return false
+		}
+		return len(th.Regressions(withScores(stable), withScores(byDigest[digest]))) == 0
+	}
+	return false
 }
 
 // withScores converts the finished SkillEvals of one digest into with-skill scores.

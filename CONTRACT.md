@@ -124,8 +124,11 @@ Per digest, once every required model has a Succeeded SkillEval:
 - Tag the digest `beta` when it is the newest evaluated version (controller manages `beta`).
 - **Promote**: lift `>= +0.10` on all required models, and no regression against the current stable version (below): add tag `stable` (move it from any other digest of that skill).
 - **Regression gate**: if another digest of the skill is tagged `stable`, compare the candidate's with-skill score with that digest's, per model. A model counts when it is required and both digests have a Succeeded SkillEval for it. If the candidate scores lower by more than `--regression-tolerance` (default `0.05`, scores compared at two decimals, a drop of exactly the tolerance passes) on any such model, the digest is not promoted and the current stable stays. The candidate still gets `beta`. Its SkillEvals get condition `Regressed` (reason `WorseThanStable`, message names the model, both versions and both scores), a Warning event, and verdict `Regressed` on the models that dropped. Optional models never gate. With no current stable version, or when the candidate is the stable digest, nothing is compared.
+- **Newest wins ties**: an older version never takes `stable` from a newer stable version unless that newer version scores worse than it (the regression gate, applied the other way round). Without this rule two equally good versions would swap the tag on every reconcile.
 - **Demote**: lift `<= -0.10` on any required model: remove tag `stable` from that digest.
 - **Obsolete**: verdict Obsolete on all required models: flag only (metric + condition), never delete.
+
+Verdicts depend on other digests (the stable one), so when a SkillEval reaches `Succeeded`, or the policy changes a tag, the controller re-enqueues the other `Succeeded` SkillEvals of the same skill (all digests). They re-run the policy and converge; a re-run that changes nothing writes nothing and enqueues nothing.
 
 Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repositories/<skill>/artifacts/<digest>/tags`, `DELETE .../artifacts/<digest>/tags/<tag>`). Unlike `oras tag`, these do not fire `PUSH_ARTIFACT`. Thresholds are controller flags (`--helps-threshold`, `--hurts-threshold`, `--promote-threshold`, `--demote-threshold`, `--obsolete-baseline`, `--regression-tolerance`).
 

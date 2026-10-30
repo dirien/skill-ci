@@ -10,7 +10,7 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-CONTROLLER_TAG ?= 0.2.0
+CONTROLLER_TAG ?= 0.2.1
 RUNNER_TAG ?= 0.3.0
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
@@ -102,7 +102,7 @@ check-skills: ## Dataset-only check of the sample skills (no LLM calls)
 lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
 	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh
 	$(YAMLLINT) -c .yamllint.yaml infra demo .yamllint.yaml .markdownlint.yaml
-	$(MARKDOWNLINT) README.md "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
+	$(MARKDOWNLINT) README.md DEMO.md "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
 

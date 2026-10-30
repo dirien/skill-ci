@@ -89,7 +89,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.2.0`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.2.1`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[{name: docr}]` | |
