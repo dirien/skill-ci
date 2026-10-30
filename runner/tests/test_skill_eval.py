@@ -147,6 +147,8 @@ def test_commands(termination, monkeypatch):
         ("--env-mode", "ack"),
         ("--agent-model", "claude-code=claude-haiku-5-5"),
         ("--n-attempts", "2"),
+        ("--override-cpus", "1"),
+        ("--override-memory-mb", "2048"),
     ]:
         assert evaluator[evaluator.index(flag) + 1] == value
     eks = [evaluator[i + 1] for i, arg in enumerate(evaluator) if arg == "--ek"]
@@ -163,6 +165,8 @@ def test_commands(termination, monkeypatch):
     [
         ({k: v for k, v in ENV.items() if k != "MODEL"}, "missing required env: MODEL"),
         ({**ENV, "ATTEMPTS": "zero"}, "ATTEMPTS must be a positive integer"),
+        ({**ENV, "SANDBOX_CPUS": "0"}, "SANDBOX_CPUS must be a positive integer"),
+        ({**ENV, "SANDBOX_MEMORY_MB": "2g"}, "SANDBOX_MEMORY_MB must be a positive integer"),
     ],
 )
 def test_bad_config(env, message):

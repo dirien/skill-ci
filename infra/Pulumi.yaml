@@ -59,7 +59,10 @@ resources:
       nodePool:
         name: default
         size: s-4vcpu-8gb
-        nodeCount: 2
+        # Each eval fans out into several sandboxes; scale out instead of timing out.
+        autoScale: true
+        minNodes: 2
+        maxNodes: 5
     options:
       dependsOn:
         - ${registry}

@@ -63,16 +63,25 @@ func (r *SkillEvalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.Get(ctx, req.NamespacedName, &se); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if err := r.ensureLabels(ctx, &se); err != nil {
+	res, err := r.reconcile(ctx, &se)
+	if apierrors.IsConflict(err) {
+		// Another write updated the SkillEval first; start over from the latest version.
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	}
+	return res, err
+}
+
+func (r *SkillEvalReconciler) reconcile(ctx context.Context, se *v1alpha1.SkillEval) (ctrl.Result, error) {
+	if err := r.ensureLabels(ctx, se); err != nil {
 		return ctrl.Result{}, err
 	}
 	switch se.Status.Phase {
 	case "", v1alpha1.PhasePending:
-		return r.reconcilePending(ctx, &se)
+		return r.reconcilePending(ctx, se)
 	case v1alpha1.PhaseRunning:
-		return ctrl.Result{}, r.reconcileRunning(ctx, &se)
+		return ctrl.Result{}, r.reconcileRunning(ctx, se)
 	case v1alpha1.PhaseSucceeded:
-		return ctrl.Result{}, r.afterSucceeded(ctx, &se) // re-run after a restart: gauges and tags converge
+		return ctrl.Result{}, r.afterSucceeded(ctx, se) // re-run after a restart: gauges and tags converge
 	case v1alpha1.PhaseFailed, v1alpha1.PhasePlanned:
 		return ctrl.Result{}, nil
 	}
@@ -120,8 +129,11 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 		return ctrl.Result{}, err
 	}
 	if r.Config.MaxConcurrentJobs > 0 && running >= r.Config.MaxConcurrentJobs {
-		return ctrl.Result{RequeueAfter: capacityRetry}, r.setMessage(ctx, se,
-			fmt.Sprintf("waiting for a free slot (%d of %d jobs running)", running, r.Config.MaxConcurrentJobs))
+		msg := fmt.Sprintf("waiting for a free slot (%d of %d jobs running)", running, r.Config.MaxConcurrentJobs)
+		if err := r.setMessage(ctx, se, msg); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: capacityRetry}, nil
 	}
 	if !r.Budget.Spend(trials) {
 		log.Info("trial budget exhausted", "skilleval", se.Name, "trials", trials)
@@ -129,9 +141,13 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 	}
 
 	job := runner.NewJob(se, r.Config.Runner)
-	if err := r.Create(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
+	if err := r.Create(ctx, job); err != nil {
+		// Either way no new trials started: a retry after a lost status write
+		// finds the Job it already created.
 		r.Budget.Refund(trials)
-		return ctrl.Result{}, fmt.Errorf("creating job %s: %w", job.Name, err)
+		if !apierrors.IsAlreadyExists(err) {
+			return ctrl.Result{}, fmt.Errorf("creating job %s: %w", job.Name, err)
+		}
 	}
 	se.Status.JobName = job.Name
 	return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseRunning, "")

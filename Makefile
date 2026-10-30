@@ -10,7 +10,8 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-TAG ?= 0.1.0
+CONTROLLER_TAG ?= 0.1.2
+RUNNER_TAG ?= 0.2.1
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
 # Demo beats.
@@ -23,7 +24,7 @@ SHELLCHECK ?= shellcheck
 YAMLLINT ?= uvx yamllint
 MARKDOWNLINT ?= npx --yes markdownlint-cli2
 
-export BUILDCTL DOCKER_CONFIG DOCR_DOCKER_CONFIG TAG REGISTRY
+export BUILDCTL DOCKER_CONFIG DOCR_DOCKER_CONFIG CONTROLLER_TAG RUNNER_TAG REGISTRY
 
 .PHONY: help
 help: ## List the targets

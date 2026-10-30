@@ -12,4 +12,4 @@ resources:
   - manager/service.yaml
 images:
   - name: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller
-    newTag: 0.1.0
+    newTag: 0.1.2

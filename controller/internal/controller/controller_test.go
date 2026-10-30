@@ -9,6 +9,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -17,6 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/evals"
@@ -489,5 +491,24 @@ func TestModelsReconciler(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestStatusConflictRequeues(t *testing.T) {
+	e := newEnv(t, Config{}, 0, nil)
+	se := e.create("acme", "v1.0.0", digestA, haiku)
+	// Every status write loses the optimistic-concurrency race.
+	e.r.Client = interceptor.NewClient(e.client.(client.WithWatch), interceptor.Funcs{
+		SubResourceUpdate: func(_ context.Context, _ client.Client, _ string, obj client.Object, _ ...client.SubResourceUpdateOption) error {
+			return apierrors.NewConflict(v1alpha1.GroupVersion.WithResource("skillevals").GroupResource(), obj.GetName(), nil)
+		},
+	})
+
+	res, err := e.r.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(se)})
+	if err != nil {
+		t.Fatalf("Reconcile returned %v, want a requeue without error", err)
+	}
+	if res.RequeueAfter == 0 {
+		t.Errorf("RequeueAfter = 0, want a requeue after a conflict")
 	}
 }
