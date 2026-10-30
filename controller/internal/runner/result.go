@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 )
 
 // Tier and publication values the runner reports.
@@ -61,6 +63,9 @@ type Result struct {
 	Lift *float64 `json:"lift"`
 	// Report is the digest of the report the runner attached to the skill, if any.
 	Report string `json:"report,omitempty"`
+	// AgentVersion is the agent CLI release the trials ran; empty when the
+	// runner did not say (older runners) or sent something that is no version.
+	AgentVersion string `json:"agentVersion,omitempty"`
 	// Samples holds the per-trial scores of both arms; nil when the runner did
 	// not report them (older runners) or an arm has fewer than two trials.
 	Samples *Samples `json:"samples,omitempty"`
@@ -100,6 +105,9 @@ func ParseResult(msg string) (Result, error) {
 	}
 	if !strings.HasPrefix(res.Report, "sha256:") {
 		res.Report = ""
+	}
+	if !v1alpha1.ValidAgentVersion(res.AgentVersion) {
+		res.AgentVersion = ""
 	}
 	res.Tiers = Tiers{Tier1: tierValue(res.Tiers.Tier1), Tier2: tierValue(res.Tiers.Tier2), Tier3: tierValue(res.Tiers.Tier3)}
 	res.Publication = publicationValue(res.Publication)

@@ -125,6 +125,7 @@ GOOD_PAYLOAD = {
     "lift": 0.59,
     "agent": "claude-code",
     "model": "claude-haiku-5-5",
+    "agentVersion": "2.1.292",
     "report": REPORT,
     "tiers": TIERS_OK,
     "publication": "passed",
@@ -166,7 +167,9 @@ class FakeRun:
         tags: dict[str, list[str]] | None = None,
         catalog_exit: int = 0,
         attach_failures: int = 0,
+        trial_versions: list[str] | None = None,
     ):
+        self.trial_versions = trial_versions  # agent_info.version of the kept Harbor trials
         self.attach_failures = attach_failures  # attach calls that fail before one succeeds
         self.result = result
         self.gate = gate
@@ -236,6 +239,11 @@ class FakeRun:
             text = self.result if isinstance(self.result, str) else json.dumps(self.result)
             (run_dir / "result.json").write_text(text)
             (run_dir / "report.html").write_text("<html>tier 3</html>")
+            for i, version in enumerate(self.trial_versions or []):
+                trial = run_dir / "_harbor-jobs" / "acme-with" / f"trial__{i}"
+                trial.mkdir(parents=True)
+                info = {"name": "claude-code", "version": version}
+                (trial / "result.json").write_text(json.dumps({"agent_info": info}))
         if content is None:
             return subprocess.CompletedProcess(cmd, 1, "", "provider error\nboom")
         results = [r for r in content["results"] if str(r["gating"]["tier"]) in selected]
@@ -635,6 +643,7 @@ def test_attach_command(termination, monkeypatch):
     assert annotations == [
         "skillci.dev/model=claude-haiku-5-5",
         "skillci.dev/agent=claude-code",
+        "skillci.dev/agent-version=2.1.292",
         "skillci.dev/lift=+0.59",
         "skillci.dev/publication=passed",
     ]
@@ -839,3 +848,193 @@ def test_tier3_names_the_llm_provider(termination, monkeypatch):
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     assert fake.envs["validate"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({}, "2.1.292"),
+        ({"AGENT": "codex"}, "0.161.0"),
+        ({"AGENT": "opencode"}, "1.19.1"),
+        ({"AGENT": "codex", "AGENT_VERSION": "0.170.1"}, "0.170.1"),
+        ({"AGENT_VERSION": ""}, "2.1.292"),
+        ({"AGENT": "gemini"}, ""),
+    ],
+)
+def test_agent_version_defaults(env, expected):
+    """AGENT_VERSION wins; otherwise the agent's default pin applies; unknown agents have none."""
+    environ = {**ENV, "MODEL": "m", **env}
+    if environ["AGENT"] == "opencode":
+        environ["MODEL"] = "anthropic/claude-sonnet-5-5"
+    assert skill_eval.load_config(environ)["AGENT_VERSION"] == expected
+
+
+@pytest.mark.parametrize("version", ["2.1.292; rm -rf /", "$(id)", "1 2", "-1.0", "1.0-", "a" * 70])
+def test_bad_agent_version(version):
+    """The version ends up in `npm install -g pkg@<version>`, so odd characters are refused."""
+    with pytest.raises(skill_eval.EvalError, match="AGENT_VERSION must be a release"):
+        skill_eval.load_config({**ENV, "AGENT_VERSION": version})
+
+
+def test_default_pins_match_skillevaluator():
+    """The claude-code and codex defaults are the pins SkillEvaluator ships."""
+    harbor_runner = pytest.importorskip("skillevaluator.tier3.harbor.runner")
+    assert skill_eval.DEFAULT_AGENT_VERSIONS["claude-code"] == harbor_runner._CLAUDE_CODE_VERSION
+    assert skill_eval.DEFAULT_AGENT_VERSIONS["codex"] == harbor_runner._CODEX_VERSION
+    assert "opencode" not in harbor_runner._HARBOR_AGENT_KWARGS  # upstream leaves it unpinned
+
+
+def test_agent_version_reaches_skillevaluator(termination, monkeypatch):
+    """The requested release is the SKILLEVALUATOR_AGENT_VERSION of every SkillEvaluator command."""
+    monkeypatch.setenv("AGENT_VERSION", "2.1.300")
+    fake = FakeRun(GOOD, trial_versions=["2.1.300", "2.1.300"])
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    assert fake.envs["validate"]["SKILLEVALUATOR_AGENT_VERSION"] == "2.1.300"
+    assert termination()["agentVersion"] == "2.1.300"
+
+
+@pytest.mark.parametrize(
+    ("trial_versions", "expected"),
+    [
+        (["2.1.292", "2.1.292"], "2.1.292"),
+        (["2.1.299", "2.1.299", "2.1.292"], "2.1.299"),  # the trials win over the request
+        (["unknown", "not a version"], "2.1.292"),  # unusable values fall back to the request
+        ([], "2.1.292"),  # jobs not kept
+    ],
+)
+def test_agent_version_is_what_the_trials_ran(trial_versions, expected, termination, monkeypatch):
+    """The termination message reports the release the trials ran, else the requested one."""
+    fake = FakeRun(GOOD, trial_versions=trial_versions)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    assert termination()["agentVersion"] == expected
+
+
+def test_rejected_run_reports_the_requested_agent_version(termination, monkeypatch):
+    """Tier 3 never runs for a rejected skill, so the version is the requested one."""
+    fake = FakeRun(GOOD, gate=TIER2_FAILED)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    assert termination()["agentVersion"] == "2.1.292"
+
+
+def test_codex_gets_the_openai_endpoint(termination, monkeypatch):
+    """Codex gets OPENAI_BASE_URL next to its key; the judge stays Anthropic."""
+    monkeypatch.setenv("AGENT", "codex")
+    monkeypatch.setenv("MODEL", "openai/gpt-6.1-sol")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    fake = FakeRun({"agents": {"codex": agent_entry(0.9, 0.4, "openai/gpt-6.1-sol")}})
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    env = fake.envs["validate"]
+    assert env["OPENAI_BASE_URL"] == "https://api.openai.com/v1"
+    assert env["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
+    assert env["SKILLEVALUATOR_AGENT_VERSION"] == "0.161.0"
+    evaluator = fake.validates()[-1]
+    assert evaluator[evaluator.index("--agent-model") + 1] == "codex=openai/gpt-6.1-sol"
+    assert termination()["agentVersion"] == "0.161.0"
+
+
+def test_codex_keeps_a_custom_endpoint(monkeypatch):
+    """An OPENAI_BASE_URL from the Job is not replaced."""
+    env = skill_eval.tool_env(
+        {**ENV, "AGENT": "codex", "OPENAI_API_KEY": "k", "OPENAI_BASE_URL": "https://gw/v1"}
+    )
+    assert env["OPENAI_BASE_URL"] == "https://gw/v1"
+
+
+OLLAMA = {"AGENT": "opencode", "MODEL": "ollama-cloud/gpt-oss:120b", "OLLAMA_API_KEY": "ollama-key"}
+
+
+def test_opencode_native_anthropic_route(monkeypatch):
+    """OpenCode on an Anthropic model uses the Anthropic key and no gateway."""
+    environ = {**ENV, "AGENT": "opencode", "MODEL": "anthropic/claude-sonnet-5-5"}
+    route = skill_eval.agent_route("opencode", environ["MODEL"], environ)
+    assert route == skill_eval.AgentRoute("anthropic/claude-sonnet-5-5")
+    env = skill_eval.tool_env({**environ, "ANTHROPIC_API_KEY": "a"})
+    assert "SKILLEVALUATOR_OPENCODE_GATEWAY" not in env
+    assert env["SKILLEVALUATOR_AGENT_VERSION"] == "1.19.1"
+
+
+def test_opencode_gateway_route():
+    """An Ollama Cloud model runs as openai/<id> against the Ollama endpoint with its own key."""
+    route = skill_eval.agent_route("opencode", OLLAMA["MODEL"], OLLAMA)
+    assert route.gateway
+    assert route.model == "openai/gpt-oss:120b"
+    assert route.env == {
+        "OPENAI_API_KEY": "ollama-key",
+        "OPENAI_BASE_URL": "https://ollama.com/v1",
+        "SKILLEVALUATOR_OPENCODE_GATEWAY": "1",
+    }
+
+
+def test_opencode_gateway_keeps_judge_and_embeddings(monkeypatch):
+    """The gateway key replaces OPENAI_API_KEY for the agent only: judge and Tier 2 stay put."""
+    environ = {**ENV, **OLLAMA, "ANTHROPIC_API_KEY": "a", "OPENAI_API_KEY": "real-openai"}
+    env = skill_eval.tool_env(environ)
+    assert env["OPENAI_API_KEY"] == "ollama-key"
+    assert env["OPENAI_BASE_URL"] == "https://ollama.com/v1"
+    assert env["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
+    assert env["SKILL_EVAL_EMBEDDING_PROVIDER"] == "openai-compatible"
+    assert env["SKILL_EVAL_EMBEDDING_API_KEY"] == "real-openai"
+    assert env["SKILL_EVAL_EMBEDDING_BASE_URL"] == "https://api.openai.com/v1"
+    assert env["SKILL_EVAL_EMBEDDING_MODEL"] == "text-embedding-3-small"
+    assert env["SKILLEVALUATOR_OPENCODE_GATEWAY"] == "1"
+
+
+def test_opencode_gateway_embeddings_fall_back_to_nvidia():
+    """Without a real OpenAI key, Tier 2 embeds through NVIDIA Build, not the gateway key."""
+    env = skill_eval.tool_env({**ENV, **OLLAMA, "ANTHROPIC_API_KEY": "a", "NVIDIA_API_KEY": "n"})
+    assert env["SKILL_EVAL_EMBEDDING_PROVIDER"] == "nv_build"
+    env = skill_eval.tool_env({**ENV, **OLLAMA, "ANTHROPIC_API_KEY": "a"})
+    assert "SKILL_EVAL_EMBEDDING_PROVIDER" not in env
+
+
+@pytest.mark.parametrize(
+    ("agent", "model", "environ", "message"),
+    [
+        ("opencode", "gpt-oss", {}, "needs a <provider>/<model> model"),
+        ("opencode", "mystery/m", {}, "provider 'mystery' is not supported"),
+        ("opencode", "ollama-cloud/glm-5.3", {}, "needs OLLAMA_API_KEY"),
+        ("opencode", "openrouter/x/y", {"OLLAMA_API_KEY": "k"}, "needs OPENROUTER_API_KEY"),
+    ],
+)
+def test_bad_opencode_route(agent, model, environ, message):
+    """An OpenCode model that cannot run fails before any work is done."""
+    with pytest.raises(skill_eval.EvalError, match=message):
+        skill_eval.agent_route(agent, model, environ)
+
+
+def test_opencode_gateway_run(termination, monkeypatch):
+    """A gateway run passes the OpenAI-form model to SkillEvaluator and reports the real one."""
+    for key, value in OLLAMA.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("OPENAI_API_KEY", "real-openai")
+    fake = FakeRun({"agents": {"opencode": agent_entry(0.8, 0.3, "openai/gpt-oss:120b")}})
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    evaluator = fake.validates()[-1]
+    assert evaluator[evaluator.index("--agent-model") + 1] == "opencode=openai/gpt-oss:120b"
+    message = termination()
+    assert message["model"] == "ollama-cloud/gpt-oss:120b"
+    assert message["agentVersion"] == "1.19.1"
+    assert fake.envs["validate"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"
+
+
+def test_gateway_keys_are_redacted(termination, monkeypatch):
+    """The Ollama and OpenRouter keys never reach the log or the message."""
+    assert {"OLLAMA_API_KEY", "OPENROUTER_API_KEY"} <= set(skill_eval.SECRET_ENV)
+    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-secret")
+    assert skill_eval.redact("failed with ollama-secret") == "failed with [redacted]"
+
+
+def test_gateway_environment_resolves_in_skillevaluator():
+    """SkillEvaluator accepts the judge and embedding providers a gateway run gets."""
+    config = pytest.importorskip("skillevaluator.provider_config")
+    environ = {**ENV, **OLLAMA, "ANTHROPIC_API_KEY": "a", "OPENAI_API_KEY": "real-openai"}
+    env = skill_eval.tool_env(environ)
+    embedding = config.resolve_embedding_provider(env)
+    assert (embedding.provider, embedding.api_key) == ("openai-compatible", "real-openai")
+    assert embedding.base_url == "https://api.openai.com/v1"
+    assert config.resolve_llm_provider(env).provider == "anthropic"

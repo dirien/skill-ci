@@ -24,6 +24,30 @@ const (
 	authMount      = "/auth"
 )
 
+// llmKey maps an entry of the llm-keys Secret to an environment variable.
+type llmKey struct {
+	// Env is the variable the runner reads.
+	Env string
+	// Key is the key in the llm-keys Secret.
+	Key string
+	// Optional keys may be missing from the Secret.
+	Optional bool
+}
+
+// LLMKeys are the llm-keys entries every runner Job receives. anthropic is
+// required: it is the judge whatever agent runs. The others are optional and
+// only matter for the agent under test: openai (and openai-base-url) for
+// Codex and for Tier 2 embeddings; ollama, openrouter and nvidia for OpenCode
+// models that live there (ollama-cloud/..., openrouter/..., nvidia/...).
+var LLMKeys = []llmKey{
+	{"ANTHROPIC_API_KEY", "anthropic", false},
+	{"OPENAI_API_KEY", "openai", true},
+	{"OPENAI_BASE_URL", "openai-base-url", true},
+	{"NVIDIA_API_KEY", "nvidia", true},
+	{"OLLAMA_API_KEY", "ollama", true},
+	{"OPENROUTER_API_KEY", "openrouter", true},
+}
+
 // Config says how Jobs are rendered.
 type Config struct {
 	// Image is the runner image.
@@ -56,17 +80,32 @@ func JobName(se *v1alpha1.SkillEval) string {
 // NewJob renders the Job that evaluates one SkillEval. The Job is named by
 // JobName and is owned by the SkillEval.
 func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
-	secretEnv := func(name, key string, optional bool) corev1.EnvVar {
-		return corev1.EnvVar{Name: name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+	env := []corev1.EnvVar{
+		{Name: "SKILL_REF", Value: cfg.Registry + "/" + cfg.Project + "/" + se.Spec.Skill + "@" + se.Spec.Digest},
+		{Name: "SKILL_NAME", Value: se.Spec.Skill},
+		{Name: "AGENT", Value: se.Spec.Agent},
+		{Name: "MODEL", Value: se.Spec.Model},
+		{Name: "ATTEMPTS", Value: strconv.Itoa(se.Spec.Attempts)},
+	}
+	if se.Spec.AgentVersion != "" { // without it the runner uses its default pin for the agent
+		env = append(env, corev1.EnvVar{Name: "AGENT_VERSION", Value: se.Spec.AgentVersion})
+	}
+	for _, k := range LLMKeys {
+		env = append(env, corev1.EnvVar{Name: k.Env, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
 			Name:     "llm-keys",
-			Key:      key,
-			Optional: new(optional),
-		}}}
+			Key:      k.Key,
+			Optional: new(k.Optional),
+		}}})
 	}
 	labels := map[string]string{
 		v1alpha1.LabelSkill:  se.Labels[v1alpha1.LabelSkill],
 		v1alpha1.LabelDigest: se.Labels[v1alpha1.LabelDigest],
 		v1alpha1.LabelModel:  se.Labels[v1alpha1.LabelModel],
+	}
+	for _, key := range []string{v1alpha1.LabelAgent, v1alpha1.LabelAgentVersion} {
+		if v := se.Labels[key]; v != "" {
+			labels[key] = v
+		}
 	}
 	return &batchv1.Job{
 		Name:      JobName(se),
@@ -91,17 +130,9 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "docr"}},
 					Containers: []corev1.Container{{
-						Name:  ContainerName,
-						Image: cfg.Image,
-						Env: []corev1.EnvVar{
-							{Name: "SKILL_REF", Value: cfg.Registry + "/" + cfg.Project + "/" + se.Spec.Skill + "@" + se.Spec.Digest},
-							{Name: "SKILL_NAME", Value: se.Spec.Skill},
-							{Name: "AGENT", Value: se.Spec.Agent},
-							{Name: "MODEL", Value: se.Spec.Model},
-							{Name: "ATTEMPTS", Value: strconv.Itoa(se.Spec.Attempts)},
-							secretEnv("ANTHROPIC_API_KEY", "anthropic", false),
-							secretEnv("OPENAI_API_KEY", "openai", true),
-						},
+						Name:         ContainerName,
+						Image:        cfg.Image,
+						Env:          env,
 						VolumeMounts: []corev1.VolumeMount{{Name: "harbor-pull", MountPath: authMount, ReadOnly: true}},
 						// If the runner dies before writing a result, the log tail becomes the message.
 						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,

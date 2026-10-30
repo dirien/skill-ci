@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,7 +36,32 @@ MEDIA_TYPES = {".html": "text/html", ".json": "application/json", ".md": "text/m
 # result.json is the Tier 3 result when Tier 3 ran. validate.json (the combined JSON report)
 # and tier3.html (the Tier 3 report) are attached only when Tier 3 ran.
 REPORT_FILES = ("report.html", "result.json", "BENCHMARK.md", "validate.json", "tier3.html")
-SECRET_ENV = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "NVIDIA_API_KEY")
+SECRET_ENV = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "NVIDIA_API_KEY",
+    "OLLAMA_API_KEY",
+    "OPENROUTER_API_KEY",
+)
+# The agent CLI release each agent runs when the Job names none (AGENT_VERSION). claude-code and
+# codex are the pins SkillEvaluator 0.6.0 ships (tier3/harbor/runner.py: _CLAUDE_CODE_VERSION,
+# _CODEX_VERSION; a test compares them). Upstream pins no OpenCode release, so Harbor would
+# install the latest one per trial; 1.19.1 (npm opencode-ai, GitHub anomalyco/opencode v1.19.1,
+# published 2026-10-15) is the newest release that was at least two weeks old on 2026-10-30.
+DEFAULT_AGENT_VERSIONS = {"claude-code": "2.1.292", "codex": "0.161.0", "opencode": "1.19.1"}
+# A version reaches `npm install -g pkg@<version>` in every sandbox: letters, digits, dot, dash,
+# underscore only, which is also a valid Kubernetes label value.
+AGENT_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$")
+OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+# OpenCode providers served through an OpenAI-compatible Chat Completions endpoint: the model
+# `<provider>/<model id>` runs with the key from llm-keys and the base URL below (patch hunks 8-11).
+GATEWAY_PROVIDERS = {
+    "ollama-cloud": ("OLLAMA_API_KEY", "https://ollama.com/v1"),
+    "openrouter": ("OPENROUTER_API_KEY", "https://openrouter.ai/api/v1"),
+    "nvidia": ("NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1"),
+    "openai": ("OPENAI_API_KEY", OPENAI_DEFAULT_BASE_URL),
+}
 # The Tier 1 + 2 gate or one catalog build, scanners and embedding calls included.
 STATIC_TIMEOUT_SEC = 1200
 RETRY_DELAYS = (2, 5, 10)  # seconds to wait before each retry of a failed oras call
@@ -81,6 +107,12 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
     config = {name: environ[name] for name in REQUIRED}
     for name, default in DEFAULTS.items():
         config[name] = environ.get(name) or default
+    config["AGENT_VERSION"] = agent_version(environ)
+    if config["AGENT_VERSION"] and not AGENT_VERSION_PATTERN.match(config["AGENT_VERSION"]):
+        raise EvalError(
+            f"AGENT_VERSION must be a release like 2.1.292, got {config['AGENT_VERSION']!r}"
+        )
+    config["AGENT_MODEL"] = agent_route(config["AGENT"], config["MODEL"], environ).model
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
             raise EvalError(f"{name} must be a positive integer, got {config[name]!r}")
@@ -93,6 +125,62 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
             f"TIMEOUT_MULTIPLIER must be a positive number, got {config['TIMEOUT_MULTIPLIER']!r}"
         )
     return config
+
+
+def agent_version(environ: Mapping[str, str]) -> str:
+    """Return the agent CLI release to run: ``AGENT_VERSION``, else the default pin of ``AGENT``."""
+    return (environ.get("AGENT_VERSION") or "").strip() or DEFAULT_AGENT_VERSIONS.get(
+        environ.get("AGENT", ""), ""
+    )
+
+
+@dataclass(frozen=True)
+class AgentRoute:
+    """How the agent under test reaches its model.
+
+    ``model`` is the value for ``--agent-model``; ``env`` the variables that replace the Job's
+    for this run. ``gateway`` is true for OpenCode behind an OpenAI-compatible endpoint.
+    """
+
+    model: str
+    env: Mapping[str, str] = field(default_factory=dict)
+    gateway: bool = False
+
+
+def agent_route(agent: str, model: str, environ: Mapping[str, str]) -> AgentRoute:
+    """Choose the credential route of ``agent`` running ``model``.
+
+    Claude Code and Codex use the keys of the Job as they are (Codex needs ``OPENAI_API_KEY``
+    and ``OPENAI_BASE_URL``). OpenCode models are ``<provider>/<model>``: ``anthropic/...`` runs
+    natively with the Anthropic key; a provider from ``GATEWAY_PROVIDERS`` runs through its
+    OpenAI-compatible endpoint, with that provider's key presented as ``OPENAI_API_KEY`` to the
+    agent only. The judge and Tier 2 keep their own providers (see ``tool_env``).
+    """
+    if agent != "opencode":
+        return AgentRoute(model)
+    provider, _, model_id = model.partition("/")
+    if not model_id:
+        raise EvalError(f"opencode needs a <provider>/<model> model, got {model!r}")
+    if provider == "anthropic":
+        return AgentRoute(model)
+    if provider not in GATEWAY_PROVIDERS:
+        known = ", ".join(["anthropic", *GATEWAY_PROVIDERS])
+        raise EvalError(f"opencode provider {provider!r} is not supported, use one of: {known}")
+    key_env, base_url = GATEWAY_PROVIDERS[provider]
+    key = environ.get(key_env, "").strip()
+    if not key:
+        raise EvalError(f"opencode model {model!r} needs {key_env} (llm-keys) in the Job")
+    if provider == "openai":
+        base_url = environ.get("OPENAI_BASE_URL") or base_url
+    return AgentRoute(
+        f"openai/{model_id}",
+        {
+            "OPENAI_API_KEY": key,
+            "OPENAI_BASE_URL": base_url,
+            "SKILLEVALUATOR_OPENCODE_GATEWAY": "1",
+        },
+        gateway=True,
+    )
 
 
 def registry_flags(config: Mapping[str, str]) -> list[str]:
@@ -169,8 +257,37 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     A value already in the environment wins. The sandbox size travels the same way:
     ``validate`` has no ``--override-cpus``, so the harbor_agent_sandbox environment reads
     ``HARBOR_SANDBOX_CPUS`` and ``HARBOR_SANDBOX_MEMORY_MB`` (patch hunk 4 lets them through).
+
+    The judge stays on Anthropic whatever agent runs: ``SKILL_EVAL_LLM_PROVIDER`` is
+    ``anthropic`` whenever the Job has an Anthropic key. Codex needs ``OPENAI_API_KEY`` together
+    with ``OPENAI_BASE_URL`` (the OpenAI endpoint unless the Job says otherwise). OpenCode behind
+    a gateway (``agent_route``) gets the gateway key as ``OPENAI_API_KEY``, so Tier 2 embeddings
+    keep the real OpenAI key through ``SKILL_EVAL_EMBEDDING_*``. The requested agent release
+    reaches SkillEvaluator as ``SKILLEVALUATOR_AGENT_VERSION`` (patch hunk 7).
     """
     env = dict(environ)
+    route = (
+        agent_route(env.get("AGENT", ""), env.get("MODEL", ""), env) if env.get("AGENT") else None
+    )
+    if not env.get("SKILL_EVAL_EMBEDDING_PROVIDER"):
+        # Chosen from the Job's own keys, before a gateway key takes the OPENAI_API_KEY name.
+        if env.get("OPENAI_API_KEY"):
+            env["SKILL_EVAL_EMBEDDING_PROVIDER"] = "openai"
+            if route and route.gateway:
+                env["SKILL_EVAL_EMBEDDING_PROVIDER"] = "openai-compatible"
+                env["SKILL_EVAL_EMBEDDING_API_KEY"] = env["OPENAI_API_KEY"]
+                env["SKILL_EVAL_EMBEDDING_BASE_URL"] = (
+                    env.get("OPENAI_BASE_URL") or OPENAI_DEFAULT_BASE_URL
+                )
+                env["SKILL_EVAL_EMBEDDING_MODEL"] = OPENAI_EMBEDDING_MODEL
+        elif env.get("NVIDIA_API_KEY"):
+            env["SKILL_EVAL_EMBEDDING_PROVIDER"] = "nv_build"
+    if route and route.gateway:
+        env.update(route.env)
+    elif env.get("OPENAI_API_KEY") and not env.get("OPENAI_BASE_URL"):
+        env["OPENAI_BASE_URL"] = OPENAI_DEFAULT_BASE_URL
+    if version := agent_version(env):
+        env["SKILLEVALUATOR_AGENT_VERSION"] = version
     for name, source in (
         ("HARBOR_SANDBOX_CPUS", "SANDBOX_CPUS"),
         ("HARBOR_SANDBOX_MEMORY_MB", "SANDBOX_MEMORY_MB"),
@@ -180,13 +297,8 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     if not env.get("SKILL_EVAL_LLM_PROVIDER"):
         if env.get("ANTHROPIC_API_KEY"):
             env["SKILL_EVAL_LLM_PROVIDER"] = "anthropic"
-        elif env.get("OPENAI_API_KEY"):
+        elif environ.get("OPENAI_API_KEY"):
             env["SKILL_EVAL_LLM_PROVIDER"] = "openai"
-    if not env.get("SKILL_EVAL_EMBEDDING_PROVIDER"):
-        if env.get("OPENAI_API_KEY"):
-            env["SKILL_EVAL_EMBEDDING_PROVIDER"] = "openai"
-        elif env.get("NVIDIA_API_KEY"):
-            env["SKILL_EVAL_EMBEDDING_PROVIDER"] = "nv_build"
     return env
 
 
@@ -230,7 +342,7 @@ def validate_command(
             "--ek", f"registry={config['TASK_IMAGE_REGISTRY']}",
             "--ek", f"image_pull_secret={config['TASK_IMAGE_PULL_SECRET']}",
             "--ek", "skip_image_check=false",
-            "--agent-model", f"{config['AGENT']}={config['MODEL']}",
+            "--agent-model", f"{config['AGENT']}={config['AGENT_MODEL']}",
             "--n-attempts", config["ATTEMPTS"],
             "--n-concurrent", config["TRIAL_CONCURRENCY"],
             "--timeout-multiplier", config["TIMEOUT_MULTIPLIER"],
@@ -556,6 +668,26 @@ def read_scores(results: Path, agent: str) -> dict[str, Any]:
     return payload
 
 
+def used_agent_version(run_dir: Path) -> str | None:
+    """Return the agent CLI release the trials ran, from Harbor's trial results.
+
+    Every trial's ``result.json`` under ``_harbor-jobs/<job>/<trial>/`` carries
+    ``agent_info.version``: the release Harbor installed (the requested pin), or the one it
+    detected afterwards when no pin was given. The most common valid value wins; ``None`` when
+    the jobs were not kept or no trial reports a version.
+    """
+    seen = Counter()
+    for path in sorted(run_dir.glob("_harbor-jobs/*/*/result.json")):
+        try:
+            info = json.loads(path.read_text()).get("agent_info") or {}
+        except (OSError, ValueError, AttributeError):
+            continue
+        version = str(info.get("version") or "").strip()
+        if version != "unknown" and AGENT_VERSION_PATTERN.match(version):  # Harbor's "no idea"
+            seen[version] += 1
+    return seen.most_common(1)[0][0] if seen else None
+
+
 def tier3_tier(results: Path) -> TierResult:
     """Return the Tier 3 status: ``passed`` when the run succeeded, else ``incomplete``.
 
@@ -656,6 +788,9 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         cmd = validate_command(config, skill_dir, out, tiers=static, catalog=catalog)
         report = read_validate(out, run_static(cmd, env))
         payload: dict[str, Any] = {"agent": config["AGENT"], "model": config["MODEL"]}
+        agent_ver = config[
+            "AGENT_VERSION"
+        ]  # what was asked for; replaced by what the trials report
         run_dir: Path | None = None
         tiers = {**report.tiers, "tier3": "skipped"}
         findings = report.findings
@@ -676,6 +811,8 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
             except EvalError as err:
                 raise EvalError(f"skillevaluator exited {proc.returncode}: {err}") from err
             run_dir = newest_result(results).parent
+            payload["model"] = config["MODEL"]  # not the gateway form SkillEvaluator ran with
+            agent_ver = used_agent_version(run_dir) or agent_ver
             full = read_validate(out, proc)
             if full.json_path is None:  # Tier 3 left scores but no combined report
                 full = ValidateReport(report.tiers, full.findings, "incomplete", None, None, None)
@@ -687,6 +824,9 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
             findings = notes + [f for f in findings if not f.startswith("tier2/")]
         publication = final_publication(report, tiers)
         annotations = {"skillci.dev/model": config["MODEL"], "skillci.dev/agent": config["AGENT"]}
+        if agent_ver:
+            annotations["skillci.dev/agent-version"] = agent_ver
+            payload["agentVersion"] = agent_ver
         if "lift" in payload:
             annotations["skillci.dev/lift"] = f"{payload['lift']:+.2f}"
         annotations["skillci.dev/publication"] = publication

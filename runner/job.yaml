@@ -18,7 +18,7 @@ spec:
         - name: docr
       containers:
         - name: skill-eval
-          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.5.1
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.6.0
           terminationMessagePolicy: FallbackToLogsOnError
           env:
             - name: SKILL_REF
@@ -29,6 +29,9 @@ spec:
               value: claude-code
             - name: MODEL
               value: claude-haiku-5-5
+            # Optional: the agent CLI release. Without it the runner pins its default for the agent.
+            - name: AGENT_VERSION
+              value: "2.1.292"
             - name: ATTEMPTS
               value: "1"
             - name: ANTHROPIC_API_KEY
@@ -42,6 +45,8 @@ spec:
                   name: llm-keys
                   key: openai
                   optional: true
+            # Optional keys of other agents (llm-keys: openai-base-url, nvidia, ollama, openrouter);
+            # the controller adds all of them to the Jobs it creates, see CONTRACT.md "LLM keys".
           volumeMounts:
             - name: registry-auth
               mountPath: /auth

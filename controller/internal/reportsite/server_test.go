@@ -19,7 +19,7 @@ import (
 )
 
 func runPath(skill, version, model string) string {
-	return "/runs/" + evals.Name(skill, version, model)
+	return "/runs/" + evals.Name(skill, version, "claude-code", "", model)
 }
 
 func TestPages(t *testing.T) {
@@ -55,14 +55,14 @@ func TestPages(t *testing.T) {
 			name: "skill page decisions", path: "/skills/acme-release-notes", status: http.StatusOK,
 			want: []string{
 				"Held back", "claude-code/claude-haiku-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.95",
-				"On stable", "Lift is +0.58 or more on every required model (claude-haiku-5-5 lowest).",
+				"On stable", "Lift is +0.58 or more on every required model (claude-code/claude-haiku-5-5 lowest).",
 				"Meets threshold", "v1.1.0 holds stable", "Waiting", "0 of 2 required models have finished.",
 				">stable<", ">beta<", "with 0.95 · without 0.37", "optional", "needs lift +0.10 on every required model, the range above zero, and no regression",
 			},
 		},
 		{
 			name: "skill page below threshold", path: "/skills/python-docstrings", status: http.StatusOK,
-			want: []string{"Not promoted", "Stable needs +0.10 on every required model; below it: claude-haiku-5-5 +0.03."},
+			want: []string{"Not promoted", "Stable needs +0.10 on every required model; below it: claude-code/claude-haiku-5-5 +0.03."},
 		},
 		{name: "unknown skill", path: "/skills/nope", status: http.StatusNotFound, want: []string{"Skill not found", `aria-label="Breadcrumb"`}},
 		{
@@ -232,7 +232,7 @@ func TestTemplatesRenderEmptyAndFailed(t *testing.T) {
 	}{
 		{"no runs", nil, map[string]string{"/": "No SkillEvals in", "/skills/acme-release-notes": "No evaluations for"}},
 		{"only failed runs", failedOnly, map[string]string{
-			"/": "boom", "/skills/acme": "An eval failed on claude-haiku-5-5, claude-sonnet-5-5, so the policy did not decide.",
+			"/": "boom", "/skills/acme": "An eval failed on claude-code/claude-haiku-5-5, claude-code/claude-sonnet-5-5, so the policy did not decide.",
 			runPath("acme", "v1.0.0", haiku): "No report stored: the run failed",
 		}},
 	}

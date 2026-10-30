@@ -40,6 +40,7 @@ func sum(s string) string {
 // spec describes one SkillEval of the fixture.
 type spec struct {
 	skill, version, model string
+	agent, agentVersion   string // default claude-code, no pinned version
 	required              bool
 	trigger               v1alpha1.Trigger
 	started               time.Time
@@ -70,11 +71,14 @@ func digestOf(skill, version string) string { return sum(skill + "@" + version) 
 func reportDigestOf(s spec) string { return sum("report/" + s.skill + s.version + s.model) }
 
 func (s spec) object() *v1alpha1.SkillEval {
+	if s.agent == "" {
+		s.agent = "claude-code"
+	}
 	se := &v1alpha1.SkillEval{
-		Name: evals.Name(s.skill, s.version, s.model), Namespace: "skill-ci",
+		Name: evals.Name(s.skill, s.version, s.agent, s.agentVersion, s.model), Namespace: "skill-ci",
 		CreationTimestamp: metav1.NewTime(s.started),
 		Spec: v1alpha1.SkillEvalSpec{
-			Skill: s.skill, Version: s.version, Digest: digestOf(s.skill, s.version), Agent: "claude-code",
+			Skill: s.skill, Version: s.version, Digest: digestOf(s.skill, s.version), Agent: s.agent, AgentVersion: s.agentVersion,
 			Model: s.model, Required: s.required, Attempts: 1, Trigger: s.trigger,
 		},
 		Status: v1alpha1.SkillEvalStatus{

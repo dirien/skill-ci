@@ -293,3 +293,97 @@ func TestParseResultSamplesAreCapped(t *testing.T) {
 		t.Errorf("kept %d scores, want %d", got, maxSamples)
 	}
 }
+
+func TestParseResultAgentVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want string
+	}{
+		{"older runner has none", `{"withSkill":0.9,"withoutSkill":0.4}`, ""},
+		{"reported", `{"withSkill":0.9,"withoutSkill":0.4,"agentVersion":"2.1.292"}`, "2.1.292"},
+		{"a rejected run reports the requested one", `{"tiers":{"tier1":"failed"},"agentVersion":"0.161.0"}`, "0.161.0"},
+		{"not a version is dropped", `{"withSkill":0.9,"withoutSkill":0.4,"agentVersion":"codex-cli 0.161.0"}`, ""},
+		{"shell syntax is dropped", `{"withSkill":0.9,"withoutSkill":0.4,"agentVersion":"1.0;id"}`, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ParseResult(tt.msg)
+			if err != nil {
+				t.Fatalf("ParseResult() error = %v", err)
+			}
+			if res.AgentVersion != tt.want {
+				t.Errorf("AgentVersion = %q, want %q", res.AgentVersion, tt.want)
+			}
+		})
+	}
+}
+
+func jobEnv(t *testing.T, se *v1alpha1.SkillEval) (plain map[string]string, secrets map[string]corev1.SecretKeySelector) {
+	t.Helper()
+	plain, secrets = map[string]string{}, map[string]corev1.SecretKeySelector{}
+	job := NewJob(se, Config{Image: "runner:1", Registry: "harbor.local", Project: "skills"})
+	for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+		if e.ValueFrom != nil {
+			secrets[e.Name] = *e.ValueFrom.SecretKeyRef
+		} else {
+			plain[e.Name] = e.Value
+		}
+	}
+	return plain, secrets
+}
+
+func TestJobAgentVersion(t *testing.T) {
+	base := v1alpha1.SkillEvalSpec{Skill: "acme", Digest: "sha256:abc", Agent: "codex", Model: "openai/gpt", Attempts: 1}
+	tests := []struct {
+		name    string
+		version string
+		want    string
+		labeled string
+	}{
+		{"pinned", "0.161.0", "0.161.0", "0.161.0"},
+		{"unpinned leaves the runner default", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spec := base
+			spec.AgentVersion = tt.version
+			se := &v1alpha1.SkillEval{Name: "x", Spec: spec, Labels: map[string]string{
+				v1alpha1.LabelAgent: "codex", v1alpha1.LabelAgentVersion: tt.labeled,
+			}}
+			plain, _ := jobEnv(t, se)
+			got, present := plain["AGENT_VERSION"]
+			if got != tt.want || present != (tt.want != "") {
+				t.Errorf("AGENT_VERSION = %q (set: %v), want %q", got, present, tt.want)
+			}
+			labels := NewJob(se, Config{}).Spec.Template.Labels
+			if labels[v1alpha1.LabelAgent] != "codex" || labels[v1alpha1.LabelAgentVersion] != tt.labeled {
+				t.Errorf("pod labels = %v", labels)
+			}
+		})
+	}
+}
+
+func TestJobPassesTheLLMKeys(t *testing.T) {
+	_, secrets := jobEnv(t, &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: "opencode", Model: "m", Attempts: 1}})
+	want := map[string]struct {
+		key      string
+		optional bool
+	}{
+		"ANTHROPIC_API_KEY":  {"anthropic", false},
+		"OPENAI_API_KEY":     {"openai", true},
+		"OPENAI_BASE_URL":    {"openai-base-url", true},
+		"NVIDIA_API_KEY":     {"nvidia", true},
+		"OLLAMA_API_KEY":     {"ollama", true},
+		"OPENROUTER_API_KEY": {"openrouter", true},
+	}
+	if len(secrets) != len(want) {
+		t.Errorf("got %d secret variables, want %d: %v", len(secrets), len(want), secrets)
+	}
+	for env, w := range want {
+		s, ok := secrets[env]
+		if !ok || s.Name != "llm-keys" || s.Key != w.key || *s.Optional != w.optional {
+			t.Errorf("%s = %+v, want llm-keys/%s optional=%v", env, s, w.key, w.optional)
+		}
+	}
+}

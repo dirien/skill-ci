@@ -23,6 +23,12 @@ spec:
     - jsonPath: .spec.version
       name: Version
       type: string
+    - jsonPath: .spec.agent
+      name: Agent
+      type: string
+    - jsonPath: .status.agentVersion
+      name: AgentVer
+      type: string
     - jsonPath: .spec.model
       name: Model
       type: string
@@ -93,6 +99,13 @@ spec:
                 description: Agent is the agent harness, for example claude-code.
                 minLength: 1
                 type: string
+              agentVersion:
+                description: |-
+                  AgentVersion is the release of the agent CLI to evaluate with, for
+                  example 2.1.292. Empty means the runner's default pin for the agent.
+                maxLength: 63
+                pattern: ^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$
+                type: string
               attempts:
                 default: 1
                 description: Attempts is the number of trials per arm.
@@ -135,6 +148,11 @@ spec:
           status:
             description: SkillEvalStatus is the observed state of a SkillEval.
             properties:
+              agentVersion:
+                description: |-
+                  AgentVersion is the agent CLI release the trials ran, as the runner
+                  reported it; until then the release the spec asks for.
+                type: string
               completedAt:
                 description: CompletedAt is when the eval reached Succeeded or Failed.
                 format: date-time

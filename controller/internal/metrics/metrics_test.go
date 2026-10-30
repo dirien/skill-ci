@@ -15,7 +15,7 @@ func TestMetrics(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	Register(reg)
 
-	se := &v1alpha1.SkillEval{Spec: v1alpha1.SkillEvalSpec{Skill: "acme", Version: "v1.0.0", Agent: "claude-code", Model: "haiku"}}
+	se := &v1alpha1.SkillEval{Spec: v1alpha1.SkillEvalSpec{Skill: "acme", Version: "v1.0.0", Agent: "claude-code", AgentVersion: "2.1.292", Model: "haiku"}}
 	ObserveScores(se, 0.95, 0.36, 0.59, &stats.Interval{Diff: 0.59, Lower: 0.41, Upper: 0.73})
 	SetInconclusive("acme", "v1.3.0", true)
 	SetStable("acme", "v1.0.0", true)
@@ -26,13 +26,13 @@ func TestMetrics(t *testing.T) {
 	want := `
 # HELP skillci_lift With-skill minus without-skill score of the latest eval.
 # TYPE skillci_lift gauge
-skillci_lift{agent="claude-code",model="haiku",skill="acme",version="v1.0.0"} 0.59
+skillci_lift{agent="claude-code",agent_version="2.1.292",model="haiku",skill="acme",version="v1.0.0"} 0.59
 # HELP skillci_lift_ci_lower Lower bound of the confidence interval of the lift.
 # TYPE skillci_lift_ci_lower gauge
-skillci_lift_ci_lower{agent="claude-code",model="haiku",skill="acme",version="v1.0.0"} 0.41
+skillci_lift_ci_lower{agent="claude-code",agent_version="2.1.292",model="haiku",skill="acme",version="v1.0.0"} 0.41
 # HELP skillci_lift_ci_upper Upper bound of the confidence interval of the lift.
 # TYPE skillci_lift_ci_upper gauge
-skillci_lift_ci_upper{agent="claude-code",model="haiku",skill="acme",version="v1.0.0"} 0.73
+skillci_lift_ci_upper{agent="claude-code",agent_version="2.1.292",model="haiku",skill="acme",version="v1.0.0"} 0.73
 # HELP skillci_inconclusive 1 when the skill version scores lower than the stable version by more than the tolerance, but not beyond noise.
 # TYPE skillci_inconclusive gauge
 skillci_inconclusive{skill="acme",version="v1.3.0"} 1
@@ -52,7 +52,7 @@ skillci_regressed{skill="acme",version="v1.2.0"} 1
 }
 
 func se(name, skill, version, model string) *v1alpha1.SkillEval {
-	s := &v1alpha1.SkillEval{Spec: v1alpha1.SkillEvalSpec{Skill: skill, Version: version, Agent: "claude-code", Model: model}}
+	s := &v1alpha1.SkillEval{Spec: v1alpha1.SkillEvalSpec{Skill: skill, Version: version, Agent: "claude-code", AgentVersion: "2.1.292", Model: model}}
 	s.Namespace, s.Name = "skill-ci", name
 	return s
 }
@@ -121,7 +121,7 @@ func TestPublication(t *testing.T) {
 	want := `
 # HELP skillci_publication 1 for the publication status SkillEvaluator reported for the run.
 # TYPE skillci_publication gauge
-skillci_publication{model="haiku",skill="acme",status="failed",version="v1.0.0"} 1
+skillci_publication{agent="claude-code",agent_version="2.1.292",model="haiku",skill="acme",status="failed",version="v1.0.0"} 1
 # HELP skillci_rejected 1 when a required model's run of the skill version failed Tier 1 or Tier 2.
 # TYPE skillci_rejected gauge
 skillci_rejected{skill="acme",version="v1.0.0"} 1
@@ -195,6 +195,48 @@ skillci_skillevals{phase="Running"} 0
 skillci_skillevals{phase="Succeeded"} 4
 `
 	if err := testutil.GatherAndCompare(reg, strings.NewReader(want), "skillci_skillevals"); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestAgentVersionLabels(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	Register(reg)
+	resetAll()
+	t.Cleanup(resetAll)
+
+	// The same model under two agents, and the same agent in two versions, are four series.
+	for i, o := range []struct{ agent, version string }{
+		{"claude-code", "2.1.292"}, {"claude-code", "2.1.300"}, {"opencode", "1.19.1"}, {"opencode", "1.19.2"},
+	} {
+		run := se(o.agent+o.version, "acme", "v1.0.0", "claude-opus-5-5")
+		run.Spec.Agent, run.Spec.AgentVersion = o.agent, o.version
+		ObserveScores(run, 0.9, 0.3, 0.6, nil)
+		run.Status.Publication = "passed"
+		ObservePublication(run)
+		if n, err := testutil.GatherAndCount(reg, "skillci_lift", "skillci_publication"); err != nil || n != 2*(i+1) {
+			t.Fatalf("after %d runs: series = %d, %v; want %d", i+1, n, err, 2*(i+1))
+		}
+	}
+
+	// Without a pinned version the label carries the one the runner reported; before that, unknown.
+	run := se("unpinned", "acme", "v1.0.0", "claude-opus-5-5")
+	run.Spec.AgentVersion, run.Status.AgentVersion = "", "2.1.292"
+	run.Spec.Agent = "codex"
+	ObserveScores(run, 0.9, 0.3, 0.6, nil)
+	run.Status.AgentVersion = ""
+	run.Spec.Agent = "codex2"
+	ObserveScores(run, 0.9, 0.3, 0.6, nil)
+	want := `
+# HELP skillci_lift With-skill minus without-skill score of the latest eval.
+# TYPE skillci_lift gauge
+skillci_lift{agent="claude-code",agent_version="2.1.292",model="claude-opus-5-5",skill="acme",version="v1.0.0"} 0.6
+skillci_lift{agent="claude-code",agent_version="2.1.300",model="claude-opus-5-5",skill="acme",version="v1.0.0"} 0.6
+skillci_lift{agent="codex2",agent_version="unknown",model="claude-opus-5-5",skill="acme",version="v1.0.0"} 0.6
+skillci_lift{agent="opencode",agent_version="1.19.1",model="claude-opus-5-5",skill="acme",version="v1.0.0"} 0.6
+skillci_lift{agent="opencode",agent_version="1.19.2",model="claude-opus-5-5",skill="acme",version="v1.0.0"} 0.6
+`
+	if err := testutil.GatherAndCompare(reg, strings.NewReader(want), "skillci_lift"); err != nil {
 		t.Error(err)
 	}
 }

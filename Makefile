@@ -10,14 +10,17 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-CONTROLLER_TAG ?= 0.5.0
-RUNNER_TAG ?= 0.5.1
+CONTROLLER_TAG ?= 0.6.0
+RUNNER_TAG ?= 0.6.0
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
 # Demo beats.
 SKILL ?= acme-release-notes
 VERSION ?= v1.1.0
 MODE ?= add
+# demo-model-swap: AGENT for MODE=require|optional, TO for MODE=bump (a Claude Code version).
+AGENT ?=
+TO ?=
 
 # Helm chart.
 CHART ?= charts/skill-ci-controller
@@ -65,8 +68,8 @@ demo-push: ## Push a new skill version (SKILL=acme-release-notes VERSION=v1.1.0;
 	@demo/demo-push.sh $(SKILL) $(VERSION)
 
 .PHONY: demo-model-swap
-demo-model-swap: ## Change the model list (MODE=add|swap|restore)
-	@demo/model-swap.sh $(MODE)
+demo-model-swap: ## Change the model list (MODE=add|swap|restore, bump [TO=2.1.308], require|optional AGENT=codex)
+	@demo/model-swap.sh $(MODE) $(if $(filter bump,$(MODE)),$(TO),$(AGENT))
 
 .PHONY: status
 status: ## SkillEvals and the tags per skill in Harbor

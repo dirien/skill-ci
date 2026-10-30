@@ -1,8 +1,18 @@
 package v1alpha1
 
 import (
+	"regexp"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// agentVersionPattern is what an agent version may look like. It ends up in a
+// label value and in `npm install -g pkg@<version>` inside the trial sandbox,
+// so it is letters, digits, dot, dash and underscore, ending in a letter or digit.
+var agentVersionPattern = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$`)
+
+// ValidAgentVersion reports whether v is an acceptable agent version, such as 2.1.292.
+func ValidAgentVersion(v string) bool { return agentVersionPattern.MatchString(v) }
 
 // Labels set on every SkillEval.
 const (
@@ -14,6 +24,9 @@ const (
 	LabelModel = "skillci.dev/model"
 	// LabelAgent holds the agent name.
 	LabelAgent = "skillci.dev/agent"
+	// LabelAgentVersion holds the agent version of the spec; absent when the
+	// entry pins none.
+	LabelAgentVersion = "skillci.dev/agent-version"
 )
 
 // Phase is the lifecycle phase of a SkillEval.
@@ -94,6 +107,12 @@ type SkillEvalSpec struct {
 	// Agent is the agent harness, for example claude-code.
 	// +kubebuilder:validation:MinLength=1
 	Agent string `json:"agent"`
+	// AgentVersion is the release of the agent CLI to evaluate with, for
+	// example 2.1.292. Empty means the runner's default pin for the agent.
+	// +optional
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$`
+	AgentVersion string `json:"agentVersion,omitempty"`
 	// Model is the pinned model name.
 	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model"`
@@ -145,6 +164,10 @@ type SkillEvalStatus struct {
 	Phase Phase `json:"phase,omitempty"`
 	// JobName is the runner Job.
 	JobName string `json:"jobName,omitempty"`
+	// AgentVersion is the agent CLI release the trials ran, as the runner
+	// reported it; until then the release the spec asks for.
+	// +optional
+	AgentVersion string `json:"agentVersion,omitempty"`
 	// WithSkill is the score with the skill, two decimals.
 	WithSkill string `json:"withSkill,omitempty"`
 	// WithoutSkill is the score without the skill, two decimals.
@@ -206,6 +229,8 @@ type SkillEvalStatus struct {
 // +kubebuilder:resource:shortName=se
 // +kubebuilder:printcolumn:name="Skill",type=string,JSONPath=`.spec.skill`
 // +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.spec.version`
+// +kubebuilder:printcolumn:name="Agent",type=string,JSONPath=`.spec.agent`
+// +kubebuilder:printcolumn:name="AgentVer",type=string,JSONPath=`.status.agentVersion`
 // +kubebuilder:printcolumn:name="Model",type=string,JSONPath=`.spec.model`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="With",type=string,JSONPath=`.status.withSkill`
@@ -232,4 +257,28 @@ type SkillEvalList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SkillEval `json:"items"`
+}
+
+// EffectiveAgentVersion returns the agent version that identifies the run: the
+// one the spec pins, else the one the runner reported. It is empty for a run
+// that pinned none and has no result yet.
+func (se *SkillEval) EffectiveAgentVersion() string {
+	if se.Spec.AgentVersion != "" {
+		return se.Spec.AgentVersion
+	}
+	return se.Status.AgentVersion
+}
+
+// Harness returns agent@version, or the agent alone while the version is unknown.
+func (se *SkillEval) Harness() string {
+	if v := se.EffectiveAgentVersion(); v != "" {
+		return se.Spec.Agent + "@" + v
+	}
+	return se.Spec.Agent
+}
+
+// EntryKey identifies the model list entry of the run, agent@version/model.
+// The tag policy compares and counts runs per entry.
+func (se *SkillEval) EntryKey() string {
+	return se.Harness() + "/" + se.Spec.Model
 }

@@ -55,8 +55,12 @@ type Run struct {
 	Name string
 	// Skill, Version and Digest identify the evaluated skill version.
 	Skill, Version, Digest string
-	// Agent and Model say what ran the eval.
-	Agent, Model string
+	// Agent, AgentVersion and Model say what ran the eval. AgentVersion is the
+	// release the spec pins, else the one the runner reported; empty when neither is known.
+	Agent, AgentVersion, Model string
+	// RanVersion is the release the runner reported for the trials; empty
+	// before the run finishes.
+	RanVersion string
 	// Required marks models that gate promotion.
 	Required bool
 	// Attempts is the number of trials per arm.
@@ -110,7 +114,7 @@ func newRun(se *v1alpha1.SkillEval, confidence string) Run {
 	r := Run{
 		N: se.Status.N, CI: se.Status.LiftCI, Confidence: confidence,
 		Name: se.Name, Skill: se.Spec.Skill, Version: se.Spec.Version, Digest: se.Spec.Digest,
-		Agent: se.Spec.Agent, Model: se.Spec.Model, Required: se.Spec.Required, Attempts: se.Spec.Attempts,
+		Agent: se.Spec.Agent, AgentVersion: se.EffectiveAgentVersion(), RanVersion: se.Status.AgentVersion, Model: se.Spec.Model, Required: se.Spec.Required, Attempts: se.Spec.Attempts,
 		Trigger: string(se.Spec.Trigger), Phase: string(se.Status.Phase), Verdict: string(se.Status.Verdict),
 		With: newScore(se.Status.WithSkill), Without: newScore(se.Status.WithoutSkill), Lift: newScore(se.Status.Lift),
 		JobName: se.Status.JobName, Message: se.Status.Message, ReportDigest: se.Status.ReportDigest, Retries: se.Status.Retries,
@@ -158,6 +162,27 @@ func parseCI(text string) (lower, upper float64, ok bool) {
 	upper, err2 = strconv.ParseFloat(hi, 64)
 	return lower, upper, found && err1 == nil && err2 == nil
 }
+
+// Harness is agent@version, or the agent alone while its version is unknown.
+func (r Run) Harness() string {
+	if r.AgentVersion == "" {
+		return r.Agent
+	}
+	return r.Agent + "@" + r.AgentVersion
+}
+
+// Entry is the model list entry of the run, agent@version/model: the unit the
+// tag policy compares and counts.
+func (r Run) Entry() string {
+	if r.Agent == "" {
+		return r.Model
+	}
+	return r.Harness() + "/" + r.Model
+}
+
+// VersionDiffers reports whether the runner saw a different agent release than
+// the spec pins, which the run page points out.
+func (r Run) VersionDiffers() bool { return r.RanVersion != "" && r.RanVersion != r.AgentVersion }
 
 // Evidence says how sure the lift is, for example "95% CI +0.41 to +0.73, n=9/9";
 // empty for a run without trial scores.

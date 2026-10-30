@@ -220,7 +220,7 @@ func withScores(group []*v1alpha1.SkillEval) []policy.Score {
 		}
 		if with, _, _, err := scores(e); err == nil {
 			with2, _ := trialScores(e)
-			out = append(out, policy.Score{Model: e.Spec.Agent + "/" + e.Spec.Model, Required: e.Spec.Required, With: with, Samples: with2})
+			out = append(out, policy.Score{Model: e.EntryKey(), Required: e.Spec.Required, With: with, Samples: with2})
 		}
 	}
 	return out
@@ -307,7 +307,7 @@ func evidenceNote(group []*v1alpha1.SkillEval, th policy.Thresholds) string {
 		if err != nil {
 			continue
 		}
-		model := e.Spec.Agent + "/" + e.Spec.Model
+		model := e.EntryKey()
 		switch ci := liftCI(e, th); {
 		case ci == nil:
 			fixed = append(fixed, model)
@@ -335,7 +335,7 @@ func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds
 	if _, without, lift, err := scores(e); err == nil {
 		verdict = th.Verdict(lift, without, liftCI(e, th))
 	}
-	model := e.Spec.Agent + "/" + e.Spec.Model
+	model := e.EntryKey()
 	switch {
 	case reg.has(model):
 		verdict = v1alpha1.VerdictRegressed

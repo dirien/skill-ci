@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	evalLabels    = []string{"skill", "version", "agent", "model"}
+	evalLabels    = []string{"skill", "version", "agent", "agent_version", "model"}
 	versionLabels = []string{"skill", "version"}
 
-	publicationLabels = []string{"skill", "version", "model", "status"}
+	publicationLabels = []string{"skill", "version", "agent", "agent_version", "model", "status"}
 	// publicationStatuses are the values of the status label.
 	publicationStatuses = []string{"passed", "failed", "incomplete"}
 
@@ -60,7 +60,10 @@ var (
 )
 
 // evalKey is the label set of one SkillEval's series.
-type evalKey struct{ skill, version, agent, model string }
+type evalKey struct{ skill, version, agent, agentVersion, model string }
+
+// unknownVersion is the agent_version label of a run that has no version yet.
+const unknownVersion = "unknown"
 
 // Register adds the metrics to reg and starts the phase gauge at zero.
 func Register(reg prometheus.Registerer) {
@@ -78,16 +81,17 @@ func ObserveScores(se *v1alpha1.SkillEval, with, without, liftValue float64, ci 
 	trackMu.Lock()
 	defer trackMu.Unlock()
 	key := track(se)
-	withScore.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(with)
-	withoutScore.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(without)
-	lift.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(liftValue)
+	labels := key.values()
+	withScore.WithLabelValues(labels...).Set(with)
+	withoutScore.WithLabelValues(labels...).Set(without)
+	lift.WithLabelValues(labels...).Set(liftValue)
 	if ci == nil {
-		liftCILower.DeleteLabelValues(key.skill, key.version, key.agent, key.model)
-		liftCIUpper.DeleteLabelValues(key.skill, key.version, key.agent, key.model)
+		liftCILower.DeleteLabelValues(labels...)
+		liftCIUpper.DeleteLabelValues(labels...)
 		return
 	}
-	liftCILower.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(ci.Lower)
-	liftCIUpper.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(ci.Upper)
+	liftCILower.WithLabelValues(labels...).Set(ci.Lower)
+	liftCIUpper.WithLabelValues(labels...).Set(ci.Upper)
 }
 
 // ObservePublication records the publication status of a finished SkillEval:
@@ -99,9 +103,9 @@ func ObservePublication(se *v1alpha1.SkillEval) {
 	key := track(se)
 	for _, status := range publicationStatuses {
 		if status == se.Status.Publication {
-			publication.WithLabelValues(key.skill, key.version, key.model, status).Set(1)
+			publication.WithLabelValues(append(key.values(), status)...).Set(1)
 		} else {
-			publication.DeleteLabelValues(key.skill, key.version, key.model, status)
+			publication.DeleteLabelValues(append(key.values(), status)...)
 		}
 	}
 }
@@ -109,11 +113,14 @@ func ObservePublication(se *v1alpha1.SkillEval) {
 // track remembers the label set of se and drops the series of an earlier one
 // when the spec changed. The caller holds trackMu.
 func track(se *v1alpha1.SkillEval) evalKey {
-	key := evalKey{se.Spec.Skill, se.Spec.Version, se.Spec.Agent, se.Spec.Model}
+	key := evalKey{se.Spec.Skill, se.Spec.Version, se.Spec.Agent, se.EffectiveAgentVersion(), se.Spec.Model}
+	if key.agentVersion == "" {
+		key.agentVersion = unknownVersion
+	}
 	id := se.Namespace + "/" + se.Name
 	if old, ok := tracked[id]; ok && old != key {
 		deleteEval(old) // the spec changed: the old label set must not linger
-		if !sharesModel(old, id) {
+		if !sharesKey(old, id) {
 			deletePublication(old)
 		}
 	}
@@ -121,11 +128,17 @@ func track(se *v1alpha1.SkillEval) evalKey {
 	return key
 }
 
-// sharesModel reports whether a tracked SkillEval other than id has the skill,
-// version and model of k, and so the same publication series.
-func sharesModel(k evalKey, id string) bool {
+// values returns the label values of the per-run series, in evalLabels order.
+func (k evalKey) values() []string {
+	return []string{k.skill, k.version, k.agent, k.agentVersion, k.model}
+}
+
+// sharesKey reports whether a tracked SkillEval other than id has the label
+// set of k (the same skill version re-evaluated under another object), and so
+// the same series.
+func sharesKey(k evalKey, id string) bool {
 	for other, key := range tracked {
-		if other != id && key.skill == k.skill && key.version == k.version && key.model == k.model {
+		if other != id && key == k {
 			return true
 		}
 	}
@@ -134,7 +147,7 @@ func sharesModel(k evalKey, id string) bool {
 
 func deletePublication(k evalKey) {
 	for _, status := range publicationStatuses {
-		publication.DeleteLabelValues(k.skill, k.version, k.model, status)
+		publication.DeleteLabelValues(append(k.values(), status)...)
 	}
 }
 
@@ -150,8 +163,8 @@ func Forget(namespace, name string) {
 		return
 	}
 	delete(tracked, id)
-	deleteEval(key)
-	if !sharesModel(key, id) {
+	if !sharesKey(key, id) {
+		deleteEval(key)
 		deletePublication(key)
 	}
 	for _, other := range tracked {
@@ -167,11 +180,12 @@ func Forget(namespace, name string) {
 }
 
 func deleteEval(k evalKey) {
-	lift.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
-	liftCILower.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
-	liftCIUpper.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
-	withScore.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
-	withoutScore.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
+	labels := k.values()
+	lift.DeleteLabelValues(labels...)
+	liftCILower.DeleteLabelValues(labels...)
+	liftCIUpper.DeleteLabelValues(labels...)
+	withScore.DeleteLabelValues(labels...)
+	withoutScore.DeleteLabelValues(labels...)
 }
 
 // SetPhaseCounts publishes how many SkillEvals exist per phase. Phases missing

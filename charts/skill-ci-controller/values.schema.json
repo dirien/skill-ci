@@ -404,6 +404,18 @@
             },
             "openai": {
               "type": "string"
+            },
+            "openaiBaseUrl": {
+              "type": "string"
+            },
+            "nvidia": {
+              "type": "string"
+            },
+            "ollama": {
+              "type": "string"
+            },
+            "openrouter": {
+              "type": "string"
             }
           },
           "additionalProperties": false,

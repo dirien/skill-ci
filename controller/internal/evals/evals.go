@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
@@ -36,11 +38,17 @@ func Slug(s string) string {
 	return s
 }
 
-// Name returns <skill>-<version with dashes>-<model>. A name longer than 63
-// characters is cut short and ends in a 6 character hash of the full name,
-// so the result still fits and two long names stay distinct.
-func Name(skill, version, model string) string {
-	full := Slug(skill) + "-" + Slug(version) + "-" + Slug(model)
+// Name returns <skill>-<version with dashes>-<agent>[-<agent version>]-<model>.
+// The agent and its version are part of the name because the same model can run
+// under several agents and agent versions, and each run is its own object. A
+// name longer than 63 characters is cut short and ends in a 6 character hash of
+// the full name, so the result still fits and two long names stay distinct.
+func Name(skill, version, agent, agentVersion, model string) string {
+	parts := []string{Slug(skill), Slug(version), Slug(agent)}
+	if agentVersion != "" {
+		parts = append(parts, Slug(agentVersion))
+	}
+	full := strings.Join(append(parts, Slug(model)), "-")
 	if len(full) <= maxName {
 		return full
 	}
@@ -58,14 +66,42 @@ func DigestLabel(digest string) string {
 	return hexPart
 }
 
-// Labels returns the labels every SkillEval carries.
-func Labels(skill, digest, agent, model string) map[string]string {
-	return map[string]string{
+// Labels returns the labels every SkillEval carries. The agent version label
+// is left out when the entry pins no version.
+func Labels(skill, digest, agent, agentVersion, model string) map[string]string {
+	l := map[string]string{
 		v1alpha1.LabelSkill:  Slug(skill),
 		v1alpha1.LabelDigest: DigestLabel(digest),
 		v1alpha1.LabelAgent:  Slug(agent),
 		v1alpha1.LabelModel:  Slug(model),
 	}
+	if agentVersion != "" {
+		l[v1alpha1.LabelAgentVersion] = agentVersion
+	}
+	return l
+}
+
+// Selector selects the SkillEvals with exactly the identity in l: every label
+// equal, and no agent version label when l has none (an unpinned entry).
+func Selector(l map[string]string) labels.Selector {
+	sel := labels.SelectorFromSet(l)
+	if _, pinned := l[v1alpha1.LabelAgentVersion]; !pinned {
+		req, err := labels.NewRequirement(v1alpha1.LabelAgentVersion, selection.DoesNotExist, nil)
+		if err != nil { // a constant key and no values cannot fail
+			panic(fmt.Sprintf("building agent version selector: %v", err))
+		}
+		sel = sel.Add(*req)
+	}
+	return sel
+}
+
+// EntrySelector selects the SkillEvals of one model list entry, whatever the
+// skill version: same agent, agent version and model.
+func EntrySelector(m models.Model) labels.Selector {
+	l := Labels("", "", m.Agent, m.AgentVersion, m.Model)
+	delete(l, v1alpha1.LabelSkill)
+	delete(l, v1alpha1.LabelDigest)
+	return Selector(l)
 }
 
 // Request describes the SkillEval to create for one skill digest and one model.
@@ -87,28 +123,30 @@ type Request struct {
 // New builds the SkillEval for a request.
 func New(namespace string, r Request) *v1alpha1.SkillEval {
 	return &v1alpha1.SkillEval{
-		Name:      Name(r.Skill, r.Version, r.Model.Model),
+		Name:      Name(r.Skill, r.Version, r.Model.Agent, r.Model.AgentVersion, r.Model.Model),
 		Namespace: namespace,
-		Labels:    Labels(r.Skill, r.Digest, r.Model.Agent, r.Model.Model),
+		Labels:    Labels(r.Skill, r.Digest, r.Model.Agent, r.Model.AgentVersion, r.Model.Model),
 		Spec: v1alpha1.SkillEvalSpec{
-			Skill:    r.Skill,
-			Version:  r.Version,
-			Digest:   r.Digest,
-			Agent:    r.Model.Agent,
-			Model:    r.Model.Model,
-			Required: r.Model.Required,
-			Attempts: r.Attempts,
-			Trigger:  r.Trigger,
+			Skill:   r.Skill,
+			Version: r.Version,
+			Digest:  r.Digest,
+			Agent:   r.Model.Agent,
+			// A pinned version is the identity; an unpinned entry leaves it to the runner's default.
+			AgentVersion: r.Model.AgentVersion,
+			Model:        r.Model.Model,
+			Required:     r.Model.Required,
+			Attempts:     r.Attempts,
+			Trigger:      r.Trigger,
 		},
 	}
 }
 
-// Ensure creates the SkillEval unless one already exists for the same digest
-// and model. It reports whether it created one.
+// Ensure creates the SkillEval unless one already exists for the same digest,
+// agent, agent version and model. It reports whether it created one.
 func Ensure(ctx context.Context, c client.Client, namespace string, r Request) (bool, error) {
 	eval := New(namespace, r)
 	var existing v1alpha1.SkillEvalList
-	if err := c.List(ctx, &existing, client.InNamespace(namespace), client.MatchingLabels(eval.Labels)); err != nil {
+	if err := c.List(ctx, &existing, client.InNamespace(namespace), client.MatchingLabelsSelector{Selector: Selector(eval.Labels)}); err != nil {
 		return false, fmt.Errorf("listing skillevals for %s: %w", eval.Name, err)
 	}
 	if len(existing.Items) > 0 {

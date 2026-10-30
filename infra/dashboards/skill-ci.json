@@ -23,7 +23,7 @@
     {
       "id": 1,
       "type": "table",
-      "title": "Lift per skill version and model",
+      "title": "Lift per skill version, agent and model",
       "description": "skillci_lift. Green: lift >= +0.10 (promotes, if the confidence interval is above 0, see the table below). Yellow: neutral. Red: lift <= -0.10 (demotes).",
       "datasource": {
         "type": "prometheus",
@@ -41,7 +41,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_join(label_replace(skillci_lift, \"col\", \"$1\", \"model\", \"claude-(.*)\"), \"row\", \" \", \"skill\", \"version\")",
+          "expr": "label_join(label_join(label_join(label_replace(skillci_lift, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\"), \"harness\", \"@\", \"agent\", \"agent_version\"), \"col\", \" / \", \"harness\", \"short\"), \"row\", \" \", \"skill\", \"version\")",
           "refId": "A",
           "legendFormat": "",
           "format": "table",
@@ -318,9 +318,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(skillci_with_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
+          "expr": "label_replace(skillci_with_score, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} · {{short}}",
+          "legendFormat": "{{skill}} {{version}} · {{agent}}@{{agent_version}} / {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -371,9 +371,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_replace(skillci_without_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
+          "expr": "label_replace(skillci_without_score, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} · {{short}}",
+          "legendFormat": "{{skill}} {{version}} · {{agent}}@{{agent_version}} / {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -573,7 +573,7 @@
     {
       "id": 10,
       "type": "table",
-      "title": "Publication per skill version and model",
+      "title": "Publication per skill version, agent and model",
       "description": "skillci_publication: SkillEvaluator's publication assessment over all three tiers (passed, failed, incomplete). Runs from before the tiers existed have no series.",
       "datasource": {
         "type": "prometheus",
@@ -618,8 +618,10 @@
             "indexByName": {
               "skill": 0,
               "version": 1,
-              "model": 2,
-              "status": 3
+              "agent": 2,
+              "agent_version": 3,
+              "model": 4,
+              "status": 5
             }
           }
         },
@@ -885,10 +887,11 @@
               "skill": 0,
               "version": 1,
               "agent": 2,
-              "model": 3,
-              "Value #A": 4,
-              "Value #B": 5,
-              "Value #C": 6
+              "agent_version": 3,
+              "model": 4,
+              "Value #A": 5,
+              "Value #B": 6,
+              "Value #C": 7
             },
             "renameByName": {
               "Value #A": "lift",

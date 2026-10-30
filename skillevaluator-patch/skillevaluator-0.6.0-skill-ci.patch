@@ -20,6 +20,23 @@ tier3/harbor/runner.py
   5. Command builder: SKILLEVALUATOR_ACK_ENV_IMPORT_PATH replaces the `ack` environment type with
      an import path, e.g. harbor_agent_sandbox:AgentSandboxEnvironment (Agent Sandbox instead of
      bare pods).
+  6. New `_GATEWAY_OPENCODE_IMPORT_PATH` and `_opencode_gateway()`: true when
+     SKILLEVALUATOR_OPENCODE_GATEWAY=1. Hunks 8 to 11 read it.
+  7. `_harbor_agent_kwargs` (agent version): SKILLEVALUATOR_AGENT_VERSION replaces the pinned
+     `version` kwarg of the selected agent (claude-code 2.1.292, codex 0.161.0) and sets one for
+     OpenCode, which upstream leaves unpinned (Harbor then installs the latest release in every
+     trial). Ignored in local mode. The variable is read in-process by SkillEvaluator, so the Harbor
+     environment allowlist does not matter. Without the variable nothing changes.
+  8. `_validate_agent_provider_credentials`: with the gateway flag, an OpenCode model like
+     `openai/gpt-oss:120b` no longer has to carry the evaluator provider (anthropic) as prefix.
+  9. `_agent_credentials`: with the Anthropic evaluator and the gateway flag, OpenCode receives
+     OPENAI_API_KEY and OPENAI_BASE_URL (the operator's OpenAI-compatible gateway) instead of the
+     Anthropic key, exactly as Codex does. The judge stays on the evaluator provider.
+ 10. `_agent_provider_config`: describes that OpenCode route as an OpenAI-compatible provider, so
+     the credential and catalog check asks the gateway (OPENAI_BASE_URL/models) about the model.
+ 11. `_agent_import_path`: with the gateway flag, OpenCode runs as SkillEvaluatorGatewayOpenCode
+     (Chat Completions through @ai-sdk/openai-compatible; OpenCode's built-in openai provider
+     always uses the Responses API).
 
 --- a/src/skillevaluator/cli.py
 +++ b/src/skillevaluator/cli.py
@@ -60,7 +77,21 @@ tier3/harbor/runner.py
          if quiet:
 --- a/src/skillevaluator/tier3/harbor/runner.py
 +++ b/src/skillevaluator/tier3/harbor/runner.py
-@@ -1012,6 +1012,9 @@
+@@ -765,6 +765,13 @@
+ _NVIDIA_BUILD_KEY_FILE_ENV = "SKILLEVALUATOR_NVIDIA_API_KEY_FILE"
+ _NVIDIA_BUILD_AGENT_DEFAULT_MODEL = CHAT_DEFAULT_NVIDIA
+ _GATEWAY_CODEX_IMPORT_PATH = "skillevaluator.tier3.harbor.local_agents:SkillEvaluatorGatewayCodex"
++_GATEWAY_OPENCODE_IMPORT_PATH = "skillevaluator.tier3.harbor.local_agents:SkillEvaluatorGatewayOpenCode"
++
++
++def _opencode_gateway() -> bool:
++    """Return True when OpenCode should use the operator's OpenAI-compatible gateway (skill-ci)."""
++    return os.environ.get("SKILLEVALUATOR_OPENCODE_GATEWAY", "").strip() == "1"
++
+ # The OpenAI-compatible gateway Codex wrapper and container agent wrappers are
+ # allowed on Harbor-native backends (including GKE).
+ _NATIVE_BACKEND_AGENT_IMPORT_PATHS = frozenset(
+@@ -1012,6 +1019,9 @@
      ),
      "ack": _DOCKER_HOST_ENV_VARS
      | {
@@ -70,7 +101,19 @@ tier3/harbor/runner.py
          "KUBECONFIG",
          "KUBERNETES_SERVICE_HOST",
          "KUBERNETES_SERVICE_PORT",
-@@ -1710,7 +1713,12 @@
+@@ -1609,6 +1619,11 @@
+         kwargs.pop("version", None)
+     if agent == "claude-code" and model and is_claude_5_5_or_later(model):
+         kwargs["reasoning_effort"] = _CLAUDE_CODE_REASONING_EFFORT
++    # skill-ci: SKILLEVALUATOR_AGENT_VERSION replaces the pin of the selected agent, or sets one
++    # (OpenCode has none and would install the latest release in every trial).
++    requested_version = os.environ.get("SKILLEVALUATOR_AGENT_VERSION", "").strip()
++    if requested_version and env_mode != ENV_MODE_LOCAL:
++        kwargs["version"] = requested_version
+     return kwargs
+ 
+ 
+@@ -1710,7 +1725,12 @@
              env_import_path = SECURE_DOCKER_ENV_IMPORT_PATH
          command.extend(["--env", env_import_path])
      else:
@@ -84,3 +127,38 @@ tier3/harbor/runner.py
      for name, value in sorted(_harbor_agent_kwargs(agent, model, env_mode).items()):
          command.extend(["--ak", encode_environment_kwarg(name, value)])
      for name, value in sorted(validated_environment_kwargs.items()):
+@@ -1833,6 +1853,7 @@
+         and opencode_model
+         and expected_opencode_provider
+         and "/" in opencode_model
++        and not _opencode_gateway()
+         and opencode_model.split("/", maxsplit=1)[0].casefold() != expected_opencode_provider
+     ):
+         return [
+@@ -2793,7 +2814,7 @@
+         return _gateway_anthropic_agent_credentials(provider, env_mode=env_mode, environment_kwargs=environment_kwargs)
+     if provider.provider == "openai" and agent == "claude-code":
+         return _independent_anthropic_agent_credentials(env_mode=env_mode, environment_kwargs=environment_kwargs)
+-    if provider.provider == "anthropic" and agent == "codex":
++    if provider.provider == "anthropic" and (agent == "codex" or (agent == "opencode" and _opencode_gateway())):
+         return {
+             name: os.environ.get(name, "") for name in ("OPENAI_API_KEY", "OPENAI_BASE_URL") if os.environ.get(name)
+         }
+@@ -2856,7 +2877,7 @@
+             base_url=credentials.get("ANTHROPIC_BASE_URL"),
+             litellm_model=f"anthropic/{resolved_model}",
+         )
+-    if evaluator_provider.provider == "anthropic" and agent == "codex":
++    if evaluator_provider.provider == "anthropic" and (agent == "codex" or (agent == "opencode" and _opencode_gateway())):
+         resolved_model = model.removeprefix("openai/")
+         return ProviderConfig(
+             provider="openai-compatible",
+@@ -3158,6 +3179,8 @@
+ 
+ def _agent_import_path(provider: ProviderConfig, agent: str, env_mode: str) -> str | None:
+     """Select only the provider-specific wrappers required for this environment."""
++    if agent == "opencode" and provider.provider == "anthropic" and _opencode_gateway():
++        return _GATEWAY_OPENCODE_IMPORT_PATH
+     if provider.provider == "openai-compatible" and agent == "codex" and env_mode != ENV_MODE_LOCAL:
+         return _GATEWAY_CODEX_IMPORT_PATH
+     if provider.provider == "openai-compatible" and agent == "opencode" and env_mode in HARBOR_DOCKER_ENGINE_ENV_MODES:

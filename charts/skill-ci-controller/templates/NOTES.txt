@@ -11,7 +11,7 @@ The chart does not create the namespace, the model list ConfigMap or (by default
 Secret. These must exist:
   Secret {{ .Values.secrets.harborCredentials.existingSecret }}  keys {{ .Values.secrets.harborCredentials.usernameKey }}, {{ .Values.secrets.harborCredentials.passwordKey }}   (controller -> Harbor REST API)
   Secret {{ .Values.secrets.harborWebhook.existingSecret }}  key {{ .Values.secrets.harborWebhook.tokenKey }}   (webhook auth{{ if .Values.secrets.harborWebhook.optional }}, optional: without it every webhook is accepted{{ end }})
-  Secret {{ .Values.secrets.llmKeys.existingSecret }}  keys anthropic, openai (optional)   (runner Jobs; the controller hardcodes this name)
+  Secret {{ .Values.secrets.llmKeys.existingSecret }}  keys anthropic; optional openai, openai-base-url, nvidia, ollama, openrouter   (runner Jobs; the controller hardcodes this name)
   ConfigMap {{ .Values.controller.modelsConfigMap }}  key models.yaml
 
 The SkillEval CRD gained status fields (liftCI, samples). Helm does not upgrade crds/, so after

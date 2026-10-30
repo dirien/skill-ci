@@ -36,13 +36,14 @@ type Page struct {
 
 // Filter is the set of server-side filters of the runs table.
 type Filter struct {
-	// Skill, Model, Verdict, Phase and Publication each match exactly; empty matches all.
-	Skill, Model, Verdict, Phase, Publication string
+	// Skill, Agent, Model, Verdict, Phase and Publication each match exactly; empty
+	// matches all. Agent is agent@version.
+	Skill, Agent, Model, Verdict, Phase, Publication string
 }
 
 func filterFrom(q url.Values) Filter {
 	return Filter{
-		Skill: q.Get("skill"), Model: q.Get("model"), Verdict: q.Get("verdict"), Phase: q.Get("phase"),
+		Skill: q.Get("skill"), Agent: q.Get("agent"), Model: q.Get("model"), Verdict: q.Get("verdict"), Phase: q.Get("phase"),
 		Publication: q.Get("publication"),
 	}
 }
@@ -52,6 +53,7 @@ func (f Filter) Active() bool { return f != Filter{} }
 
 func (f Filter) match(r Run) bool {
 	return (f.Skill == "" || r.Skill == f.Skill) &&
+		(f.Agent == "" || r.Harness() == f.Agent) &&
 		(f.Model == "" || r.Model == f.Model) &&
 		(f.Verdict == "" || r.Verdict == f.Verdict) &&
 		(f.Phase == "" || r.Phase == f.Phase) &&
@@ -60,8 +62,8 @@ func (f Filter) match(r Run) bool {
 
 // FilterOptions are the values the filter drop-downs offer.
 type FilterOptions struct {
-	// Skills, Models, Verdicts, Phases and Publications hold the distinct values present in the runs.
-	Skills, Models, Verdicts, Phases, Publications []string
+	// Skills, Agents, Models, Verdicts, Phases and Publications hold the distinct values present in the runs.
+	Skills, Agents, Models, Verdicts, Phases, Publications []string
 }
 
 // Stats are the counts in the header of the runs page.
@@ -188,6 +190,7 @@ func filterOptions(runs []Run, f Filter) FilterOptions {
 	var o FilterOptions
 	for _, r := range runs {
 		o.Skills = append(o.Skills, r.Skill)
+		o.Agents = append(o.Agents, r.Harness())
 		o.Models = append(o.Models, r.Model)
 		o.Phases = append(o.Phases, r.Phase)
 		if r.Publication != "" {
@@ -199,6 +202,7 @@ func filterOptions(runs []Run, f Filter) FilterOptions {
 	}
 	// A filter value from a shared URL stays selectable even when no run has it.
 	o.Skills, o.Models = keepSorted(o.Skills, f.Skill), keepSorted(o.Models, f.Model)
+	o.Agents = keepSorted(o.Agents, f.Agent)
 	o.Verdicts, o.Phases = keepSorted(o.Verdicts, f.Verdict), keepSorted(o.Phases, f.Phase)
 	o.Publications = keepSorted(o.Publications, f.Publication)
 	return o
@@ -212,12 +216,29 @@ func keepSorted(values []string, extra string) []string {
 	return slices.Compact(values)
 }
 
-// ModelColumn is one model column of the skill page.
+// ModelColumn is one model column of the skill page: one entry of the model
+// list, agent@version/model.
 type ModelColumn struct {
-	// Agent and Model identify the column.
-	Agent, Model string
+	// Agent, AgentVersion and Model identify the column.
+	Agent, AgentVersion, Model string
 	// Required is true when any run of the model is required.
 	Required bool
+}
+
+// Harness is agent@version, or the agent alone when no version is known.
+func (c ModelColumn) Harness() string {
+	if c.AgentVersion == "" {
+		return c.Agent
+	}
+	return c.Agent + "@" + c.AgentVersion
+}
+
+// Entry is agent@version/model, the sort key of the columns.
+func (c ModelColumn) Entry() string {
+	if c.Agent == "" {
+		return c.Model
+	}
+	return c.Harness() + "/" + c.Model
 }
 
 // VersionRow is one evaluated digest of a skill.
@@ -253,12 +274,12 @@ func buildSkill(page Page, skill string, runs []Run, ch *Channels, th policy.Thr
 	_, v.Beta = ch.Holder(skill, policy.TagBeta)
 	stableDigest, stableVersion := ch.Holder(skill, policy.TagStable)
 
-	cols := map[[2]string]*ModelColumn{}
+	cols := map[[3]string]*ModelColumn{}
 	byDigest := map[string][]Run{}
 	for _, r := range runs { // runs are newest first
-		key := [2]string{r.Agent, r.Model}
+		key := [3]string{r.Agent, r.AgentVersion, r.Model}
 		if cols[key] == nil {
-			cols[key] = &ModelColumn{Agent: r.Agent, Model: r.Model}
+			cols[key] = &ModelColumn{Agent: r.Agent, AgentVersion: r.AgentVersion, Model: r.Model}
 		}
 		cols[key].Required = cols[key].Required || r.Required
 		byDigest[r.Digest] = append(byDigest[r.Digest], r)
@@ -273,14 +294,14 @@ func buildSkill(page Page, skill string, runs []Run, ch *Channels, th policy.Thr
 			}
 			return 1
 		}
-		return strings.Compare(a.Agent+"/"+a.Model, b.Agent+"/"+b.Model)
+		return strings.Compare(a.Entry(), b.Entry())
 	})
 
 	for digest, group := range byDigest {
 		row := VersionRow{Version: group[0].Version, Digest: digest, Channels: ch.Tags(skill, digest), Cells: make([]*Run, len(v.Models))}
 		for i, col := range v.Models {
 			for j := range group {
-				if group[j].Agent == col.Agent && group[j].Model == col.Model {
+				if group[j].Agent == col.Agent && group[j].AgentVersion == col.AgentVersion && group[j].Model == col.Model {
 					row.Cells[i] = &group[j]
 					break // newest first
 				}

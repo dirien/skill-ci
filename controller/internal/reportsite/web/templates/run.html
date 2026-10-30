@@ -1,5 +1,5 @@
 {{define "content"}}
-<h1>{{.Run.Skill}} {{.Run.Version}} on {{.Run.Model}}</h1>
+<h1>{{.Run.Skill}} {{.Run.Version}} on {{.Run.Model}} <span class="muted">({{.Run.Harness}})</span></h1>
 <p class="lede"><code>{{.Run.Name}}</code></p>
 
 <section aria-labelledby="summary-h">
@@ -60,6 +60,7 @@
     <div><dt>Digest</dt><dd class="mono wrap">{{.Run.Digest}}</dd></div>
     <div><dt>Model</dt><dd>{{.Run.Model}} <span class="muted">({{if .Run.Required}}required{{else}}optional, never gates{{end}})</span></dd></div>
     <div><dt>Agent</dt><dd>{{.Run.Agent}}</dd></div>
+    <div><dt>Agent version</dt><dd>{{if .Run.AgentVersion}}{{.Run.AgentVersion}}{{else}}<span class="muted">not known yet</span>{{end}}{{if .Run.VersionDiffers}} <span class="muted">(the trials ran {{.Run.RanVersion}})</span>{{end}}</dd></div>
     <div><dt>Attempts</dt><dd>{{.Run.Attempts}} per arm</dd></div>
     <div><dt>Trigger</dt><dd>{{dash .Run.Trigger}}</dd></div>
     <div><dt>Started</dt><dd><time datetime="{{rfc .Run.Created}}">{{tsSec .Run.Created}} UTC</time> <span class="muted">{{age .Run.Created}}</span></dd></div>

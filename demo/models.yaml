@@ -1,7 +1,26 @@
+# The model list of the demo: ConfigMap skill-ci-models, key models.yaml (CONTRACT.md, "Model list").
+# An entry is an agent (the harness), its version and a model. Identity = agent + agentVersion + model:
+# a new version of the same agent is a new entry and re-evaluates every beta and stable skill.
+# `required: true` entries gate promotion; `required: false` entries run and show up, but never gate.
+# Flip an entry live with `make demo-model-swap MODE=require AGENT=codex` (or MODE=optional).
 models:
+  # Claude Code, the harness the skills are written for. Pinned to the SkillEvaluator 0.6.0 pin.
   - agent: claude-code
-    model: claude-haiku-5-5
+    agentVersion: "2.1.292"
+    model: claude-opus-5-5
     required: true
-  - agent: claude-code
-    model: claude-sonnet-5-5
-    required: true
+  # Codex with an OpenAI model (OPENAI_API_KEY in llm-keys; OPENAI_BASE_URL defaults to api.openai.com).
+  # Pinned to the SkillEvaluator 0.6.0 pin.
+  # PLACEHOLDER MODEL: gpt-6.1-sol is SkillEvaluator's default OpenAI model, not checked against the
+  # account (the OpenAI key in the ESC environment returned 401). Replace it with a model the key can use.
+  - agent: codex
+    agentVersion: "0.161.0"
+    model: openai/gpt-6.1-sol
+    required: false
+  # OpenCode with an open model on Ollama Cloud (key `ollama` in llm-keys). Needs the ollama-cloud
+  # gateway route of runner 0.6.0. Release 1.19.1 (npm opencode-ai) is at least two weeks old.
+  # gpt-oss:120b is free on the account's Ollama Cloud plan; GLM, Kimi and MiniMax need credits.
+  - agent: opencode
+    agentVersion: "1.19.1"
+    model: ollama-cloud/gpt-oss:120b
+    required: false

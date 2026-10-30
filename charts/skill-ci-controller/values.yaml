@@ -46,7 +46,7 @@ controller:
   # --runner-image, rendered as repository:tag or repository@digest.
   runnerImage:
     repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
-    tag: "0.5.1"
+    tag: "0.6.0"
     digest: ""
   modelsConfigMap: skill-ci-models
   # Attempts per arm. One attempt is too noisy for the regression gate: the same
@@ -127,14 +127,25 @@ secrets:
     optional: true
     create: false
     token: ""
-  # LLM API keys used by runner Jobs (keys: anthropic, openai). The controller
-  # hardcodes the name llm-keys in the Jobs it creates, so the chart only
-  # documents it and can create it; changing the name has no effect on the Jobs.
+  # LLM API keys used by runner Jobs. The controller hardcodes the name llm-keys in the
+  # Jobs it creates, so the chart only documents it and can create it; changing the name
+  # has no effect on the Jobs. Secret keys (all but anthropic are optional):
+  #   anthropic        the judge, and the model of Claude Code and of OpenCode's anthropic/... models
+  #   openai           Codex (OPENAI_API_KEY) and Tier 2 embeddings
+  #   openai-base-url  OPENAI_BASE_URL for Codex; the runner uses https://api.openai.com/v1 without it
+  #   ollama           OpenCode models "ollama-cloud/<model>" (Ollama Cloud, OpenAI-compatible)
+  #   openrouter       OpenCode models "openrouter/<model>"
+  #   nvidia           OpenCode models "nvidia/<model>" (NVIDIA Build), and Tier 2 embeddings when
+  #                    there is no openai key
   llmKeys:
     existingSecret: llm-keys
     create: false
     anthropic: ""
     openai: ""
+    openaiBaseUrl: ""
+    nvidia: ""
+    ollama: ""
+    openrouter: ""
 
 # Runner Jobs ServiceAccount, Role and RoleBinding. The controller hardcodes
 # the ServiceAccount name skill-eval-runner.

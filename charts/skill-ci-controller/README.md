@@ -13,7 +13,7 @@ The chart replaces `kubectl apply -k config/`. Its defaults reproduce `config/ma
 - Created out of band, in the release namespace (the chart creates none of them by default):
   - Secret `harbor-credentials` (`username`, `password`)
   - Secret `harbor-webhook` (`token`, optional)
-  - Secret `llm-keys` (`anthropic`, optional `openai`), read by runner Jobs
+  - Secret `llm-keys` (`anthropic`; optional `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter`), read by runner Jobs
   - Secret `docr` (image pull and task image push)
   - ConfigMap `skill-ci-models` (key `models.yaml`)
 - Optional: the Prometheus Operator CRDs for `serviceMonitor.enabled`.
@@ -89,7 +89,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.5.0`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.6.0`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[{name: docr}]` | |
@@ -98,7 +98,7 @@ keys are rejected.
 | `controller.namespace` | `""` (release namespace) | `--namespace` |
 | `controller.harborUrl` | `http://harbor.harbor.svc.cluster.local` | `--harbor-url` |
 | `controller.harborProject` | `skills` | `--harbor-project` |
-| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.5.1` / `""` | `--runner-image` |
+| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.6.0` / `""` | `--runner-image` |
 | `controller.modelsConfigMap` | `skill-ci-models` | `--models-configmap` |
 | `controller.defaultAttempts` | `3` | `--default-attempts`: trials per arm; with 3 eval cases that gives 9 trial scores per arm for the statistics |
 | `controller.thresholds.helps` | `"0.05"` | `--helps-threshold` |
@@ -120,6 +120,7 @@ keys are rejected.
 | `secrets.harborCredentials.existingSecret` | `harbor-credentials` | Keys `usernameKey: username`, `passwordKey: password` |
 | `secrets.harborWebhook.existingSecret` | `harbor-webhook` | Key `tokenKey: token`; `optional: true` |
 | `secrets.llmKeys.existingSecret` | `llm-keys` | Used by runner Jobs; the controller hardcodes the name |
+| `secrets.llmKeys.anthropic`, `.openai`, `.openaiBaseUrl`, `.nvidia`, `.ollama`, `.openrouter` | `""` | Only with `create: true`: the Secret keys `anthropic` (required), `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter`. See "LLM keys" |
 | `secrets.<name>.create` | `false` | Create the Secret from inline values (demos only) |
 | `runner.enabled` | `true` | Runner ServiceAccount, Role, RoleBinding |
 | `runner.serviceAccount.name` | `skill-eval-runner` | Hardcoded in the controller |
@@ -136,9 +137,23 @@ keys are rejected.
 | `resources` | requests 50m / 64Mi, limit 256Mi memory | |
 | `nodeSelector`, `tolerations`, `affinity` | empty | |
 
+### LLM keys
+
+The runner Job reads these keys of `llm-keys`. Only `anthropic` is required: it is the judge that scores every
+run, whatever agent is under test.
+
+| Key | Variable | Needed for |
+| --- | --- | --- |
+| `anthropic` | `ANTHROPIC_API_KEY` | The judge; Claude Code; OpenCode models `anthropic/<model>` |
+| `openai` | `OPENAI_API_KEY` | Codex; Tier 2 embeddings |
+| `openai-base-url` | `OPENAI_BASE_URL` | Codex endpoint; the runner uses `https://api.openai.com/v1` when it is missing |
+| `ollama` | `OLLAMA_API_KEY` | OpenCode models `ollama-cloud/<model>` (Ollama Cloud, `https://ollama.com/v1`) |
+| `openrouter` | `OPENROUTER_API_KEY` | OpenCode models `openrouter/<model>` |
+| `nvidia` | `NVIDIA_API_KEY` | OpenCode models `nvidia/<model>` (NVIDIA Build); Tier 2 embeddings when `openai` is missing |
+
 ### The statistical gate
 
-From controller 0.5.0 (runner 0.5.1 sends the trial scores) the gate asks for evidence instead of a fixed number.
+From controller 0.5.0 (runner 0.5.1 and later send the trial scores) the gate asks for evidence instead of a fixed number.
 `controller.thresholds.confidence` is the level of the confidence intervals it uses:
 
 - A version is promoted to `stable` only when, on every required model, the lift reaches

@@ -82,17 +82,17 @@ func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 	case st.This && lowest.Model == "":
 		return Decision{Kind: "pass", Headline: "On stable", Detail: "This version holds the stable tag."}
 	case st.This:
-		return Decision{Kind: "pass", Headline: "On stable", Detail: fmt.Sprintf("Lift is %+.2f or more on every required model (%s lowest).", lowest.Lift.Value, lowest.Model)}
+		return Decision{Kind: "pass", Headline: "On stable", Detail: fmt.Sprintf("Lift is %+.2f or more on every required model (%s lowest).", lowest.Lift.Value, lowest.Entry())}
 	case len(below) > 0:
 		parts := make([]string, len(below))
 		for i, r := range below {
-			parts[i] = fmt.Sprintf("%s %+.2f", r.Model, r.Lift.Value)
+			parts[i] = fmt.Sprintf("%s %+.2f", r.Entry(), r.Lift.Value)
 		}
 		return Decision{Kind: "neutral", Headline: "Not promoted", Detail: fmt.Sprintf("Stable needs %+.2f on every required model; below it: %s.", th.Promote, strings.Join(parts, ", "))}
 	case len(unproven) > 0:
 		parts := make([]string, len(unproven))
 		for i, r := range unproven {
-			parts[i] = fmt.Sprintf("%s %+.2f (%s)", r.Model, r.Lift.Value, r.Evidence())
+			parts[i] = fmt.Sprintf("%s %+.2f (%s)", r.Entry(), r.Lift.Value, r.Evidence())
 		}
 		return Decision{Kind: "neutral", Headline: "Not promoted", Detail: "The lift reaches " + fmt.Sprintf("%+.2f", th.Promote) + " but is not beyond noise, so the skill may not help: " + strings.Join(parts, ", ") + ". Stable needs the whole interval above zero."}
 	case !st.Known:
@@ -113,7 +113,7 @@ func liftSummary(required []Run, promote float64) (lowest Run, below []Run) {
 		if c := compareFloat(a.Lift.Value, b.Lift.Value); c != 0 {
 			return c
 		}
-		return strings.Compare(a.Model, b.Model)
+		return strings.Compare(a.Entry(), b.Entry())
 	})
 	if len(scored) == 0 {
 		return Run{}, nil
@@ -154,7 +154,7 @@ func allPlanned(runs []Run) bool {
 func models(runs []Run) string {
 	names := make([]string, len(runs))
 	for i, r := range runs {
-		names[i] = r.Model
+		names[i] = r.Entry()
 	}
 	return strings.Join(names, ", ")
 }

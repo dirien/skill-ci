@@ -44,6 +44,7 @@
   <h2 id="runs-h">All runs</h2>
   <form class="filters" method="get" action="/">
     {{template "select" (sel "skill" "Skill" .Filter.Skill .Options.Skills)}}
+    {{template "select" (sel "agent" "Agent" .Filter.Agent .Options.Agents)}}
     {{template "select" (sel "model" "Model" .Filter.Model .Options.Models)}}
     {{template "select" (sel "verdict" "Verdict" .Filter.Verdict .Options.Verdicts)}}
     {{template "select" (sel "phase" "Phase" .Filter.Phase .Options.Phases)}}
@@ -61,6 +62,7 @@
           <th scope="col">Age</th>
           <th scope="col">Skill</th>
           <th scope="col">Version</th>
+          <th scope="col">Agent</th>
           <th scope="col">Model</th>
           <th scope="col">Trigger</th>
           <th scope="col">Phase</th>
@@ -81,6 +83,7 @@
           <td class="nowrap muted" title="{{age .Created}}">{{ageShort .Created}}</td>
           <td class="nowrap"><a href="/skills/{{.Skill}}">{{.Skill}}</a></td>
           <td class="nowrap">{{.Version}}</td>
+          <td class="nowrap mono">{{.Harness}}</td>
           <td class="nowrap"><span{{if not .Required}} title="Optional model: never gates promotion"{{end}}>{{.Model}}</span></td>
           <td class="nowrap">{{dash .Trigger}}</td>
           <td class="nowrap"{{if .Message}} title="{{.Message}}"{{end}}>{{template "status" .PhaseStatus}}</td>

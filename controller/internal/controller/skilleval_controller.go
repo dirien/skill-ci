@@ -100,18 +100,24 @@ func (r *SkillEvalReconciler) reconcile(ctx context.Context, se *v1alpha1.SkillE
 // ensureLabels gives a hand-written SkillEval the labels the controller creates
 // on its own ones, so dedupe and the tag policy can find it.
 func (r *SkillEvalReconciler) ensureLabels(ctx context.Context, se *v1alpha1.SkillEval) error {
-	want := evals.Labels(se.Spec.Skill, se.Spec.Digest, se.Spec.Agent, se.Spec.Model)
+	want := evals.Labels(se.Spec.Skill, se.Spec.Digest, se.Spec.Agent, se.Spec.AgentVersion, se.Spec.Model)
 	missing := false
 	for k, v := range want {
 		missing = missing || se.Labels[k] != v
 	}
-	if !missing {
+	// An entry without a pinned version has no agent version label.
+	_, pinned := want[v1alpha1.LabelAgentVersion]
+	_, stale := se.Labels[v1alpha1.LabelAgentVersion]
+	if !missing && (!stale || pinned) {
 		return nil
 	}
 	if se.Labels == nil {
 		se.Labels = map[string]string{}
 	}
 	maps.Copy(se.Labels, want)
+	if !pinned {
+		delete(se.Labels, v1alpha1.LabelAgentVersion)
+	}
 	if err := r.Update(ctx, se); err != nil {
 		return fmt.Errorf("labelling %s: %w", se.Name, err)
 	}
@@ -121,6 +127,9 @@ func (r *SkillEvalReconciler) ensureLabels(ctx context.Context, se *v1alpha1.Ski
 func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1.SkillEval) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	trials := se.Spec.Attempts * 2 // attempts per arm, two arms
+	if se.Status.AgentVersion == "" {
+		se.Status.AgentVersion = se.Spec.AgentVersion // written by the next status update
+	}
 	if se.Status.Phase == "" {
 		if err := r.setPhase(ctx, se, v1alpha1.PhasePending, ""); err != nil {
 			return ctrl.Result{}, err
@@ -129,7 +138,7 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 
 	if r.Config.DryRun {
 		log.Info("dry run: would start a Job", "skill", se.Spec.Skill, "version", se.Spec.Version,
-			"model", se.Spec.Model, "trials", trials)
+			"agent", se.Harness(), "model", se.Spec.Model, "trials", trials)
 		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhasePlanned, fmt.Sprintf("dry run: would run %d trials", trials))
 	}
 
@@ -225,6 +234,9 @@ func applyResult(se *v1alpha1.SkillEval, res runner.Result, th policy.Thresholds
 		st.Verdict = v1alpha1.VerdictRejected
 	}
 	st.ReportDigest = res.Report
+	if res.AgentVersion != "" { // what the trials ran; an older runner leaves the requested one
+		st.AgentVersion = res.AgentVersion
+	}
 	st.Tiers = nil
 	if res.Tiers.Known() {
 		st.Tiers = &v1alpha1.TierStatuses{Tier1: res.Tiers.Tier1, Tier2: res.Tiers.Tier2, Tier3: res.Tiers.Tier3}

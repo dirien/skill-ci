@@ -15,7 +15,7 @@
         <tr>
           <th scope="col">Version</th>
           <th scope="col">Channels</th>
-          {{range .Models}}<th scope="col">{{.Model}}<span class="sub">{{.Agent}} · {{if .Required}}required{{else}}optional{{end}}</span></th>
+          {{range .Models}}<th scope="col">{{.Model}}<span class="sub">{{.Harness}} · {{if .Required}}required{{else}}optional{{end}}</span></th>
           {{end}}
           <th scope="col" class="decision">Policy decision</th>
         </tr>

@@ -276,7 +276,7 @@ func TestManualSkillEvalGetsLabels(t *testing.T) {
 	}
 	e := newEnv(t, Config{MaxConcurrentJobs: 4}, 200, nil, manual)
 	e.reconcile(manual)
-	want := evals.Labels("acme", digestA, "claude-code", "claude-haiku-5-5")
+	want := evals.Labels("acme", digestA, "claude-code", "", "claude-haiku-5-5")
 	if got := e.get(manual); !reflect.DeepEqual(got.Labels, want) || got.Status.Phase != v1alpha1.PhaseRunning {
 		t.Errorf("labels = %v, phase = %s", got.Labels, got.Status.Phase)
 	}

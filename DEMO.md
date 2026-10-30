@@ -11,9 +11,25 @@ The point of the demo: a skill is an OCI artifact in a registry, and a Kubernete
 - Each score is one SkillEval: 3 eval cases, 3 attempts per arm, so 9 trials per arm. It is a small sample, not a benchmark. The pre-baked results below were recorded before the statistical gate, with one attempt per arm.
 - Every SkillEval takes 11 to 13 minutes. Nothing below waits for a run except the one optional live trigger, and its result arrives after the talk.
 
+## The model list: agents, versions and what gates
+
+The model list (`demo/models.yaml`, ConfigMap `skill-ci-models`) names the harness as well as the model. An entry is **agent + agent version + model**:
+
+| Agent | Release | Model | Gates promotion? |
+| --- | --- | --- | --- |
+| `claude-code` | 2.1.292 | `claude-opus-5-5` | yes (`required: true`) |
+| `codex` | 0.161.0 | `openai/gpt-6.1-sol` (placeholder, see the file) | no (`required: false`) |
+| `opencode` | 1.19.1 | `ollama-cloud/gpt-oss:120b` | no (`required: false`) |
+
+Gating is the `required` flag of each entry. Optional entries run, show up in `kubectl get skillevals`, on the reporting site and in Grafana, and never hold a version back. Flip one live: `make demo-model-swap MODE=require AGENT=codex` (and `MODE=optional AGENT=codex` back). The runs that exist are re-judged at once, so a skill that Codex does not lift stops being promoted, with no new run.
+
+Needs the keys in `llm-keys`: `anthropic` always (it is the judge, whatever agent runs), `openai` for Codex, `ollama` for the OpenCode entry. Without a key the run fails in a few seconds with the name of the missing key, before any sandbox starts.
+
 ## The state the beats rely on
 
-Pre-run results, read from the cluster on 2026-10-30 (`kubectl -n skill-ci get skillevals -o wide`). Models are `claude-haiku-5-5`, `claude-sonnet-5-5` (both required) and `claude-opus-5-5` (optional).
+The numbers below were recorded before agent versions existed, on the old list: claude-code with `claude-haiku-5-5` and `claude-sonnet-5-5` (both required) and `claude-opus-5-5` (optional). Beats 1 to 6 describe that state. After a `make reset` the list is the one above, so rows, columns and the "required" models differ until you rebuild the state.
+
+Pre-run results, read from the cluster on 2026-10-30 (`kubectl -n skill-ci get skillevals -o wide`). Models are `claude-haiku-5-5`, `claude-sonnet-5-5` (both required) and `claude-opus-5-5` (optional), all under `claude-code`.
 
 | Skill and version | Haiku with / without / lift | Sonnet with / without / lift | Opus with / without / lift | Outcome |
 | --- | --- | --- | --- | --- |
@@ -41,7 +57,7 @@ Three things to know before you talk about these numbers:
 
 ## Controller version check (do this first)
 
-For the statistical gate (Inconclusive, confidence intervals) run controller 0.5.0 with runner 0.5.1 and apply the CRD first (`kubectl apply --server-side -f charts/skill-ci-controller/crds/`, which `make deploy` does). Older runs have no trial scores and are judged by the fixed thresholds.
+For the statistical gate (Inconclusive, confidence intervals) and the agent versions run controller 0.6.0 with runner 0.6.0 and apply the CRD first (`kubectl apply --server-side -f charts/skill-ci-controller/crds/`, which `make deploy` does). Older runs have no trial scores and are judged by the fixed thresholds. SkillEvals from before 0.6.0 have no `spec.agentVersion`: the controller treats them as entries without a version, and `kubectl get skillevals` shows an empty `AGENTVER` for them. Applying the pinned list of `demo/models.yaml` on top of them adds the pinned entries, so every `beta` and `stable` skill runs again; for a clean demo state run `make reset` first.
 
 Controller images before 0.2.1 have two defects that show up exactly in this state. Both are fixed in 0.2.1 (`controller/internal/controller/siblings.go` and `policy.go`, see CONTRACT.md):
 
@@ -217,7 +233,7 @@ Expected output (the stable version named is the one holding `stable` when the g
 claude-code/claude-haiku-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.95; claude-code/claude-sonnet-5-5 scores 0.70 with v1.2.0, stable v1.1.0 scored 0.95 (tolerance 0.05; fixed rule, no trial scores to test it)
 ```
 
-The pre-baked v1.2.0 runs come from a runner that did not send trial scores, so controller 0.5.0 judges them by the fixed tolerance and says so at the end of the message. Runs made by runner 0.5.1 carry their trial scores and the message gains the numbers (next section).
+The pre-baked v1.2.0 runs come from a runner that did not send trial scores, so controller 0.6.0 judges them by the fixed tolerance and says so at the end of the message. Runs made by runner 0.5.1 or later carry their trial scores and the message gains the numbers (next section).
 
 Then `make status`: v1.2.0 carries `beta` (it is the newest) but not `stable`. Point out the opus row: `Helps` at 0.71, because opus is optional and never gates. Kubernetes Events with reason `WorseThanStable` exist too, but events expire after an hour, so do not rely on `kubectl get events` for a pre-run state.
 
@@ -227,7 +243,7 @@ Be honest: v1.2.0 was written to fail. The real-world version of this is a well-
 
 Say: the same skill version scored 0.95 on one run and 0.87 on the next. A gate that fires at "more than 0.05 below stable" would have held a good version back on that noise. So the gate does not compare two numbers. Each run keeps its 9 trial scores per arm and the controller puts a 95% confidence interval around the difference.
 
-What the audience sees depends on the evidence. After a re-run on runner 0.5.1 (`make demo-push VERSION=v1.2.0`, or `make retrigger` for an existing version), with the stable version at 0.95:
+What the audience sees depends on the evidence. After a re-run on runner 0.5.1 or later (`make demo-push VERSION=v1.2.0`, or `make retrigger` for an existing version), with the stable version at 0.95:
 
 ```bash
 kubectl -n skill-ci get skillevals -l skillci.dev/skill=acme-release-notes -o wide | grep v1-2-0
@@ -261,9 +277,46 @@ The audience sees: haiku 0.62 with, 0.59 without, +0.03 `Neutral`; sonnet 0.95 /
 
 Say: sonnet and opus gain about 0.4, haiku scores 0.62 with the skill and 0.59 without. The rule is +0.10 on every required model, so this skill stays on `beta`. (I have not looked at why haiku gains nothing; do not claim a reason on stage.) That is a result a team would act on: improve the skill or drop haiku from the required list. Compare k8s-resource-naming (arbitrary team conventions): +0.57, +0.62, +0.57, `stable`.
 
-### Beat 7: metrics and reports (about 3 minutes)
+### Beat 7: the harness changed (about 3 minutes)
 
-Grafana (browser tab 1, dashboard `skill-ci`): the lift matrix per skill version and model, the with-skill and no-skill scores, the stable table. Say: the controller exposes `skillci_lift`, `skillci_stable`, `skillci_regressed` and friends, scraped by Prometheus. The dashboard JSON is in the repo.
+The model did not change, the tool around it did. Claude Code ships often, and a new release can change how a skill is found and followed. The list pins the release, so a new one is a new entry.
+
+```bash
+make demo-model-swap MODE=bump TO=2.1.308
+kubectl -n skill-ci get skillevals -w
+```
+
+The audience sees in terminals 2 and 3: the model list change in the controller log (`model list changed`), then one new SkillEval per `beta` or `stable` digest, `Pending` and then `Running`. The `AGENTVER` column shows `2.1.308` on them and `2.1.292` on the earlier runs:
+
+```text
+NAME                                                          SKILL                VERSION  AGENT        AGENTVER  MODEL            PHASE
+acme-release-notes-v1-1-0-claude-code-2-1-292-claude-opus-5-5 acme-release-notes   v1.1.0   claude-code  2.1.292   claude-opus-5-5  Succeeded
+acme-release-notes-v1-1-0-claude-code-2-1-308-claude-opus-5-5 acme-release-notes   v1.1.0   claude-code  2.1.308   claude-opus-5-5  Running
+```
+
+Say: nobody pushed a skill. The tool changed, and every skill version in a release channel is tested against it, the way a package is rebuilt against a new compiler. The old results stay: same skill, same model, two harness releases, two entries. If the new release makes a skill worse, the regression gate compares it with the stable version **on the same harness release**, so the answer is about the skill, not about the harness.
+
+This spends tokens and takes 11 to 13 minutes per skill version, so it is a second live trigger: start it and say "here is one I prepared earlier", then show the finished entries on the reporting site (`/skills/acme-release-notes`: one column per `agent@version` and model) or in Grafana (the `agent_version` label). Not verified end to end on the cluster: the bump was exercised with controller and runner unit tests, not with a live run.
+
+Undo with `make demo-model-swap MODE=restore`. The runs on 2.1.308 stay; remove the entry's results with `make reset` if they should not count.
+
+### Beat 8: other harnesses, and who gates (about 2 minutes)
+
+```bash
+kubectl -n skill-ci get skillevals -l skillci.dev/skill=acme-release-notes -o custom-columns=RUN:.metadata.name,AGENT:.spec.agent,VER:.status.agentVersion,MODEL:.spec.model,LIFT:.status.lift,REQUIRED:.spec.required
+```
+
+Say: Codex and OpenCode run the same skill with their own models. They are optional here, so a bad score does not block anything. Then flip the switch:
+
+```bash
+make demo-model-swap MODE=require AGENT=codex
+```
+
+The controller updates `spec.required` of the Codex runs and re-judges every digest: if Codex's lift is below +0.10, or its with-skill score fell against stable, the digest stops being promoted, with no new run. `MODE=optional AGENT=codex` puts it back. Not verified end to end: Codex needs a model the OpenAI key can use (the model in `demo/models.yaml` is a placeholder), and the OpenCode route through Ollama Cloud has been checked against SkillEvaluator's provider checks and the Ollama API, not with a full run.
+
+### Beat 9: metrics and reports (about 3 minutes)
+
+Grafana (browser tab 1, dashboard `skill-ci`): the lift matrix per skill version, `agent@version` and model, the with-skill and no-skill scores, the stable table. Say: the controller exposes `skillci_lift`, `skillci_stable`, `skillci_regressed` and friends, scraped by Prometheus. The dashboard JSON is in the repo.
 
 Then the evidence behind one number:
 
@@ -271,7 +324,7 @@ Then the evidence behind one number:
 make report SKILL=acme-release-notes VERSION=v1.1.0 OUT=reports/
 ```
 
-The audience sees a table of three report referrers (sha256 digest, creation time, model, agent, lift +0.58, +0.64, +0.58), then three downloads, each with `report.html` and `result.json`. Open `reports/acme-release-notes-v1.1.0-claude-opus-5-5/report.html` in the browser.
+The audience sees a table of three report referrers (sha256 digest, creation time, model, agent, agent version, lift +0.58, +0.64, +0.58), then three downloads, each with `report.html` and `result.json`. Open `reports/acme-release-notes-v1.1.0-claude-opus-5-5/report.html` in the browser.
 
 Say: the full SkillEvaluator report is attached to the skill digest as an OCI referrer, so it survives the pod and travels with the artifact.
 
@@ -302,17 +355,17 @@ If the cluster or the network fails, do not debug on stage.
 | A webhook did not fire, so a pushed version has no SkillEvals | `make seed RETRIGGER=1` re-fires the push webhook for the v1.0.0 tags. For another version, `demo/retrigger.sh <skill> <version>`. The controller dedupes by digest and model, so nothing is evaluated twice |
 | State is wrong beyond repair | `make reset`, then rebuild (below). This deletes every result, and rebuilding takes about 90 minutes. Never do it within an hour of the show |
 
-`make reset` deletes all SkillEvals and Jobs, removes the `beta` and `stable` tags and every version except v1.0.0 from Harbor, and restores the model list from `demo/models.yaml` (haiku and sonnet, both required, no opus).
+`make reset` deletes all SkillEvals and Jobs, removes the `beta` and `stable` tags and every version except v1.0.0 from Harbor, and restores the model list from `demo/models.yaml` (Claude Code 2.1.292 with opus as the only required entry, plus optional Codex and OpenCode entries). That is a different list from the one the pre-baked table was made with, so rebuild the state afterwards.
 
 ### Rebuild the state
 
-Do this the day before, never on the day. Fifteen SkillEvals run three at a time (the controller allows three Jobs, `maxConcurrentJobs: 3`), each taking 11 to 13 minutes, so expect about 70 minutes of pure runtime plus queueing.
+Do this the day before, never on the day. With the old list, fifteen SkillEvals run three at a time (the controller allows three Jobs, `maxConcurrentJobs: 3`), each taking 11 to 13 minutes, so expect about 70 minutes of pure runtime plus queueing.
 
 ```bash
 make reset
-make seed RETRIGGER=1                 # v1.0.0 of all three skills: 6 SkillEvals (haiku, sonnet)
+make seed RETRIGGER=1                 # v1.0.0 of all three skills: one SkillEval per entry of the model list
 # wait until every v1.0.0 is tagged beta or stable: make status
-make demo-model-swap MODE=add         # opus as an optional model: 3 SkillEvals for the tagged v1.0.0 digests
+make demo-model-swap MODE=add         # an optional model (claude-sonnet-5-5): one SkillEval per tagged v1.0.0 digest
 make demo-push VERSION=v1.2.0         # the regression: 3 SkillEvals
 make demo-push VERSION=v1.1.0         # the improvement: 3 SkillEvals
 make status

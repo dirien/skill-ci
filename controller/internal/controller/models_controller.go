@@ -68,6 +68,14 @@ func (r *ModelsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
+	if flipped := models.RequiredChanged(previous, current); len(flipped) > 0 {
+		n, err := r.syncRequired(ctx, flipped)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		log.Info("required flag changed", "entries", len(flipped), "skillevals", n)
+	}
+
 	if added := models.Added(previous, current); len(added) > 0 {
 		n, err := r.evaluateTagged(ctx, added)
 		if err != nil {
@@ -92,6 +100,35 @@ func (r *ModelsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, fmt.Errorf("recording applied model list: %w", err)
 	}
 	return ctrl.Result{}, nil
+}
+
+// syncRequired copies the required flag of the changed entries to their
+// existing SkillEvals, so flipping an entry in the model list gates (or stops
+// gating) promotion of the versions that were already evaluated. The spec
+// change makes each SkillEval reconcile, which applies the tag policy again.
+// It returns how many SkillEvals it updated.
+func (r *ModelsReconciler) syncRequired(ctx context.Context, changed []models.Model) (int, error) {
+	updated := 0
+	for _, m := range changed {
+		var list v1alpha1.SkillEvalList
+		err := r.List(ctx, &list, client.InNamespace(r.Config.Namespace),
+			client.MatchingLabelsSelector{Selector: evals.EntrySelector(m)})
+		if err != nil {
+			return updated, fmt.Errorf("listing skillevals of %s: %w", m.Key(), err)
+		}
+		for i := range list.Items {
+			se := &list.Items[i]
+			if se.Spec.Required == m.Required {
+				continue
+			}
+			se.Spec.Required = m.Required
+			if err := r.Update(ctx, se); err != nil {
+				return updated, fmt.Errorf("setting required=%t on %s: %w", m.Required, se.Name, err)
+			}
+			updated++
+		}
+	}
+	return updated, nil
 }
 
 // evaluateTagged creates a SkillEval for every added model and every digest

@@ -12,8 +12,8 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 | [BuildKit](https://github.com/moby/buildkit) | Builds task images in the cluster | v0.34.1 |
 | DOKS + DOCR | Cluster and image registry (DOCR professional tier) | Kubernetes 1.36.5 |
 | [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
-| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.5.0 (Helm chart `charts/skill-ci-controller`) |
-| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.5.1 |
+| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.6.0 (Helm chart `charts/skill-ci-controller`) |
+| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.6.0 |
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
 
@@ -29,7 +29,7 @@ charts/                Helm chart of the controller (what `make deploy` installs
 config/                Controller manifests (CRD source, RBAC, Deployment, Service), plain `kubectl apply -k` alternative
 reports/               Eval reports downloaded by `make report`
 harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox
-skillevaluator-patch/  Five-hunk patch: that environment, its sizing, and a Tier 2 catalog for validate
+skillevaluator-patch/  Eleven-hunk patch: that environment, its sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
 ```
 
@@ -45,11 +45,11 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | --- | --- |
 | `make up` | `pulumi up`: cluster, registry, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
 | `make docr-login` | Writes DOCR push credentials from the cluster to `~/.cache/skill-ci/docker` (used by `make build` when present) |
-| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.5.0`, `RUNNER_TAG=0.5.1`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
+| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.6.0`, `RUNNER_TAG=0.6.0`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
 | `make deploy` | Applies the CRD and installs the controller with its Helm chart (`helm upgrade --install --take-ownership`), pinning the controller and runner tags |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |
-| `make demo-model-swap` | Changes the model list live (`MODE=add` adds `claude-code/claude-opus-5-5`, `swap` replaces sonnet with opus, `restore` resets) |
+| `make demo-model-swap` | Changes the model list live: `MODE=add` adds an optional model, `swap` replaces the Claude model, `bump [TO=2.1.308]` moves Claude Code to another release (the harness changed), `require AGENT=codex` / `optional AGENT=codex` flips whether an agent gates promotion, `restore` resets |
 | `make status` | `kubectl get skillevals -o wide` plus tags and digests per skill from the Harbor API |
 | `make report` | Downloads the eval reports attached to a skill version in Harbor (`SKILL=acme-release-notes VERSION=v1.1.0 [MODEL=...] OUT=reports/`) |
 | `make reports-ui` | Port-forwards the controller's reporting site to `localhost:8082` and prints the URL |
@@ -66,14 +66,30 @@ Demo beats after that (a SkillEval takes 11 to 13 minutes and three run at a tim
 1. **Push a better version.** `make demo-push` publishes `acme-release-notes:v1.1.0`. The controller evaluates it against every model on the list.
 2. **Push a regression.** `make demo-push VERSION=v1.2.0` publishes a version whose rules contradict its own evals. The regression gate holds it at `beta` (see below). A drop that is within noise is held back too, as `Inconclusive` rather than `Regressed`.
 3. **Change the model list.** `make demo-model-swap` adds a model. The controller evaluates the current `beta`/`stable` digests against it.
-4. **Show the metrics and reports.** `make dashboard`, then open the `skill-ci` dashboard. `make report SKILL=acme-release-notes VERSION=v1.1.0` pulls the SkillEvaluator reports attached to that version.
+4. **Change the harness.** `make demo-model-swap MODE=bump` moves Claude Code to a newer release. A new agent version is a new model list entry, so every `beta` and `stable` skill version runs again on it.
+5. **Show the metrics and reports.** `make dashboard`, then open the `skill-ci` dashboard. `make report SKILL=acme-release-notes VERSION=v1.1.0` pulls the SkillEvaluator reports attached to that version.
+
+## Agents and their versions
+
+The harness is part of the measurement, so skill-ci treats the agent and its release like the model. An entry of the model list is agent + `agentVersion` + model (`demo/models.yaml` has one for each supported agent):
+
+| Agent | Pinned release | Model | Needs in `llm-keys` |
+| --- | --- | --- | --- |
+| `claude-code` | 2.1.292 (SkillEvaluator's pin) | `claude-opus-5-5` | `anthropic` |
+| `codex` | 0.161.0 (SkillEvaluator's pin) | `openai/<id>` | `openai`, optionally `openai-base-url` |
+| `opencode` | 1.19.1 (skill-ci's pin: upstream pins none, 1.19.1 was published on 2026-10-15) | `ollama-cloud/gpt-oss:120b`, `anthropic/<model>`, ... | `ollama` (or `openrouter`, `nvidia`, `anthropic`) |
+
+- **A new agent version is a new entry**, so bumping a version re-evaluates every `beta` and `stable` digest on it. Results stay per entry: the regression gate compares a candidate with the stable version on the same `agent@version/model`, never across harnesses.
+- **`required` per entry decides what gates promotion.** The demo list gates on Claude Code and runs Codex and OpenCode as optional, so they show up everywhere without holding a skill back. `make demo-model-swap MODE=require AGENT=codex` makes Codex gate (the runs that already exist are re-judged at once); `MODE=optional AGENT=codex` undoes it.
+- **The judge is always Anthropic**, whatever agent runs. Codex gets `OPENAI_API_KEY` and `OPENAI_BASE_URL`; OpenCode models other than `anthropic/...` run through the provider's OpenAI-compatible endpoint (patch hunks 6 and 8 to 11). The routes and the checks are in [CONTRACT.md](CONTRACT.md) ("Agent versions", "LLM keys").
+- Upgrading from 0.5: runs created before agent versions have no `agent-version` label and count as the entries without `agentVersion`. Pinned entries are new entries, so applying the pinned list re-evaluates the `beta` and `stable` digests; keep an unpinned entry in the list, or delete the old SkillEvals (`make reset`), to avoid mixing.
 
 ## Reporting site
 
 The controller serves a read-only reporting site on port 8082 (`--reports-addr`, empty disables it; Helm `reports.enabled`). `make reports-ui` port-forwards it to <http://localhost:8082>.
 
-- `/` lists every run (SkillEval) newest first, with release channels per skill and filters (`?skill=`, `?model=`, `?verdict=`, `?phase=`).
-- `/skills/<skill>` shows versions against models with the lift (and its confidence interval and n), the channel tags and the policy decision per version in plain words.
+- `/` lists every run (SkillEval) newest first, with release channels per skill and filters (`?skill=`, `?agent=claude-code@2.1.292`, `?model=`, `?verdict=`, `?phase=`).
+- `/skills/<skill>` shows versions against model list entries (one column per `agent@version` and model) with the lift (and its confidence interval and n), the channel tags and the policy decision per version in plain words.
 - `/runs/<name>` shows one run: scores with the lift interval and n, conditions and, when a report is stored, the six SkillEvaluator dimensions with and without the skill. The full SkillEvaluator report and `result.json` open from there.
 
 Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. `make report-page` builds the offline equivalent.
@@ -113,11 +129,11 @@ The details and the flags are in [CONTRACT.md](CONTRACT.md).
 
 - **Harbor** has `externalURL: http://harbor.harbor.svc.cluster.local`, so pods can reach its token service. From outside the cluster, reach it only through in-cluster tooling: the toolbox pod or `kubectl -n harbor port-forward svc/harbor`.
 - **Setup Job.** `harbor-setup-<id>` waits for Harbor, creates the private project `skills` if it is missing, and creates or updates the webhook policy `skill-ci` (`PUSH_ARTIFACT`, payload `Default`, `Authorization: Bearer <harbor-webhook token>`) pointing at the controller Service. It also removes policies that still point at the old debug receiver. The script is `infra/harbor-setup.sh`. The Job name carries a random id that changes when the script, the image, the admin password or the token change, so every relevant `pulumi up` runs a fresh, idempotent Job.
-- **Secrets** in `skill-ci`: `harbor-credentials` (user `admin` and the generated admin password), `harbor-pull` (Docker config for `harbor.harbor.svc.cluster.local`, same credentials), `harbor-webhook` (random token). A project-scoped Harbor robot account is the production choice. Admin keeps the demo reproducible from one `pulumi up`. `llm-keys` is not managed by Pulumi. Create it by hand and never commit key values: `kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$ANTHROPIC_API_KEY"`.
+- **Secrets** in `skill-ci`: `harbor-credentials` (user `admin` and the generated admin password), `harbor-pull` (Docker config for `harbor.harbor.svc.cluster.local`, same credentials), `harbor-webhook` (random token). A project-scoped Harbor robot account is the production choice. Admin keeps the demo reproducible from one `pulumi up`. `llm-keys` is not managed by Pulumi. Create it by hand and never commit key values: `kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$ANTHROPIC_API_KEY"`. Only `anthropic` is required (it is the judge). Add the keys of the agents you evaluate: `openai` (Codex, Tier 2 embeddings), `ollama`, `openrouter`, `nvidia` (OpenCode models behind those providers), `openai-base-url` (a Codex endpoint other than api.openai.com); see [the agent section](#agents-and-their-versions).
 - **Toolbox.** Deployment `toolbox` has two containers: `oras` (pinned image, the `harbor-pull` secret at `/auth/config.json`) and `harbor-api` (curl with the admin password in its env). The scripts copy a skill directory in with `tar` over `kubectl exec` and run `oras push --plain-http --registry-config /auth/config.json`.
 - **Sandbox sizing.** Each trial runs in one Agent Sandbox. The runner image defaults are `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per sandbox) and `TRIAL_CONCURRENCY=2` (trials at once per Job); `SANDBOX_NAMESPACE` and `TASK_IMAGE_REGISTRY` are set there too. Override them as env vars on the runner container (the manual Job in `runner/job.yaml` shows where). The controller caps the Jobs: Helm value `controller.maxConcurrentJobs` (`--max-concurrent-jobs`, deployed with 3) and `controller.trialBudget` (`--trial-budget`, 200). Three Jobs at two trials each is up to 6 sandboxes of 1 vCPU and 2 GiB at a time.
-- **Model list.** ConfigMap `skill-ci-models` is seeded from `demo/models.yaml` and has `ignoreChanges: [data]` in Pulumi, so demo edits survive later `pulumi up` runs. `make reset` restores it from the same file.
-- **Monitoring.** `kube-prometheus-stack` in namespace `monitoring`: Prometheus (24h retention) and Grafana, with Alertmanager, node exporter, kube-state-metrics, default rules and the control-plane scrape jobs switched off. A `ServiceMonitor` in `skill-ci` scrapes Service `skill-ci-controller` (port `metrics`, label `app.kubernetes.io/name=skill-ci-controller`). The dashboard `infra/dashboards/skill-ci.json` is a ConfigMap with the `grafana_dashboard` label. It shows the lift matrix per skill version and model (`skillci_lift`), the lift with its confidence interval (`skillci_lift_ci_lower`, `skillci_lift_ci_upper`), scores with and without the skill, `skillci_stable`, `skillci_obsolete`, the Inconclusive and Regressed counts and `skillci_skillevals_total`. The Grafana admin password is generated and exported as the secret stack output `grafanaAdminPassword`.
+- **Model list.** ConfigMap `skill-ci-models` (an entry is agent + agent version + model, see [the agent section](#agents-and-their-versions)) is seeded from `demo/models.yaml` and has `ignoreChanges: [data]` in Pulumi, so demo edits survive later `pulumi up` runs. `make reset` restores it from the same file.
+- **Monitoring.** `kube-prometheus-stack` in namespace `monitoring`: Prometheus (24h retention) and Grafana, with Alertmanager, node exporter, kube-state-metrics, default rules and the control-plane scrape jobs switched off. A `ServiceMonitor` in `skill-ci` scrapes Service `skill-ci-controller` (port `metrics`, label `app.kubernetes.io/name=skill-ci-controller`). The dashboard `infra/dashboards/skill-ci.json` is a ConfigMap with the `grafana_dashboard` label. It shows the lift matrix per skill version, `agent@version` and model (`skillci_lift`; every per-run series has `agent` and `agent_version` labels), the lift with its confidence interval (`skillci_lift_ci_lower`, `skillci_lift_ci_upper`), scores with and without the skill, `skillci_stable`, `skillci_obsolete`, the Inconclusive and Regressed counts and `skillci_skillevals_total`. The Grafana admin password is generated and exported as the secret stack output `grafanaAdminPassword`.
 - **Cost.** DOCR moved from `basic` to `professional` (about 5 to 20 USD a month) because SkillEvaluator creates one task image repository per eval case and arm, and `basic` allows five. Prometheus and Grafana run on the existing two nodes (requests of about 0.2 vCPU and 0.6 GiB in total). Live evals cost LLM tokens, see the cost guard flags in `CONTRACT.md`.
 
 ## Sample skills
