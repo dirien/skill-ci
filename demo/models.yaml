@@ -10,9 +10,8 @@ models:
     model: claude-opus-5-5
     required: true
   # Codex with an OpenAI model (OPENAI_API_KEY in llm-keys; OPENAI_BASE_URL defaults to api.openai.com).
-  # Pinned to the SkillEvaluator 0.6.0 pin.
-  # PLACEHOLDER MODEL: gpt-6.1-sol is SkillEvaluator's default OpenAI model, not checked against the
-  # account (the OpenAI key in the ESC environment returned 401). Replace it with a model the key can use.
+  # Pinned to the SkillEvaluator 0.6.0 pin. gpt-6.1-sol is SkillEvaluator's own OpenAI default and
+  # is listed for the account's key (checked 2026-10-30); gpt-6.1-terra is newer but under two weeks old.
   - agent: codex
     agentVersion: "0.161.0"
     model: openai/gpt-6.1-sol
