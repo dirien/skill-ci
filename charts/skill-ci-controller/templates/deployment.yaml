@@ -1,0 +1,132 @@
+{{- $ctl := .Values.controller }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "skill-ci-controller.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "skill-ci-controller.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "skill-ci-controller.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "skill-ci-controller.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "skill-ci-controller.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: manager
+          image: {{ include "skill-ci-controller.image" (dict "image" .Values.image "defaultTag" .Chart.AppVersion) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --namespace={{ include "skill-ci-controller.watchNamespace" . }}
+            - --harbor-url={{ $ctl.harborUrl }}
+            - --harbor-project={{ $ctl.harborProject }}
+            - --runner-image={{ include "skill-ci-controller.image" (dict "image" $ctl.runnerImage "defaultTag" "") }}
+            - --models-configmap={{ $ctl.modelsConfigMap }}
+            - --default-attempts={{ $ctl.defaultAttempts }}
+            - --helps-threshold={{ $ctl.thresholds.helps }}
+            - --hurts-threshold={{ $ctl.thresholds.hurts }}
+            - --promote-threshold={{ $ctl.thresholds.promote }}
+            - --demote-threshold={{ $ctl.thresholds.demote }}
+            - --obsolete-baseline={{ $ctl.thresholds.obsoleteBaseline }}
+            {{- if ne (toString $ctl.thresholds.regressionTolerance) "" }}
+            - --regression-tolerance={{ $ctl.thresholds.regressionTolerance }}
+            {{- end }}
+            - --max-concurrent-jobs={{ $ctl.maxConcurrentJobs }}
+            - --trial-budget={{ $ctl.trialBudget }}
+            - --dry-run={{ $ctl.dryRun }}
+            - --webhook-addr=:{{ .Values.ports.webhook }}
+            - --metrics-addr=:{{ .Values.ports.metrics }}
+            - --leader-elect={{ $ctl.leaderElect }}
+            {{- with $ctl.logging.level }}
+            - --zap-log-level={{ . }}
+            {{- end }}
+            {{- with $ctl.logging.encoder }}
+            - --zap-encoder={{ . }}
+            {{- end }}
+            {{- if $ctl.logging.development }}
+            - --zap-devel=true
+            {{- end }}
+            {{- range .Values.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            {{- with .Values.secrets.harborCredentials }}
+            - name: HARBOR_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: {{ .usernameKey }}
+            - name: HARBOR_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: {{ .passwordKey }}
+            {{- end }}
+            {{- with .Values.secrets.harborWebhook }}
+            # Optional: without the secret the controller warns and accepts all webhooks.
+            - name: WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: {{ .tokenKey }}
+                  optional: {{ .optional }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: webhook
+              containerPort: {{ .Values.ports.webhook }}
+            - name: metrics
+              containerPort: {{ .Values.ports.metrics }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- with .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.extraVolumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

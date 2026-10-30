@@ -1,0 +1,187 @@
+# Default values for skill-ci-controller.
+# The defaults reproduce config/manager/deployment.yaml in the repository root.
+
+nameOverride: ""
+# Defaults to the chart name. The controller expects the Service skill-ci-controller
+# (Harbor webhook target), so change this only together with the webhook policy.
+fullnameOverride: ""
+# Extra labels on every object the chart creates.
+commonLabels: {}
+
+replicaCount: 1
+# Recreate because leader election is off by default (one active controller at a time).
+strategy:
+  type: Recreate
+
+image:
+  repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller
+  # Defaults to the chart appVersion.
+  tag: ""
+  # Takes precedence over tag, for example sha256:0123...
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: docr
+
+serviceAccount:
+  create: true
+  # Defaults to the fullname when create=true.
+  name: ""
+  annotations: {}
+
+rbac:
+  # Controller Role and RoleBinding.
+  create: true
+  # Extra PolicyRules appended to the controller Role.
+  extraRules: []
+
+# Controller flags (see controller/cmd/manager/main.go).
+controller:
+  # --namespace. Defaults to the release namespace. Role, RoleBinding and the runner
+  # ServiceAccount are created in this namespace.
+  namespace: ""
+  harborUrl: http://harbor.harbor.svc.cluster.local
+  harborProject: skills
+  # --runner-image, rendered as repository:tag or repository@digest.
+  runnerImage:
+    repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
+    tag: "0.2.2"
+    digest: ""
+  modelsConfigMap: skill-ci-models
+  defaultAttempts: 1
+  # Lift thresholds, as strings to keep the trailing zero.
+  thresholds:
+    helps: "0.05"
+    hurts: "-0.10"
+    promote: "0.10"
+    demote: "-0.10"
+    obsoleteBaseline: "0.80"
+    # --regression-tolerance: with-skill drop below the stable version that still allows
+    # promotion. Empty omits the flag (controller default 0.05). Images before the flag
+    # existed (controller tag 0.1.2) exit on an unknown flag, so set it only with a newer image.
+    regressionTolerance: ""
+  # Deployed with 3 so 3 Jobs x 2 trials fit a small cluster (the flag default is 4).
+  maxConcurrentJobs: 3
+  # Max trials per controller lifetime, 0 is unlimited.
+  trialBudget: 200
+  # Create SkillEvals in phase Planned and no Jobs.
+  dryRun: false
+  leaderElect: false
+  # controller-runtime zap logging flags. Empty means the controller default.
+  logging:
+    level: ""
+    encoder: ""
+    development: false
+
+# Container and Service ports. They also set --webhook-addr and --metrics-addr.
+ports:
+  webhook: 8080
+  metrics: 8081
+
+# Additional raw arguments, for example ["--zap-stacktrace-level=error"].
+extraArgs: []
+# Additional container env entries.
+extraEnv: []
+extraVolumes: []
+extraVolumeMounts: []
+
+# Secrets are referenced by name and never created unless create=true (demos and tests).
+# Create them out of band: kubectl, Pulumi ESC, External Secrets or sealed-secrets.
+secrets:
+  # Harbor REST API credentials of the controller (robot account or admin).
+  harborCredentials:
+    existingSecret: harbor-credentials
+    usernameKey: username
+    passwordKey: password
+    create: false
+    username: ""
+    password: ""
+  # Bearer token the Harbor webhook policy sends.
+  harborWebhook:
+    existingSecret: harbor-webhook
+    tokenKey: token
+    # With optional=true a missing Secret leaves WEBHOOK_TOKEN empty and the
+    # controller accepts every webhook (with a warning).
+    optional: true
+    create: false
+    token: ""
+  # LLM API keys used by runner Jobs (keys: anthropic, openai). The controller
+  # hardcodes the name llm-keys in the Jobs it creates, so the chart only
+  # documents it and can create it; changing the name has no effect on the Jobs.
+  llmKeys:
+    existingSecret: llm-keys
+    create: false
+    anthropic: ""
+    openai: ""
+
+# Runner Jobs ServiceAccount, Role and RoleBinding. The controller hardcodes
+# the ServiceAccount name skill-eval-runner.
+runner:
+  enabled: true
+  serviceAccount:
+    name: skill-eval-runner
+    annotations: {}
+  # Image pull Secret the runner may read to create trial sandboxes.
+  pullSecretName: docr
+  extraRules: []
+
+service:
+  type: ClusterIP
+  webhookPort: 8080
+  metricsPort: 8081
+  annotations: {}
+  labels: {}
+
+serviceMonitor:
+  # Needs the Prometheus Operator CRDs. Do not enable while another ServiceMonitor
+  # selects this Service, or the metrics are scraped twice.
+  enabled: false
+  # Defaults to the release namespace.
+  namespace: ""
+  # Extra labels, for example {release: kps} for a kube-prometheus-stack selector.
+  labels: {}
+  interval: 15s
+  scrapeTimeout: ""
+  path: /metrics
+  relabelings: []
+  metricRelabelings: []
+
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# Probes are served by the webhook server on the webhook port.
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: webhook
+  periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /readyz
+    port: webhook
+  periodSeconds: 10
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

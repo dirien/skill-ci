@@ -1,0 +1,17 @@
+apiVersion: v2
+name: skill-ci-controller
+description: Kubernetes controller that evaluates agent skills pushed to Harbor (SkillEval CRD, runner Jobs, tag policy, Prometheus metrics).
+type: application
+version: 0.1.0
+appVersion: "0.1.2"
+kubeVersion: ">=1.27.0-0"
+keywords:
+  - skills
+  - ci
+  - harbor
+  - evaluation
+  - operator
+sources:
+  - https://github.com/dirien/skill-ci
+annotations:
+  skillci.dev/crd-source: config/crd/skillci.dev_skillevals.yaml

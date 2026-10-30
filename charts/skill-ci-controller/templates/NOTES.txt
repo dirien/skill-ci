@@ -1,0 +1,36 @@
+skill-ci controller {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Watching namespace:   {{ include "skill-ci-controller.watchNamespace" . }}
+Harbor:               {{ .Values.controller.harborUrl }} (project "{{ .Values.controller.harborProject }}")
+Runner image:         {{ include "skill-ci-controller.image" (dict "image" .Values.controller.runnerImage "defaultTag" "") }}
+Model list ConfigMap: {{ .Values.controller.modelsConfigMap }}
+Dry run:              {{ .Values.controller.dryRun }}
+
+The chart does not create the namespace, the model list ConfigMap or (by default) any
+Secret. These must exist:
+  Secret {{ .Values.secrets.harborCredentials.existingSecret }}  keys {{ .Values.secrets.harborCredentials.usernameKey }}, {{ .Values.secrets.harborCredentials.passwordKey }}   (controller -> Harbor REST API)
+  Secret {{ .Values.secrets.harborWebhook.existingSecret }}  key {{ .Values.secrets.harborWebhook.tokenKey }}   (webhook auth{{ if .Values.secrets.harborWebhook.optional }}, optional: without it every webhook is accepted{{ end }})
+  Secret {{ .Values.secrets.llmKeys.existingSecret }}  keys anthropic, openai (optional)   (runner Jobs; the controller hardcodes this name)
+  ConfigMap {{ .Values.controller.modelsConfigMap }}  key models.yaml
+
+Try it:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "skill-ci-controller.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "skill-ci-controller.fullname" . }}
+  kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} get skillevals
+  kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} get skillevals -o wide --watch
+
+Harbor webhook target (payload format Default, event PUSH_ARTIFACT):
+  http://{{ include "skill-ci-controller.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.webhookPort }}/webhook/harbor
+
+Metrics: http://{{ include "skill-ci-controller.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.metricsPort }}/metrics{{ if not .Values.serviceMonitor.enabled }}
+(set serviceMonitor.enabled=true to scrape them with the Prometheus Operator){{ end }}
+{{- if .Values.controller.dryRun }}
+
+WARNING: controller.dryRun=true. SkillEvals are created in phase Planned and no Jobs run.
+{{- end }}
+{{- if gt (int .Values.replicaCount) 1 }}
+{{- if not .Values.controller.leaderElect }}
+
+WARNING: replicaCount > 1 without controller.leaderElect=true. Several replicas will fight over SkillEvals.
+{{- end }}
+{{- end }}

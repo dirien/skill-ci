@@ -1,0 +1,56 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "skill-ci-controller.fullname" . }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+  labels:
+    {{- include "skill-ci-controller.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals/status"]
+    verbs: ["get", "update", "patch"]
+  # Needed to set blockOwnerDeletion on the Jobs it owns.
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillevals/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # The model list: read it, and record the last-applied copy in an annotation.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["", "events.k8s.io"]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Only used with --leader-elect.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "update"]
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "skill-ci-controller.fullname" . }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+  labels:
+    {{- include "skill-ci-controller.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "skill-ci-controller.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "skill-ci-controller.fullname" . }}
+{{- end }}

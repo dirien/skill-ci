@@ -1,0 +1,56 @@
+{{- if .Values.runner.enabled }}
+# Identity of the runner Jobs: they create one Agent Sandbox per trial.
+# The controller hardcodes the ServiceAccount name skill-eval-runner.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.runner.serviceAccount.name }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+  labels:
+    {{- include "skill-ci-controller.runnerLabels" . | nindent 4 }}
+  {{- with .Values.runner.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.runner.serviceAccount.name }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+  labels:
+    {{- include "skill-ci-controller.runnerLabels" . | nindent 4 }}
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.runner.pullSecretName | quote }}]
+    verbs: ["get"]
+  {{- with .Values.runner.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.runner.serviceAccount.name }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+  labels:
+    {{- include "skill-ci-controller.runnerLabels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.runner.serviceAccount.name }}
+    namespace: {{ include "skill-ci-controller.watchNamespace" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.runner.serviceAccount.name }}
+{{- end }}

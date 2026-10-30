@@ -1,0 +1,549 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "skill-ci-controller values",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "image",
+    "controller",
+    "secrets"
+  ],
+  "properties": {
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "commonLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "Recreate",
+            "RollingUpdate"
+          ]
+        },
+        "rollingUpdate": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64})?$"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "pullPolicy"
+      ]
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "rbac": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "extraRules": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    },
+    "controller": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "harborUrl": {
+          "type": "string",
+          "pattern": "^https?://[^/\\s]+.*$"
+        },
+        "harborProject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runnerImage": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository"
+          ]
+        },
+        "modelsConfigMap": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+          "maxLength": 253
+        },
+        "defaultAttempts": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "thresholds": {
+          "type": "object",
+          "properties": {
+            "helps": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "hurts": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "promote": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "demote": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "obsoleteBaseline": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+            },
+            "regressionTolerance": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^(-?[0-9]+(\\.[0-9]+)?)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "maxConcurrentJobs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "trialBudget": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "leaderElect": {
+          "type": "boolean"
+        },
+        "logging": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "type": "string"
+            },
+            "encoder": {
+              "enum": [
+                "",
+                "json",
+                "console"
+              ]
+            },
+            "development": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "harborUrl",
+        "harborProject",
+        "runnerImage",
+        "modelsConfigMap"
+      ]
+    },
+    "ports": {
+      "type": "object",
+      "properties": {
+        "webhook": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "metrics": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "webhook",
+        "metrics"
+      ]
+    },
+    "extraArgs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "extraEnv": {
+      "type": "array"
+    },
+    "extraVolumes": {
+      "type": "array"
+    },
+    "extraVolumeMounts": {
+      "type": "array"
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "harborCredentials": {
+          "type": "object",
+          "properties": {
+            "existingSecret": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "maxLength": 253,
+              "minLength": 1
+            },
+            "create": {
+              "type": "boolean"
+            },
+            "usernameKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "passwordKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "existingSecret",
+            "create",
+            "usernameKey",
+            "passwordKey"
+          ]
+        },
+        "harborWebhook": {
+          "type": "object",
+          "properties": {
+            "existingSecret": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "maxLength": 253,
+              "minLength": 1
+            },
+            "create": {
+              "type": "boolean"
+            },
+            "tokenKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "optional": {
+              "type": "boolean"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "existingSecret",
+            "create",
+            "tokenKey",
+            "optional"
+          ]
+        },
+        "llmKeys": {
+          "type": "object",
+          "properties": {
+            "existingSecret": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "maxLength": 253,
+              "minLength": 1
+            },
+            "create": {
+              "type": "boolean"
+            },
+            "anthropic": {
+              "type": "string"
+            },
+            "openai": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "existingSecret",
+            "create"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "harborCredentials",
+        "harborWebhook",
+        "llmKeys"
+      ]
+    },
+    "runner": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "serviceAccount": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+              "maxLength": 253,
+              "minLength": 1
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ]
+        },
+        "pullSecretName": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
+          "maxLength": 253,
+          "minLength": 1
+        },
+        "extraRules": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "ClusterIP",
+            "NodePort",
+            "LoadBalancer"
+          ]
+        },
+        "webhookPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "metricsPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^[0-9]+(ms|s|m|h)$"
+        },
+        "scrapeTimeout": {
+          "type": "string",
+          "pattern": "^([0-9]+(ms|s|m|h))?$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "relabelings": {
+          "type": "array"
+        },
+        "metricRelabelings": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    },
+    "podAnnotations": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "podLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "priorityClassName": {
+      "type": "string"
+    },
+    "podSecurityContext": {
+      "type": "object"
+    },
+    "securityContext": {
+      "type": "object"
+    },
+    "livenessProbe": {
+      "type": "object"
+    },
+    "readinessProbe": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    }
+  }
+}
