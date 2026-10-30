@@ -17,6 +17,8 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
 
+Slides: the talk deck is in [slides/](slides/) (Slidev; `cd slides && npm ci && npm run dev`, diagrams in `slides/diagrams/`).
+
 ## Layout
 
 ```text

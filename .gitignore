@@ -12,3 +12,7 @@ results/
 # Pulled eval reports
 reports/
 dist/
+# Slides (slides/.gitignore has the rest)
+slides/node_modules/
+slides/dist/
+slides/.slidev/

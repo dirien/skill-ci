@@ -1,0 +1,25 @@
+{
+  "name": "skills-are-packages-now",
+  "version": "0.1.0",
+  "description": "Skills Are Packages Now. Your Platform Should Treat Them That Way. KubeAuto Day North America 2026, Salt Lake City",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md --open",
+    "build": "slidev build slides.md",
+    "export": "slidev export slides.md",
+    "diagrams": "node scripts/render-diagrams.mjs"
+  },
+  "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
+    "@pulumi/slidev-theme": "latest",
+    "@slidev/cli": "^0.50.0",
+    "@slidev/client": "^0.50.0",
+    "@slidev/types": "^0.50.0",
+    "playwright-chromium": "^1.63.0",
+    "qrcode": "^1.5.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "vue": "^3.5.13"
+  }
+}

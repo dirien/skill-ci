@@ -1,0 +1,277 @@
+/*
+ * GKE workshop — global style overlay on top of @pulumi/slidev-theme.
+ *   - Global +40% font-size bump (1rem becomes 1.4x via 22.4px html base).
+ *   - Pulumi `default` layout reflowed so h1 pins top, body centers vertically.
+ *   - Code blocks restyled as rounded card frames.
+ *   - Reusable .gpu-card / .gpu-caption primitives.
+ *   - Shared callout primitives: .big-code, .info-card, .wi-mermaid.
+ */
+
+/* ── Global scale +40% over default 16px ──────────────────────────── */
+html {
+  font-size: 22.4px;
+}
+
+/* ── Pulumi default layout: h1 pinned top, body centered ──────────── */
+/* Mirrors theme-foundry's positioning so titles sit at the same vertical
+ * spot across both decks:
+ *   - h1: 56px from top of slide, 80px from each side
+ *   - body: ~150px top / 80px bottom padding so content sits visually centered
+ * The Pulumi default.vue already adds an 8px accent bar on top, and the
+ * inner .pulumi-slide-body has `padding: 2.5rem 3.5rem 0` (≈ 56/78px).
+ * We push the inner body's padding to reserve room for the absolute h1. */
+.slidev-layout .pulumi-slide-body {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  padding-top: 6.7rem !important;   /* ≈ 150px @ 22.4px base */
+  padding-bottom: 3.6rem !important; /* ≈ 80px */
+  position: relative !important;
+}
+
+.slidev-layout.default .pulumi-slide-body > h1:first-child,
+.pulumi-slide-body > h1:first-child {
+  position: absolute;
+  top: 2.15rem;   /* ≈ 48px from top of body = 56px from slide top (8px accent bar) */
+  left: 3.5rem;   /* matches body's horizontal padding so title aligns with content */
+  right: 3.5rem;
+  margin: 0 0 0.55rem; /* ≈ 12px below — matches foundry */
+}
+
+/* ── Headings (Pulumi spec: Inter Semibold, -5% letter, 110% line) ── */
+.slidev-layout h1 {
+  font-weight: 600;
+  font-size: 3.1rem;
+  letter-spacing: -0.05em;
+  line-height: 1.1;
+  margin: 0 0 0.5rem;
+}
+
+.slidev-layout h2 {
+  color: var(--p-primary);
+  font-weight: 600;
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  margin: 0 0 1rem;
+}
+
+.slidev-layout h3 {
+  font-weight: 600;
+  font-size: 1.75rem;
+  letter-spacing: -0.05em;
+  line-height: 1.1;
+  margin: 0 0 0.5rem;
+}
+
+/* ── Body text ────────────────────────────────────────────────────── */
+.slidev-layout p,
+.slidev-layout li {
+  font-size: 1.35rem;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--p-fg);
+}
+
+.slidev-layout li { margin: 0 0 0.4rem; }
+
+/* ── Inline code (in body copy) ───────────────────────────────────── */
+.slidev-layout code:not(pre code) {
+  font-family: var(--slidev-font-mono);
+  font-size: 0.9em;
+  background-color: var(--p-bg-elevated);
+  color: var(--p-primary);
+  padding: 0.1em 0.4em;
+  border-radius: 5px;
+}
+
+/* ── Code blocks (Foundry-style rounded card frame) ───────────────── */
+.slidev-layout pre,
+.slidev-layout pre.shiki,
+.slidev-layout .shiki {
+  font-family: var(--slidev-font-mono) !important;
+  background-color: var(--p-bg-elevated) !important;
+  border: 1px solid var(--p-border);
+  border-radius: 12px;
+  padding: 1.05rem 1.35rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  overflow: auto;
+}
+
+/* ── Reusable card primitives (Pulumi-toned .foundry-card) ────────── */
+.gpu-card {
+  background: var(--p-bg-elevated);
+  border: 1.5px solid var(--p-border);
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gpu-card--accent  { border-color: color-mix(in srgb, var(--p-accent)  60%, var(--p-border)); }
+.gpu-card--primary { border-color: color-mix(in srgb, var(--p-primary) 60%, var(--p-border)); }
+.gpu-card--muted   { border-color: var(--p-border); background: transparent; }
+
+/* Foundry-style overline caption — mono, uppercase, tracked */
+.gpu-caption {
+  font-family: var(--slidev-font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--p-fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+.gpu-caption--accent  { color: var(--p-primary); }
+.gpu-caption--muted   { color: var(--p-fg-muted); }
+
+/* ── Larger code blocks (used on slides where the snippet is the centerpiece) ── */
+.big-code pre,
+.big-code .shiki,
+.big-code pre.shiki,
+.big-code code {
+  font-size: 1.05rem !important;
+  line-height: 1.55 !important;
+}
+.big-code pre,
+.big-code pre.shiki {
+  padding: 1.1rem 1.3rem !important;
+}
+
+/* ── Info-card callout (Pulumi-purple left border + uppercase label) ── */
+.info-card {
+  margin-top: 1.4rem;
+  padding: 0.9rem 1.25rem;
+  background: rgba(126, 107, 255, 0.08);
+  border-left: 4px solid var(--p-primary);
+  border-radius: 6px;
+  font-size: 1.15rem;
+  line-height: 1.55;
+}
+.info-card__label {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--p-primary);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+.info-card p,
+.info-card ul {
+  margin: 0 !important;
+  color: var(--p-fg);
+}
+.info-card ul { padding-left: 1.1rem; }
+.info-card li { margin: 0.25rem 0; }
+.info-card strong { color: var(--p-primary); }
+
+/* ── Mermaid container — clip overflow + soft drop-shadow ──────────── */
+.wi-mermaid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+.wi-mermaid svg {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  filter: drop-shadow(0 6px 18px rgba(126, 107, 255, 0.18));
+}
+
+/* ── Denser code blocks for slides whose snippet must fit half a column ── */
+.code-sm pre, .code-sm .shiki, .code-sm pre.shiki, .code-sm code {
+  font-size: 0.85rem !important;
+  line-height: 1.45 !important;
+}
+.code-xs pre, .code-xs .shiki, .code-xs pre.shiki, .code-xs code {
+  font-size: 0.72rem !important;
+  line-height: 1.4 !important;
+}
+.code-sm pre, .code-sm pre.shiki, .code-xs pre, .code-xs pre.shiki {
+  padding: 0.9rem 1.1rem !important;
+}
+
+/* ── Meme captions: Anton (OFL), bundled so the venue needs no network ── */
+@font-face {
+  font-family: 'Anton';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/fonts/Anton-Regular.woff2') format('woff2');
+}
+
+/* ── Big statement slides: one short sentence, huge, optional muted line ── */
+.statement {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0 7rem 2rem;
+}
+.statement h1 {
+  font-size: 7.2rem !important;
+  font-weight: 600;
+  line-height: 1.02 !important;
+  letter-spacing: -0.05em;
+  margin: 0 !important;
+  max-width: 92%;
+  text-wrap: balance;
+}
+.statement h1 em {
+  font-style: normal;
+  color: var(--p-primary);
+}
+/* Optional lead-in above the headline ("Keep in mind:") */
+.statement .statement__kicker {
+  margin: 0 0 1.6rem !important;
+  font-size: 2.4rem !important;
+  line-height: 1.2 !important;
+  font-weight: 500;
+  color: var(--p-fg-muted) !important;
+  max-width: 85%;
+}
+.statement p {
+  margin: 2.2rem 0 0 !important;
+  font-size: 2.6rem !important;
+  line-height: 1.25 !important;
+  color: var(--p-fg-muted) !important;
+  max-width: 85%;
+}
+
+/* ── Skills deck additions ─────────────────────────────────────────── */
+/* Muted source line under evidence, quotes and diagrams */
+.src {
+  font-family: var(--slidev-font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--p-fg-muted);
+  overflow-wrap: anywhere;
+}
+.hl { color: var(--p-primary); }
+/* Statement slides that carry a longer sentence */
+.statement--long h1 { font-size: 6rem !important; }
+.statement--xl h1 { font-size: 8.4rem !important; }
+/* Icons above a statement */
+.statement .statement__icon { font-size: 7rem; color: var(--p-primary); margin-bottom: 1.2rem; }
+
+/* Content zoom, like the workshop deck's .zoom-content: cards and text grow, the width stays */
+.zm { zoom: 1.25; }
+.zm-lg { zoom: 1.4; }
+/* Commands and code on demo slides are read from the back of a room */
+.demo pre, .demo pre.shiki, .demo .shiki, .demo code {
+  font-size: 1.6rem !important;
+  line-height: 1.6 !important;
+}
+.demo pre, .demo pre.shiki { padding: 1.2rem 1.6rem !important; }
+.demo .info-card { margin-top: 1.8rem; }
+.demo .info-card li, .demo .info-card p { font-size: 1.7rem !important; line-height: 1.4 !important; }
+.demo .info-card__label { font-size: 1.05rem; }
