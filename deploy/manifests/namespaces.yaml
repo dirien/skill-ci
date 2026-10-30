@@ -1,0 +1,5 @@
+# The harbor namespace is created by Helm (--create-namespace).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: skill-ci

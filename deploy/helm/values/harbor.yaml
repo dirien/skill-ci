@@ -1,0 +1,24 @@
+# goharbor/harbor chart (version: HARBOR_CHART_VERSION in deploy/versions.env). Mirrors infra/Pulumi.yaml.
+# Not set here: harborAdminPassword. deploy/install.sh (or the README) passes it at install time.
+expose:
+  type: clusterIP
+  tls:
+    enabled: false
+# Pods authenticate against the token service at this URL, so it has to resolve in the cluster.
+# Reach Harbor from outside only through in-cluster tooling (toolbox pod).
+externalURL: http://harbor.harbor.svc.cluster.local
+trivy:
+  enabled: false
+# Most block storage is ReadWriteOnce: a rolling update deadlocks the registry and jobservice pods on
+# their volumes (the new pod cannot attach a volume the old pod still holds), so replace them instead.
+updateStrategy:
+  type: Recreate
+# A scale-down must not move Harbor during a demo: every component stays put.
+# cluster-autoscaler honors this annotation. Karpenter uses karpenter.sh/do-not-disrupt: "true" instead.
+nginx: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+portal: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+core: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+jobservice: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+registry: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+database: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}
+redis: {podAnnotations: {cluster-autoscaler.kubernetes.io/safe-to-evict: "false"}}

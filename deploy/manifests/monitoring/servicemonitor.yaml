@@ -1,0 +1,20 @@
+# Scrapes the controller's /metrics. The Service itself ships with the controller chart.
+# Needs the Prometheus Operator CRDs (kube-prometheus-stack).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: skill-ci-controller
+  namespace: skill-ci
+  labels:
+    app.kubernetes.io/name: skill-ci-controller
+spec:
+  namespaceSelector:
+    matchNames:
+      - skill-ci
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skill-ci-controller
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

@@ -1,0 +1,30 @@
+# skill-ci-controller chart (oci://ghcr.io/dirien/charts/skill-ci-controller).
+# The image tags come from SKILL_CI_VERSION in deploy/versions.env: install.sh passes them with --set,
+# and the published chart defaults to them anyway. Everything not listed here is a chart default.
+image:
+  repository: ghcr.io/dirien/skill-ci-controller
+# The images are public on GHCR: no pull secret.
+imagePullSecrets: []
+controller:
+  harborUrl: http://harbor.harbor.svc.cluster.local
+  harborProject: skills
+  runnerImage:
+    repository: ghcr.io/dirien/skill-ci-runner
+  modelsConfigMap: skill-ci-models
+# The Secrets are created before the chart (deploy/manifests/secrets, install.sh), never by the chart.
+secrets:
+  harborCredentials:
+    existingSecret: harbor-credentials
+    create: false
+  harborWebhook:
+    existingSecret: harbor-webhook
+    optional: false
+    create: false
+  llmKeys:
+    existingSecret: llm-keys
+    create: false
+# The ServiceMonitor ships with deploy/manifests/monitoring, after kube-prometheus-stack installed its CRDs.
+serviceMonitor:
+  enabled: false
+reports:
+  enabled: true

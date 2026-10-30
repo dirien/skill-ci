@@ -1,0 +1,40 @@
+# Idempotent: waits for Harbor, creates project "skills", creates or updates the webhook policy.
+# A Job's pod template is immutable, so deploy/install.sh deletes the old Job before applying this one.
+# The script comes from the ConfigMap harbor-setup-script (generated from infra/harbor-setup.sh).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: harbor-setup
+  namespace: skill-ci
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: setup
+          image: curlimages/curl
+          command: ["/bin/sh", "/scripts/harbor-setup.sh"]
+          env:
+            - name: HARBOR_URL
+              value: http://harbor.harbor.svc.cluster.local
+            - name: WEBHOOK_URL
+              value: http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor
+            - name: HARBOR_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-credentials
+                  key: password
+            - name: WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: harbor-webhook
+                  key: token
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: harbor-setup-script
