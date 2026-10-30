@@ -136,7 +136,7 @@ class TierResult:
 
 
 def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
-    """Return the environment for SkillEvaluator's Tier 1 and Tier 2 commands.
+    """Return the environment for every SkillEvaluator command (all three tiers).
 
     SkillEvaluator refuses to guess when several provider keys exist, so the
     chat and embeddings providers are named here. Anthropic has no embeddings
@@ -548,7 +548,8 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
             results = work / "results"
             # Output streams straight to the container log. A non-zero exit is not
             # fatal: a failed trial can still leave scores for the other arm.
-            proc = subprocess.run(evaluate_command(config, skill_dir, results), check=False)
+            cmd = evaluate_command(config, skill_dir, results)
+            proc = subprocess.run(cmd, check=False, env=env)
             try:
                 payload = read_scores(results, config["AGENT"])
             except EvalError as err:

@@ -31,7 +31,7 @@ spec:
             - --namespace=skill-ci
             - --harbor-url=http://harbor.harbor.svc.cluster.local
             - --harbor-project=skills
-            - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.4.0
+            - --runner-image=registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.4.1
             - --models-configmap=skill-ci-models
             - --default-attempts=3
             - --helps-threshold=0.05

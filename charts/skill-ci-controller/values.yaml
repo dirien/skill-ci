@@ -46,7 +46,7 @@ controller:
   # --runner-image, rendered as repository:tag or repository@digest.
   runnerImage:
     repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
-    tag: "0.4.0"
+    tag: "0.4.1"
     digest: ""
   modelsConfigMap: skill-ci-models
   # Attempts per arm. One attempt is too noisy for the regression gate: the same

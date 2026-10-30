@@ -642,3 +642,12 @@ def test_attach_gives_up_after_three_retries(termination, monkeypatch, sleeps):
     assert "report" not in termination()
     assert sum(c[:2] == ["oras", "attach"] for c in fake.calls) == 4
     assert sleeps == [2, 5, 10]
+
+
+def test_tier3_names_the_llm_provider(termination, monkeypatch):
+    """With several provider keys, Tier 3 still gets an explicit SKILL_EVAL_LLM_PROVIDER."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-openai")
+    fake = FakeRun(GOOD)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    assert fake.envs["tier3"]["SKILL_EVAL_LLM_PROVIDER"] == "anthropic"

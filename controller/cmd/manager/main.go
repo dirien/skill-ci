@@ -66,7 +66,7 @@ func run() error {
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
 	flag.StringVar(&cfg.Project, "harbor-project", "skills", "Harbor project that holds skills.")
-	flag.StringVar(&runnerImage, "runner-image", "registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.4.0", "Runner image.")
+	flag.StringVar(&runnerImage, "runner-image", "registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.4.1", "Runner image.")
 	flag.StringVar(&modelsCM, "models-configmap", "skill-ci-models", "ConfigMap with the model list (key models.yaml).")
 	flag.IntVar(&cfg.Attempts, "default-attempts", 1, "Trials per arm for SkillEvals created by the controller.")
 	flag.Float64Var(&th.Helps, "helps-threshold", th.Helps, "Lift at or above which a verdict is Helps.")
