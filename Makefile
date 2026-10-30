@@ -10,8 +10,8 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-CONTROLLER_TAG ?= 0.3.0
-RUNNER_TAG ?= 0.3.0
+CONTROLLER_TAG ?= 0.4.0
+RUNNER_TAG ?= 0.4.0
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
 # Demo beats.
