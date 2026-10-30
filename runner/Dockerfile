@@ -1,7 +1,7 @@
 # Runs one SkillEval: ORAS pulls the skill, SkillEvaluator checks it through all three tiers
 # (Tier 1 static and security, Tier 2 deduplication, Tier 3 live trials as Agent Sandboxes that
 # run the generic sandbox image, sandbox/Dockerfile). Build context is the repo root.
-FROM python:3.12.16-slim-bookworm
+FROM python:3.15.0-slim-bookworm
 
 ARG SKILLEVALUATOR_VERSION=v0.6.0
 ARG ORAS_VERSION=1.3.0
