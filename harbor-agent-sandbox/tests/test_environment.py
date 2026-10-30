@@ -51,6 +51,9 @@ def test_manifest_is_unprivileged_sandbox(tmp_path, monkeypatch):
     manifest = make_env(tmp_path)._sandbox_manifest()
     assert manifest["apiVersion"] == "agents.x-k8s.io/v1beta1"
     assert manifest["kind"] == "Sandbox"
+    assert manifest["spec"]["podTemplate"]["metadata"]["annotations"] == {
+        "cluster-autoscaler.kubernetes.io/safe-to-evict": "false"
+    }
     assert manifest["metadata"]["namespace"] == "skill-ci"
     (container,) = pod_spec(manifest)["containers"]
     assert container["image"] == "registry.example.com/evals/rn-basic:latest"

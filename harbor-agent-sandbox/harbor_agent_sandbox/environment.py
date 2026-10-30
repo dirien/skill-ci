@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 GROUP = "agents.x-k8s.io"
 VERSION = "v1beta1"
 PLURAL = "sandboxes"
+SAFE_TO_EVICT = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 
 # Where a pod finds its own namespace and name.
 SA_NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
@@ -135,7 +136,13 @@ class AgentSandboxEnvironment(ACKEnvironment):
             "apiVersion": f"{GROUP}/{VERSION}",
             "kind": "Sandbox",
             "metadata": {"name": self.pod_name, "namespace": self.namespace, "labels": labels},
-            "spec": {"podTemplate": {"metadata": {"labels": labels}, "spec": pod_spec}},
+            "spec": {
+                "podTemplate": {
+                    # A cluster scale-down must not kill a running trial.
+                    "metadata": {"labels": labels, "annotations": {SAFE_TO_EVICT: "false"}},
+                    "spec": pod_spec,
+                }
+            },
         }
 
     async def _ensure_image(self, force_build: bool) -> None:

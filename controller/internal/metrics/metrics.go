@@ -8,6 +8,7 @@ import (
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/retry"
+	"github.com/dirien/skill-ci/controller/internal/stats"
 )
 
 var (
@@ -20,6 +21,10 @@ var (
 
 	lift = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_lift", Help: "With-skill minus without-skill score of the latest eval."}, evalLabels)
+	liftCILower = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "skillci_lift_ci_lower", Help: "Lower bound of the confidence interval of the lift."}, evalLabels)
+	liftCIUpper = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "skillci_lift_ci_upper", Help: "Upper bound of the confidence interval of the lift."}, evalLabels)
 	withScore = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_with_score", Help: "Score with the skill."}, evalLabels)
 	withoutScore = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -30,6 +35,8 @@ var (
 		Name: "skillci_obsolete", Help: "1 when every required model does fine without the skill version."}, versionLabels)
 	regressed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_regressed", Help: "1 when the skill version scores worse than the stable version."}, versionLabels)
+	inconclusive = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "skillci_inconclusive", Help: "1 when the skill version scores lower than the stable version by more than the tolerance, but not beyond noise."}, versionLabels)
 	rejected = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_rejected", Help: "1 when a required model's run of the skill version failed Tier 1 or Tier 2."}, versionLabels)
 	publication = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -57,21 +64,30 @@ type evalKey struct{ skill, version, agent, model string }
 
 // Register adds the metrics to reg and starts the phase gauge at zero.
 func Register(reg prometheus.Registerer) {
-	reg.MustRegister(lift, withScore, withoutScore, stable, obsolete, regressed, rejected, publication, skillEvals, skillEvalsNow, retries)
+	reg.MustRegister(lift, liftCILower, liftCIUpper, withScore, withoutScore, stable, obsolete, regressed, inconclusive, rejected, publication, skillEvals, skillEvalsNow, retries)
 	SetPhaseCounts(nil)
 	for _, r := range retry.Reasons() {
 		retries.WithLabelValues(string(r)) // visible at zero before the first retry
 	}
 }
 
-// ObserveScores records the scores of a finished SkillEval.
-func ObserveScores(se *v1alpha1.SkillEval, with, without, liftValue float64) {
+// ObserveScores records the scores of a finished SkillEval and, when the run
+// has trial scores, the confidence interval of its lift. A nil interval removes
+// the interval series.
+func ObserveScores(se *v1alpha1.SkillEval, with, without, liftValue float64, ci *stats.Interval) {
 	trackMu.Lock()
 	defer trackMu.Unlock()
 	key := track(se)
 	withScore.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(with)
 	withoutScore.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(without)
 	lift.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(liftValue)
+	if ci == nil {
+		liftCILower.DeleteLabelValues(key.skill, key.version, key.agent, key.model)
+		liftCIUpper.DeleteLabelValues(key.skill, key.version, key.agent, key.model)
+		return
+	}
+	liftCILower.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(ci.Lower)
+	liftCIUpper.WithLabelValues(key.skill, key.version, key.agent, key.model).Set(ci.Upper)
 }
 
 // ObservePublication records the publication status of a finished SkillEval:
@@ -124,7 +140,7 @@ func deletePublication(k evalKey) {
 
 // Forget removes the series of a deleted SkillEval, named namespace/name. When
 // no other tracked SkillEval has the same skill and version, the version-level
-// series (stable, obsolete, regressed, rejected) go too.
+// series (stable, obsolete, regressed, inconclusive, rejected) go too.
 func Forget(namespace, name string) {
 	id := namespace + "/" + name
 	trackMu.Lock()
@@ -146,11 +162,14 @@ func Forget(namespace, name string) {
 	stable.DeleteLabelValues(key.skill, key.version)
 	obsolete.DeleteLabelValues(key.skill, key.version)
 	regressed.DeleteLabelValues(key.skill, key.version)
+	inconclusive.DeleteLabelValues(key.skill, key.version)
 	rejected.DeleteLabelValues(key.skill, key.version)
 }
 
 func deleteEval(k evalKey) {
 	lift.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
+	liftCILower.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
+	liftCIUpper.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
 	withScore.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
 	withoutScore.DeleteLabelValues(k.skill, k.version, k.agent, k.model)
 }
@@ -176,6 +195,11 @@ func SetObsolete(skill, version string, v bool) {
 // SetRegressed records whether a skill version scores worse than the stable version.
 func SetRegressed(skill, version string, v bool) {
 	regressed.WithLabelValues(skill, version).Set(boolToFloat(v))
+}
+
+// SetInconclusive records whether a skill version is held back for lack of evidence: it scores lower than the stable version by more than the tolerance, but not beyond noise.
+func SetInconclusive(skill, version string, v bool) {
+	inconclusive.WithLabelValues(skill, version).Set(boolToFloat(v))
 }
 
 // SetRejected records whether a required model's run of a skill version failed Tier 1 or Tier 2.

@@ -235,6 +235,7 @@ func TestRejectedRecordsConditionEventAndMetrics(t *testing.T) {
 		"skillci_stable///v1.0.0":                             0, // it lost stable
 		"skillci_obsolete///v1.0.0":                           0,
 		"skillci_regressed///v1.0.0":                          0,
+		"skillci_inconclusive///v1.0.0":                       0,
 	}
 	if !maps.Equal(got, want) {
 		t.Errorf("series of the rejected skill = %v, want %v", got, want)

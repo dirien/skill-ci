@@ -32,6 +32,7 @@
               {{if .Lift.Text}}
               <span class="lift">{{.Lift.Text}}</span> {{template "status" .VerdictStatus}}
               <span class="sub">with {{.With.Text}} · without {{.Without.Text}}</span>
+              {{with .Evidence}}<span class="sub">{{.}}</span>{{end}}
               {{else if .Rejected}}
               {{template "status" .VerdictStatus}}
               <span class="sub">{{.RejectedBy}} failed · no trials run</span>

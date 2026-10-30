@@ -159,7 +159,7 @@ func (s *Server) runs(ctx context.Context) ([]Run, error) {
 	}
 	runs := make([]Run, 0, len(list.Items))
 	for i := range list.Items {
-		runs = append(runs, newRun(&list.Items[i]))
+		runs = append(runs, newRun(&list.Items[i], s.cfg.Thresholds.Percent()))
 	}
 	sortRuns(runs)
 	return runs, nil

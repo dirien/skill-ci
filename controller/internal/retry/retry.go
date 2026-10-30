@@ -137,6 +137,8 @@ func classifyPart(p part) (Reason, bool) {
 		return "", false // the agent ran out of time on its task: a real result
 	case p.name == "EnvironmentStartTimeoutError":
 		return ReasonEnvStartTimeout, true
+	case p.name == "AgentSetupTimeoutError":
+		return ReasonAgentSetup, true // installing the agent CLI in the sandbox took too long
 	case strings.Contains(p.text, connectionLost):
 		return ReasonConnectionLost, true
 	case p.name == "NonZeroAgentExitCodeError":

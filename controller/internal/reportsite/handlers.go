@@ -153,5 +153,5 @@ func (s *Server) lookup(w http.ResponseWriter, r *http.Request) (Run, bool) {
 		s.fail(w, r, http.StatusServiceUnavailable, "Cannot read the run", err.Error())
 		return Run{}, false
 	}
-	return newRun(&se), true
+	return newRun(&se, s.cfg.Thresholds.Percent()), true
 }

@@ -89,7 +89,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.4.1`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.5.0`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[{name: docr}]` | |
@@ -98,15 +98,16 @@ keys are rejected.
 | `controller.namespace` | `""` (release namespace) | `--namespace` |
 | `controller.harborUrl` | `http://harbor.harbor.svc.cluster.local` | `--harbor-url` |
 | `controller.harborProject` | `skills` | `--harbor-project` |
-| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.5.0` / `""` | `--runner-image` |
+| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.5.1` / `""` | `--runner-image` |
 | `controller.modelsConfigMap` | `skill-ci-models` | `--models-configmap` |
-| `controller.defaultAttempts` | `1` | `--default-attempts` |
+| `controller.defaultAttempts` | `3` | `--default-attempts`: trials per arm; with 3 eval cases that gives 9 trial scores per arm for the statistics |
 | `controller.thresholds.helps` | `"0.05"` | `--helps-threshold` |
 | `controller.thresholds.hurts` | `"-0.10"` | `--hurts-threshold` |
 | `controller.thresholds.promote` | `"0.10"` | `--promote-threshold` |
 | `controller.thresholds.demote` | `"-0.10"` | `--demote-threshold` |
 | `controller.thresholds.obsoleteBaseline` | `"0.80"` | `--obsolete-baseline` |
-| `controller.thresholds.regressionTolerance` | `""` (flag omitted, controller default `0.05`) | `--regression-tolerance`; set only with a controller image that has the flag |
+| `controller.thresholds.regressionTolerance` | `"0.05"` | `--regression-tolerance`: with-skill drop below the stable version that still allows promotion. `""` omits the flag |
+| `controller.thresholds.confidence` | `"0.95"` | `--confidence`: level of the confidence intervals of the statistical gate (see below). Between 0 and 1, exclusive; `""` omits the flag, for controller images before 0.5.0 |
 | `controller.maxConcurrentJobs` | `3` | `--max-concurrent-jobs` |
 | `controller.trialBudget` | `200` | `--trial-budget` (0 is unlimited) |
 | `controller.maxRetries` | `1` | `--max-retries`: fresh Jobs after an infrastructure failure, 0 disables; needs controller image 0.4.1 or newer |
@@ -134,6 +135,22 @@ keys are rejected.
 | `livenessProbe`, `readinessProbe` | `/healthz`, `/readyz` on port `webhook` | |
 | `resources` | requests 50m / 64Mi, limit 256Mi memory | |
 | `nodeSelector`, `tolerations`, `affinity` | empty | |
+
+### The statistical gate
+
+From controller 0.5.0 (runner 0.5.1 sends the trial scores) the gate asks for evidence instead of a fixed number.
+`controller.thresholds.confidence` is the level of the confidence intervals it uses:
+
+- A version is promoted to `stable` only when, on every required model, the lift reaches
+  `controller.thresholds.promote` **and** the lower bound of the lift's confidence interval is above 0.
+- A drop below the stable version by more than `controller.thresholds.regressionTolerance` is a `Regressed`
+  verdict only when the interval of the difference lies entirely below 0. Otherwise the verdict is
+  `Inconclusive`: the version is not promoted, stable stays, and it keeps `beta`.
+- Runs from a runner without trial scores (before 0.5.1) fall back to the fixed thresholds.
+
+A higher `confidence` (`"0.99"`) needs more evidence both to promote and to call a regression; a lower one
+(`"0.90"`) needs less. The upgrade needs the new CRD fields: apply `crds/` by hand first, see "CRD handling".
+Details: `CONTRACT.md`, section "Policy".
 
 The ServiceMonitor selects the Service by `app.kubernetes.io/name: skill-ci-controller`, the same label the
 ServiceMonitor already in the cluster uses. Do not enable both.

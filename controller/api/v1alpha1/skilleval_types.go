@@ -63,6 +63,9 @@ const (
 	VerdictRegressed Verdict = "Regressed"
 	// VerdictRejected means Tier 1 or Tier 2 failed, so no live trials ran.
 	VerdictRejected Verdict = "Rejected"
+	// VerdictInconclusive means the score dropped below the stable version by
+	// more than the tolerance, but the trials do not show it beyond noise.
+	VerdictInconclusive Verdict = "Inconclusive"
 )
 
 // Tier and publication statuses reported by the runner.
@@ -121,6 +124,20 @@ type TierStatuses struct {
 	Tier3 string `json:"tier3,omitempty"`
 }
 
+// Samples are the per-trial overall scores of a run, one entry per trial and
+// two decimals, as strings so the CRD needs no floats. The statistics in the
+// status are computed from them.
+type Samples struct {
+	// WithSkill holds the with-skill trial scores.
+	// +optional
+	// +listType=atomic
+	WithSkill []string `json:"withSkill,omitempty"`
+	// WithoutSkill holds the baseline trial scores.
+	// +optional
+	// +listType=atomic
+	WithoutSkill []string `json:"withoutSkill,omitempty"`
+}
+
 // SkillEvalStatus is the observed state of a SkillEval.
 type SkillEvalStatus struct {
 	// Phase is the lifecycle phase.
@@ -134,8 +151,25 @@ type SkillEvalStatus struct {
 	WithoutSkill string `json:"withoutSkill,omitempty"`
 	// Lift is WithSkill minus WithoutSkill, signed, two decimals.
 	Lift string `json:"lift,omitempty"`
+	// WithSkillStdErr is the standard error of the with-skill trial scores, two decimals.
+	// +optional
+	WithSkillStdErr string `json:"withSkillStdErr,omitempty"`
+	// WithoutSkillStdErr is the standard error of the baseline trial scores, two decimals.
+	// +optional
+	WithoutSkillStdErr string `json:"withoutSkillStdErr,omitempty"`
+	// N is the number of trials behind the scores, with-skill/without-skill, for example 9/9.
+	// +optional
+	N string `json:"n,omitempty"`
+	// LiftCI is the confidence interval of the lift (Welch's t), for example [+0.41, +0.73].
+	// The level is the controller's --confidence.
+	// +optional
+	LiftCI string `json:"liftCI,omitempty"`
+	// Samples are the per-trial scores the statistics come from; absent for
+	// runs of a runner that does not report them.
+	// +optional
+	Samples *Samples `json:"samples,omitempty"`
 	// Verdict classifies the lift.
-	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete;Regressed;Rejected
+	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete;Regressed;Inconclusive;Rejected
 	Verdict Verdict `json:"verdict,omitempty"`
 	// Tiers is the outcome of the three SkillEvaluator tiers; absent when the
 	// runner is older than the tiers.
@@ -179,6 +213,8 @@ type SkillEvalStatus struct {
 // +kubebuilder:printcolumn:name="Lift",type=string,JSONPath=`.status.lift`
 // +kubebuilder:printcolumn:name="Verdict",type=string,JSONPath=`.status.verdict`
 // +kubebuilder:printcolumn:name="Tier1",type=string,JSONPath=`.status.tiers.tier1`
+// +kubebuilder:printcolumn:name="Lift CI",type=string,priority=1,JSONPath=`.status.liftCI`
+// +kubebuilder:printcolumn:name="N",type=string,priority=1,JSONPath=`.status.n`
 // +kubebuilder:printcolumn:name="Publication",type=string,priority=1,JSONPath=`.status.publication`
 // +kubebuilder:printcolumn:name="Report",type=string,priority=1,JSONPath=`.status.reportDigest`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

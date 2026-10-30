@@ -66,7 +66,18 @@ func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 			return Decision{Kind: "regressed", Headline: "Held back", Detail: r.Regressed}
 		}
 	}
+	for _, r := range required {
+		if r.Inconclusive != "" {
+			return Decision{Kind: "neutral", Headline: "Not proven", Detail: r.Inconclusive + ". The stable version stays; more trials would show whether the drop is real."}
+		}
+	}
 	lowest, below := liftSummary(required, th.Promote)
+	var unproven []Run
+	for _, r := range required {
+		if r.CI != "" && r.Lift.OK && math.Round(r.Lift.Value*100)/100 >= th.Promote-1e-9 && !r.BeyondNoise() {
+			unproven = append(unproven, r)
+		}
+	}
 	switch {
 	case st.This && lowest.Model == "":
 		return Decision{Kind: "pass", Headline: "On stable", Detail: "This version holds the stable tag."}
@@ -78,6 +89,12 @@ func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 			parts[i] = fmt.Sprintf("%s %+.2f", r.Model, r.Lift.Value)
 		}
 		return Decision{Kind: "neutral", Headline: "Not promoted", Detail: fmt.Sprintf("Stable needs %+.2f on every required model; below it: %s.", th.Promote, strings.Join(parts, ", "))}
+	case len(unproven) > 0:
+		parts := make([]string, len(unproven))
+		for i, r := range unproven {
+			parts[i] = fmt.Sprintf("%s %+.2f (%s)", r.Model, r.Lift.Value, r.Evidence())
+		}
+		return Decision{Kind: "neutral", Headline: "Not promoted", Detail: "The lift reaches " + fmt.Sprintf("%+.2f", th.Promote) + " but is not beyond noise, so the skill may not help: " + strings.Join(parts, ", ") + ". Stable needs the whole interval above zero."}
 	case !st.Known:
 		return Decision{Kind: "neutral", Headline: "Meets threshold", Detail: fmt.Sprintf("Lift is %+.2f or more on every required model. Release channels are unavailable, so the tag is unknown.", th.Promote)}
 	case st.Holder != "":

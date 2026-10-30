@@ -17,6 +17,11 @@ func TestClassify(t *testing.T) {
 			wantReason: ReasonEnvStartTimeout, wantTransent: true,
 		},
 		{
+			name:       "agent setup timeout (CLI install too slow)",
+			message:    prefix + "AgentSetupTimeoutError: Agent setup timed out after 360.0 seconds; AgentSetupTimeoutError: Agent setup timed out after 360.0 seconds",
+			wantReason: ReasonAgentSetup, wantTransent: true,
+		},
+		{
 			name:       "connection lost during apt-get",
 			message:    prefix + "NonZeroAgentExitCodeError: Command failed (exit 1): apt-get update && apt-get install -y nodejs npm procps ... Connection to remote host was lost.",
 			wantReason: ReasonConnectionLost, wantTransent: true,

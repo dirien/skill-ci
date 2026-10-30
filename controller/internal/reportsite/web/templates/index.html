@@ -86,7 +86,7 @@
           <td class="nowrap"{{if .Message}} title="{{.Message}}"{{end}}>{{template "status" .PhaseStatus}}</td>
           <td class="num">{{dash .With.Text}}</td>
           <td class="num">{{dash .Without.Text}}</td>
-          <td class="num">{{dash .Lift.Text}}</td>
+          <td class="num">{{dash .Lift.Text}}{{with .Evidence}}<span class="sub nowrap">{{.}}</span>{{end}}</td>
           <td class="nowrap">{{template "status" .VerdictStatus}}</td>
           <td class="nowrap">{{template "tiers" .}}</td>
           <td class="nowrap">{{template "status" .PublicationStatus}}</td>

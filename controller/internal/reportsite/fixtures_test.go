@@ -56,6 +56,8 @@ type spec struct {
 	rejected              string // message of the Rejected condition
 	retries               int
 	retried               string // message of the Retried condition
+	n, ci                 string // trials per arm ("9/9") and lift interval ("[+0.41, +0.73]")
+	inconclusive          string // message of the Inconclusive condition
 }
 
 func at(hour, minute int) time.Time {
@@ -94,6 +96,13 @@ func (s spec) object() *v1alpha1.SkillEval {
 	if s.rejected != "" {
 		se.Status.Conditions = append(se.Status.Conditions, metav1.Condition{
 			Type: "Rejected", Status: metav1.ConditionTrue, Reason: "Tier1Failed", Message: s.rejected,
+			LastTransitionTime: metav1.NewTime(s.started.Add(s.took)),
+		})
+	}
+	se.Status.N, se.Status.LiftCI = s.n, s.ci
+	if s.inconclusive != "" {
+		se.Status.Conditions = append(se.Status.Conditions, metav1.Condition{
+			Type: "Inconclusive", Status: metav1.ConditionTrue, Reason: "NotEnoughEvidence", Message: s.inconclusive,
 			LastTransitionTime: metav1.NewTime(s.started.Add(s.took)),
 		})
 	}

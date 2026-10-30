@@ -8,7 +8,7 @@
     {{if not .Run.NoScores}}
     <div><dt>With skill</dt><dd>{{dash .Run.With.Text}}</dd></div>
     <div><dt>Without skill</dt><dd>{{dash .Run.Without.Text}}</dd></div>
-    <div><dt>Lift</dt><dd>{{dash .Run.Lift.Text}}</dd></div>
+    <div><dt>Lift</dt><dd>{{dash .Run.Lift.Text}}{{with .Run.Evidence}}<span class="sub">{{.}}</span>{{end}}</dd></div>
     {{end}}
     <div><dt>Verdict</dt><dd class="status-dd">{{template "status" .Run.VerdictStatus}}</dd></div>
     <div><dt>Tiers</dt><dd class="status-dd">{{template "tiers" .Run}}</dd></div>
@@ -16,6 +16,7 @@
     <div><dt>Phase</dt><dd class="status-dd">{{template "status" .Run.PhaseStatus}}</dd></div>
   </dl>
   {{if .Run.Message}}<p class="notice{{if eq .Run.Phase "Failed"}} failed{{end}}">{{.Run.Message}}</p>{{end}}
+  {{with .Run.Inconclusive}}<p class="notice">{{.}}. The stable version stays: the trials do not show beyond noise that this version is worse.</p>{{end}}
   {{with .Run.RetryNote}}<p class="notice">{{.}}</p>{{end}}
   {{with .Run.Tier3Note}}<p class="notice{{if $.Run.Rejected}} failed{{end}}">{{.}}</p>{{end}}
 </section>

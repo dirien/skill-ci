@@ -54,6 +54,9 @@ spec:
             {{- if ne (toString $ctl.thresholds.regressionTolerance) "" }}
             - --regression-tolerance={{ $ctl.thresholds.regressionTolerance }}
             {{- end }}
+            {{- if ne (toString $ctl.thresholds.confidence) "" }}
+            - --confidence={{ $ctl.thresholds.confidence }}
+            {{- end }}
             - --max-concurrent-jobs={{ $ctl.maxConcurrentJobs }}
             - --trial-budget={{ $ctl.trialBudget }}
             - --max-retries={{ $ctl.maxRetries }}

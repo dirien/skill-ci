@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -39,6 +40,17 @@ type Tiers struct {
 // Known reports whether the runner said anything about the tiers.
 func (t Tiers) Known() bool { return t != Tiers{} }
 
+// maxSamples caps the trial scores kept per arm, as the runner does.
+const maxSamples = 50
+
+// Samples are the per-trial overall scores of the two arms.
+type Samples struct {
+	// WithSkill holds one score per with-skill trial.
+	WithSkill []float64 `json:"withSkill"`
+	// WithoutSkill holds one score per baseline trial.
+	WithoutSkill []float64 `json:"withoutSkill"`
+}
+
 // Result is the JSON the runner writes to /dev/termination-log.
 type Result struct {
 	// WithSkill is the score with the skill installed.
@@ -49,6 +61,9 @@ type Result struct {
 	Lift *float64 `json:"lift"`
 	// Report is the digest of the report the runner attached to the skill, if any.
 	Report string `json:"report,omitempty"`
+	// Samples holds the per-trial scores of both arms; nil when the runner did
+	// not report them (older runners) or an arm has fewer than two trials.
+	Samples *Samples `json:"samples,omitempty"`
 	// Tiers is the outcome of the three tiers; empty fields mean unknown.
 	Tiers Tiers `json:"tiers"`
 	// Publication is SkillEvaluator's publication assessment: passed, failed
@@ -89,6 +104,7 @@ func ParseResult(msg string) (Result, error) {
 	res.Tiers = Tiers{Tier1: tierValue(res.Tiers.Tier1), Tier2: tierValue(res.Tiers.Tier2), Tier3: tierValue(res.Tiers.Tier3)}
 	res.Publication = publicationValue(res.Publication)
 	res.Findings = cleanFindings(res.Findings)
+	res.Samples = cleanSamples(res.Samples)
 	if res.Error != "" {
 		return res, nil
 	}
@@ -140,6 +156,27 @@ func cleanFindings(in []string) []string {
 		if len(out) == maxFindings {
 			break
 		}
+	}
+	return out
+}
+
+// cleanSamples rounds the scores to two decimals, keeps at most maxSamples per
+// arm and drops the whole block unless both arms have at least two scores: one
+// score has no spread, so no interval can be drawn from it.
+func cleanSamples(s *Samples) *Samples {
+	if s == nil {
+		return nil
+	}
+	clean := func(in []float64) []float64 {
+		out := make([]float64, 0, min(len(in), maxSamples))
+		for _, v := range in[:min(len(in), maxSamples)] {
+			out = append(out, math.Round(v*100)/100)
+		}
+		return out
+	}
+	out := &Samples{WithSkill: clean(s.WithSkill), WithoutSkill: clean(s.WithoutSkill)}
+	if len(out.WithSkill) < 2 || len(out.WithoutSkill) < 2 {
+		return nil
 	}
 	return out
 }

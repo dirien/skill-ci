@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -173,6 +174,9 @@ func TestNewJob(t *testing.T) {
 	if owner.Kind != "SkillEval" || owner.Name != se.Name || owner.UID != "uid-1" || owner.Controller == nil || !*owner.Controller {
 		t.Errorf("owner reference = %+v", owner)
 	}
+	if got := job.Spec.Template.Annotations[SafeToEvictAnnotation]; got != "false" {
+		t.Errorf("pod annotation %s = %q, want \"false\"", SafeToEvictAnnotation, got)
+	}
 	if *job.Spec.BackoffLimit != 0 || *job.Spec.TTLSecondsAfterFinished != 3600 || *job.Spec.ActiveDeadlineSeconds != 7200 {
 		t.Errorf("backoffLimit/ttl = %d/%d", *job.Spec.BackoffLimit, *job.Spec.TTLSecondsAfterFinished)
 	}
@@ -249,5 +253,43 @@ func TestJobName(t *testing.T) {
 				t.Errorf("JobName(%q, retries %d) = %q (%d chars), want %q", tt.se, tt.retries, got, len(got), tt.want)
 			}
 		})
+	}
+}
+
+func TestParseResultSamples(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want *Samples
+	}{
+		{name: "older runner has none", msg: `{"withSkill":0.9,"withoutSkill":0.4}`},
+		{name: "per-trial scores", msg: `{"withSkill":0.9,"withoutSkill":0.4,"samples":{"withSkill":[0.95,0.85],"withoutSkill":[0.4,0.41,0.39]}}`,
+			want: &Samples{WithSkill: []float64{0.95, 0.85}, WithoutSkill: []float64{0.4, 0.41, 0.39}}},
+		{name: "rounded to two decimals", msg: `{"withSkill":0.9,"withoutSkill":0.4,"samples":{"withSkill":[0.951,0.849],"withoutSkill":[0.4,0.4]}}`,
+			want: &Samples{WithSkill: []float64{0.95, 0.85}, WithoutSkill: []float64{0.4, 0.4}}},
+		{name: "one trial has no spread", msg: `{"withSkill":0.9,"withoutSkill":0.4,"samples":{"withSkill":[0.9],"withoutSkill":[0.4,0.4]}}`},
+		{name: "one arm missing", msg: `{"withSkill":0.9,"withoutSkill":0.4,"samples":{"withSkill":[0.9,0.8]}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ParseResult(tt.msg)
+			if err != nil {
+				t.Fatalf("ParseResult() error = %v", err)
+			}
+			if !reflect.DeepEqual(res.Samples, tt.want) {
+				t.Errorf("Samples = %+v, want %+v", res.Samples, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseResultSamplesAreCapped(t *testing.T) {
+	scores := strings.TrimSuffix(strings.Repeat("0.9,", 80), ",")
+	res, err := ParseResult(`{"withSkill":0.9,"withoutSkill":0.4,"samples":{"withSkill":[` + scores + `],"withoutSkill":[` + scores + `]}}`)
+	if err != nil {
+		t.Fatalf("ParseResult() error = %v", err)
+	}
+	if got := len(res.Samples.WithSkill); got != maxSamples {
+		t.Errorf("kept %d scores, want %d", got, maxSamples)
 	}
 }

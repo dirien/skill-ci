@@ -595,6 +595,7 @@ def test_commands(termination, monkeypatch):
         ("--agent-model", "claude-code=claude-haiku-5-5"),
         ("--n-attempts", "2"),
         ("--n-concurrent", "2"),
+        ("--timeout-multiplier", "2"),
     ]:
         assert evaluator[evaluator.index(flag) + 1] == value
     assert "--no-autopilot" in evaluator
@@ -659,6 +660,71 @@ def test_termination_message_with_report_fits(tmp_path):
     assert len(path.read_text().encode()) < skill_eval.MAX_MESSAGE_BYTES
 
 
+def attempts_block(*cases: list[float]) -> dict:
+    """Build one ``pass_at_k.<arm>`` block: one case per argument, one row per attempt."""
+    return {
+        "cases": {
+            f"case-{i}": {"attempts": [{"attempt": n, "score": s} for n, s in enumerate(c, 1)]}
+            for i, c in enumerate(cases)
+        }
+    }
+
+
+def with_trials(entry: dict, with_skill: dict, without_skill: dict) -> dict:
+    """Return an ``agents.<name>`` entry that carries per-trial scores."""
+    return {**entry, "pass_at_k": {"with_skill": with_skill, "without_skill": without_skill}}
+
+
+def test_samples_are_the_per_trial_scores(termination, monkeypatch):
+    """3 cases x 3 attempts give 9 scores per arm, rounded to two decimals."""
+    entry = with_trials(
+        agent_entry(0.9, 0.3667),
+        attempts_block([0.95, 0.9, 0.85], [0.95, 0.95, 0.8], [0.9, 0.95, 0.85]),
+        attempts_block([0.365, 0.3829, 0.3517], [0.3, 0.4, 0.35], [0.36, 0.37, 0.38]),
+    )
+    monkeypatch.setattr(skill_eval.subprocess, "run", FakeRun({"agents": {"claude-code": entry}}))
+    assert skill_eval.main() == 0
+    samples = termination()["samples"]
+    assert samples["withSkill"] == [0.95, 0.9, 0.85, 0.95, 0.95, 0.8, 0.9, 0.95, 0.85]
+    assert samples["withoutSkill"][:3] == [0.36, 0.38, 0.35]
+    assert len(samples["withoutSkill"]) == 9
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        (agent_entry(0.9, 0.3), {}),  # older SkillEvaluator: no per-trial block
+        (with_trials(agent_entry(0.9, 0.3), attempts_block([0.9]), attempts_block()), {}),
+        (
+            with_trials(agent_entry(0.9, 0.3), attempts_block([0.9, None]), attempts_block([0.3])),
+            {"withSkill": [0.9], "withoutSkill": [0.3]},
+        ),
+    ],
+    ids=["no block", "one arm empty", "missing score skipped"],
+)
+def test_samples_are_optional(entry, expected, termination, monkeypatch):
+    """Without usable per-trial scores the message has no ``samples``."""
+    monkeypatch.setattr(skill_eval.subprocess, "run", FakeRun({"agents": {"claude-code": entry}}))
+    assert skill_eval.main() == 0
+    assert termination().get("samples", {}) == expected
+
+
+def test_samples_are_capped_and_the_message_fits(tmp_path):
+    """Even a huge dataset keeps the message under 4 KB."""
+    many = [[0.95] * 40] * 40
+    entry = with_trials(agent_entry(0.95, 0.36), attempts_block(*many), attempts_block(*many))
+    samples = {
+        "withSkill": skill_eval.trial_scores(entry, "with_skill"),
+        "withoutSkill": skill_eval.trial_scores(entry, "without_skill"),
+    }
+    payload = {**GOOD_PAYLOAD, "samples": samples}
+    path = tmp_path / "log"
+    skill_eval.write_termination(payload, str(path))
+    text = path.read_text()
+    assert len(text.encode()) < skill_eval.MAX_MESSAGE_BYTES
+    assert len(json.loads(text)["samples"]["withSkill"]) == skill_eval.MAX_SAMPLES
+
+
 @pytest.mark.parametrize(
     ("env", "message"),
     [
@@ -666,6 +732,8 @@ def test_termination_message_with_report_fits(tmp_path):
         ({**ENV, "ATTEMPTS": "zero"}, "ATTEMPTS must be a positive integer"),
         ({**ENV, "SANDBOX_CPUS": "0"}, "SANDBOX_CPUS must be a positive integer"),
         ({**ENV, "SANDBOX_MEMORY_MB": "2g"}, "SANDBOX_MEMORY_MB must be a positive integer"),
+        ({**ENV, "TIMEOUT_MULTIPLIER": "fast"}, "TIMEOUT_MULTIPLIER must be a positive number"),
+        ({**ENV, "TIMEOUT_MULTIPLIER": "0"}, "TIMEOUT_MULTIPLIER must be a positive number"),
     ],
 )
 def test_bad_config(env, message):

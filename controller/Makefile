@@ -1,6 +1,6 @@
 CONTROLLER_GEN_VERSION ?= v0.23.0
 CONTROLLER_GEN ?= $(shell go env GOPATH)/bin/controller-gen
-IMG ?= registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.1.0
+IMG ?= registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.5.0
 
 .PHONY: all
 all: generate manifests fmt lint test build

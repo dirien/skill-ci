@@ -5,7 +5,7 @@ Shared interfaces for every part of skill-ci. Change this file first, then the c
 ## Names
 
 | Thing | Value |
-|---|---|
+| --- | --- |
 | Namespace | `skill-ci` |
 | Harbor (goharbor) in-cluster URL | `http://harbor.harbor.svc.cluster.local` (plain HTTP, also its `externalURL`) |
 | Harbor project for skills | `skills` (repository = skill name) |
@@ -18,7 +18,7 @@ Shared interfaces for every part of skill-ci. Change this file first, then the c
 ## Secrets (namespace `skill-ci`)
 
 | Secret | Keys | Used by |
-|---|---|---|
+| --- | --- | --- |
 | `llm-keys` | `anthropic` (required), `openai` (optional) | runner Job |
 | `docr` | `.dockerconfigjson` | image pulls, task image pushes |
 | `harbor-credentials` | `username`, `password` (Harbor robot account or admin) | controller (Harbor REST API) |
@@ -61,13 +61,22 @@ status:
   withSkill: "0.95"                 # strings, two decimals
   withoutSkill: "0.36"
   lift: "+0.59"
-  verdict: Helps                    # Helps | Neutral | Hurts | Obsolete | Regressed
+  withSkillStdErr: "0.03"           # optional: standard error of the with-skill trial scores
+  withoutSkillStdErr: "0.01"        # optional: same for the baseline
+  n: "9/9"                          # optional: trials behind the scores, with/without
+  liftCI: "[+0.41, +0.73]"          # optional: confidence interval of the lift at --confidence
+  samples:                          # optional: per-trial scores the statistics come from
+    withSkill: ["0.95", "0.90", "1.00"]
+    withoutSkill: ["0.36", "0.38", "0.35"]
+  verdict: Helps                    # Helps | Neutral | Hurts | Obsolete | Regressed | Inconclusive | Rejected
   reportDigest: sha256:...          # optional: the eval report attached to the skill digest in Harbor
   message: ...
   completedAt: ...
 ```
 
-Printer columns: Skill, Version, Model, Phase, With, Without, Lift, Verdict, Age; Report (`status.reportDigest`) at priority 1 (`-o wide`).
+Printer columns: Skill, Version, Model, Phase, With, Without, Lift, Verdict, Tier1, Age; Lift CI (`status.liftCI`), N (`status.n`), Publication and Report (`status.reportDigest`) at priority 1 (`-o wide`).
+
+The statistics fields are present only when the runner sent trial scores (see "Statistics"). The controller recomputes them from `status.samples` whenever it reconciles a finished run, so a changed `--confidence` shows in `liftCI` without a new run. `samples` holds two decimals as strings (CRDs have no floats), up to 50 per arm.
 
 Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex without `sha256:`, first 32 chars), `skillci.dev/model`.
 
@@ -76,7 +85,7 @@ Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex withou
 The controller creates one `batch/v1` Job per SkillEval attempt, named like the SkillEval (a retry adds `-r1`, `-r2`, see "Retry"; cut short to fit 63 characters; the runner does not depend on the name) (owner reference to the SkillEval, `backoffLimit: 0`, `ttlSecondsAfterFinished: 3600`, ServiceAccount `skill-eval-runner`, imagePullSecrets `docr`). Container `skill-eval` runs the runner image with no args and these env vars:
 
 | Env | Example |
-|---|---|
+| --- | --- |
 | `SKILL_REF` | `harbor.harbor.svc.cluster.local/skills/acme-release-notes@sha256:...` |
 | `SKILL_NAME` | `acme-release-notes` |
 | `AGENT` | `claude-code` |
@@ -85,13 +94,23 @@ The controller creates one `batch/v1` Job per SkillEval attempt, named like the 
 | `ANTHROPIC_API_KEY` | from secret `llm-keys` key `anthropic` |
 | `OPENAI_API_KEY` | from secret `llm-keys` key `openai` (optional) |
 
-The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien`, `TASK_IMAGE_PULL_SECRET=docr`, `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them.
+The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien`, `TASK_IMAGE_PULL_SECRET=docr`, `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job), `TIMEOUT_MULTIPLIER=2` (scales Harbor's step timeouts; agent setup installs the CLI in every sandbox). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them.
 
-The container sets `terminationMessagePolicy: FallbackToLogsOnError`. On completion it writes one JSON object to `/dev/termination-log` and exits 0:
+Runner pods and trial sandbox pods carry `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, so a node scale-down never kills a running eval. The container sets `terminationMessagePolicy: FallbackToLogsOnError`. On completion it writes one JSON object to `/dev/termination-log` and exits 0:
 
 ```json
 {"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "claude-haiku-5-5", "report": "sha256:..."}
 ```
+
+`samples` is optional: the overall score of every trial, per arm, two decimals (see "Statistics"):
+
+```json
+{"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "claude-haiku-5-5",
+ "samples": {"withSkill": [0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95],
+             "withoutSkill": [0.36, 0.38, 0.35, 0.30, 0.40, 0.35, 0.36, 0.37, 0.38]}}
+```
+
+The runner reads them from SkillEvaluator's `result.json`: `agents.<agent>.pass_at_k.<with_skill|without_skill>.cases.<case>.attempts[].score`, one entry per attempt of every eval case, whose mean is the arm's `overall_*` score. With 3 cases x 3 attempts that is 9 scores per arm. The runner caps each arm at 50 scores, and leaves `samples` out when either arm has none (an older SkillEvaluator). A termination message without `samples`, or with fewer than two scores in an arm, is valid; the controller then uses the fixed-number rules.
 
 `report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds.
 
@@ -141,40 +160,82 @@ SkillEval status gains `tiers` (`tier1`, `tier2`, `tier3` strings), `publication
 1. **Skill push.** Harbor webhook policy on project `skills`, events `PUSH_ARTIFACT`, target `http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor`, payload format `Default`. The controller acts only when the pushed tag matches `^v\d+\.\d+\.\d+$`. Other tags (`beta`, `stable`) are ignored. For each model in the list it creates a SkillEval unless one already exists for the same digest and model (dedupe by labels).
 2. **Model list change.** The controller watches ConfigMap `skill-ci-models`. For each added model entry it creates SkillEvals for every skill digest currently tagged `beta` or `stable` in Harbor (`trigger: model-change`).
 
+## Statistics
+
+One run is 3 eval cases x `attempts` trials per arm, so up to 9 trial scores per arm. The same skill version scored 0.95 on one run and 0.87 on the next, so a fixed number is a poor gate. The gate asks for evidence: a confidence interval at level `--confidence` (default 0.95, so `alpha = 0.05`).
+
+For two samples `a` and `b` (at least two scores each) the controller computes, in `internal/stats`:
+
+```text
+mean(x)      = sum(x) / n
+s2(x)        = sum((x - mean)^2) / (n - 1)            sample variance
+stderr(x)    = sqrt(s2(x) / n)                        standard error of the mean
+va, vb       = s2(a) / n_a,  s2(b) / n_b
+diff         = mean(a) - mean(b)
+nu           = (va + vb)^2 / (va^2 / (n_a - 1) + vb^2 / (n_b - 1))      Welch-Satterthwaite degrees of freedom
+CI(a, b)     = diff +/- t(1 - alpha/2, nu) * sqrt(va + vb)              Welch's t interval
+```
+
+`t(p, nu)` is the quantile of Student's t distribution (inverse of its distribution function by the regularized incomplete beta function; unit tests check it against SciPy and t tables). If both samples have no spread the interval collapses to `diff`. With fewer than two scores in an arm there is no interval and the fixed-number rules apply.
+
+Two intervals are used, both Welch's, both on the two-decimal trial scores (trials are treated as independent draws; the cases differ in difficulty, which only widens the spread):
+
+- **Lift interval**: `a` = with-skill scores, `b` = without-skill scores of one run. Stored as `status.liftCI`.
+- **Version interval**: `a` = with-skill scores of the candidate, `b` = with-skill scores of the stable digest, per required model.
+
+Example (9 trials per arm): with-skill `0.95` x 9 against without-skill `0.36 0.38 0.35 0.30 0.40 0.35 0.36 0.37 0.38`: lift `+0.59`, 95% interval `[+0.57, +0.61]`.
+
 ## Policy
 
-Per SkillEval verdict (SkillEvaluator bands): `lift >= +0.05` Helps, `lift <= -0.10` Hurts, otherwise Neutral; Neutral with `withoutSkill >= 0.80` is Obsolete. The version-over-version gate below overrides the verdict with `Regressed` on the models that scored worse than the stable version; the policy itself always reads the no-skill bands, never the stored verdict.
+Per SkillEval verdict (SkillEvaluator bands, plus the interval when the run has one): `lift >= +0.05` **and** the lift interval's lower bound `> 0` is Helps, `lift <= -0.10` **and** the interval's upper bound `< 0` is Hurts, otherwise Neutral; Neutral with `withoutSkill >= 0.80` is Obsolete. A run without trial scores uses the lift bands alone. `lift` is the runner's two-decimal lift. The version-over-version gate below overrides the verdict with `Regressed` or `Inconclusive` on the models that scored worse than the stable version; the policy itself always reads the no-skill bands, never the stored verdict.
 
 Per digest, once every required model has a Succeeded SkillEval:
 
 - Tag the digest `beta` when it is the newest evaluated version (controller manages `beta`).
-- **Promote**: lift `>= +0.10` on all required models, and no regression against the current stable version (below): add tag `stable` (move it from any other digest of that skill).
-- **Regression gate**: if another digest of the skill is tagged `stable`, compare the candidate's with-skill score with that digest's, per model. A model counts when it is required and both digests have a Succeeded SkillEval for it. If the candidate scores lower by more than `--regression-tolerance` (default `0.05`, scores compared at two decimals, a drop of exactly the tolerance passes) on any such model, the digest is not promoted and the current stable stays. The candidate still gets `beta`. Its SkillEvals get condition `Regressed` (reason `WorseThanStable`, message names the model, both versions and both scores), a Warning event, and verdict `Regressed` on the models that dropped. Optional models never gate. With no current stable version, or when the candidate is the stable digest, nothing is compared.
-- **Newest wins ties**: an older version never takes `stable` from a newer stable version unless that newer version scores worse than it (the regression gate, applied the other way round). Without this rule two equally good versions would swap the tag on every reconcile.
-- **Demote**: lift `<= -0.10` on any required model: remove tag `stable` from that digest.
+- **Promote**: on all required models `lift >= --promote-threshold` (default `+0.10`) **and** the lift interval's lower bound `> 0` (the skill helps beyond noise), and no regression against the current stable version (below): add tag `stable` (move it from any other digest of that skill). A model whose lift reaches the threshold but whose interval includes 0 blocks promotion; the `PolicyApplied` message names it ("lift not beyond noise on claude-code/claude-sonnet-5-5 (+0.12, 95% CI [-0.05, +0.29])").
+- **Regression gate**: if another digest of the skill is tagged `stable`, compare the candidate's with-skill score with that digest's, per model. A model counts when it is required and both digests have a Succeeded SkillEval for it. The difference is `candidate - stable`, the mean of the with-skill trial scores of each side (the runs' with-skill scores when either side has no trial scores). If `difference < -tolerance` (`--regression-tolerance`, default `0.05`, compared at two decimals, a drop of exactly the tolerance passes), the version interval decides:
+  - interval's upper bound `< 0`: **Regressed**. The digest is not promoted and the current stable stays. Its SkillEvals get condition `Regressed` (reason `WorseThanStable`, message names the model, both versions, both scores, the difference and the interval), a Warning event, and verdict `Regressed` on the models that dropped.
+  - interval includes 0 (upper bound `>= 0`): **Inconclusive**. The digest is not promoted and the current stable stays, exactly as for Regressed, but the evidence does not say the drop is real. Its SkillEvals get condition `Inconclusive` (reason `NotEnoughEvidence`) with the numbers, for example `claude-code/claude-sonnet-5-5: 0.87 with v1.2.0 vs 0.95 with stable v1.1.0, difference -0.08, 95% CI [-0.18, +0.03]; not enough evidence to call it a regression`, a Normal event, and verdict `Inconclusive` on the models that dropped. A later run with more trials, or a rerun, can settle it either way.
+  - either side has no trial scores (older runners): the fixed rule decides, a drop beyond the tolerance is Regressed, and the message ends with `fixed rule, no trial scores to test it`.
+
+  The candidate still gets `beta` in all three cases. Optional models never gate. With no current stable version, or when the candidate is the stable digest, nothing is compared. When both Regressed and Inconclusive occur (different models) the digest carries both conditions.
+- **Newest wins ties**: an older version never takes `stable` from a newer stable version unless that newer version scores worse than it, beyond noise (a Regressed comparison the other way round; an Inconclusive one does not count). Without this rule two equally good versions would swap the tag on every reconcile.
+- **Demote**: `lift <= --demote-threshold` (default `-0.10`) and the lift interval's upper bound `< 0` on any required model: remove tag `stable` from that digest. Without trial scores the lift alone decides.
 - **Obsolete**: verdict Obsolete on all required models: flag only (metric + condition), never delete.
+- **No trial scores**: a run whose termination message had no `samples` (runner before 0.5.1) uses the fixed-number rules for its own lift, and the `PolicyApplied` message says `fixed thresholds, no trial scores from <model>`.
 - **Rejected**: a run whose Tier 1 or Tier 2 failed ends `Succeeded` with verdict `Rejected` and usually no scores (Tier 3 was skipped; a Succeeded run without scores and without a failed tier is marked `Failed` instead). It counts as finished for "every required model has a result". If any required model is Rejected, the digest gets no `beta` and no `stable`, loses `stable` if it holds it, and is never the "newest evaluated version" that takes `beta` (the older version keeps it). The Rejected run gets condition `Rejected` (reason `Tier1Failed` or `Tier2Failed`, message the findings) and a Warning event with the same reason. Rejected runs are left out of the regression comparison. Rejected optional models never gate. A termination message from a runner without `tiers` still works: the tiers are unknown, nothing is Rejected.
+
+Worked example (both required models, stable `v1.0.0` with-skill 0.95 on 9 trials):
+
+| Candidate with-skill trials | Mean | Difference | 95% interval | Result |
+| --- | --- | --- | --- | --- |
+| `0.70 0.71 0.69 0.70 0.70 0.71 0.69 0.70 0.70` | 0.70 | -0.25 | `[-0.26, -0.24]` | Regressed |
+| `0.95 0.55 0.90 0.85 1.00 0.80 0.90 0.95 0.95` (stable spread too) | 0.87 | -0.08 | `[-0.18, +0.03]` | Inconclusive |
+| same scores as stable | 0.95 | 0.00 | `[-0.01, +0.01]` | passes |
+| `0.99 0.98 1.00 0.99 0.99 0.98 1.00 0.99 0.99` | 0.99 | +0.04 | `[+0.03, +0.05]` | passes |
 
 Verdicts depend on other digests (the stable one), so when a SkillEval reaches `Succeeded`, or the policy changes a tag, the controller re-enqueues the other `Succeeded` SkillEvals of the same skill (all digests). They re-run the policy and converge; a re-run that changes nothing writes nothing and enqueues nothing.
 
-Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repositories/<skill>/artifacts/<digest>/tags`, `DELETE .../artifacts/<digest>/tags/<tag>`). Unlike `oras tag`, these do not fire `PUSH_ARTIFACT`. Thresholds are controller flags (`--helps-threshold`, `--hurts-threshold`, `--promote-threshold`, `--demote-threshold`, `--obsolete-baseline`, `--regression-tolerance`).
+Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repositories/<skill>/artifacts/<digest>/tags`, `DELETE .../artifacts/<digest>/tags/<tag>`). Unlike `oras tag`, these do not fire `PUSH_ARTIFACT`. Thresholds are controller flags (`--helps-threshold`, `--hurts-threshold`, `--promote-threshold`, `--demote-threshold`, `--obsolete-baseline`, `--regression-tolerance`, `--confidence`). `--confidence` is the level of both intervals (default `0.95`, exclusive between 0 and 1); a higher level asks for more evidence to promote and to call a regression. Helm: `controller.thresholds.confidence`.
 
 ## Metrics (controller `:8081/metrics`)
 
-Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Gauge `skillci_publication{skill,version,model,status}` is 1 for the publication status of the run (`passed`, `failed` or `incomplete`; one series per skill, version and model, replaced when a rerun changes the status, absent for runs without a publication status). Gauge `skillci_rejected{skill,version}` is 1 when a required model's run failed Tier 1 or Tier 2. Counter `skillci_skillevals_total{phase}` counts phase transitions. Counter `skillci_retries_total{reason}` counts runs started again after an infrastructure failure (`reason` is `env_start_timeout`, `connection_lost`, `agent_install`, `agent_setup` or `job_lost`; all five series exist at 0 from startup). Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_publication` series of its skill, version and model, and the `skillci_stable`, `skillci_obsolete`, `skillci_regressed` and `skillci_rejected` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
+Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`, and, for runs with trial scores, `skillci_lift_ci_lower` and `skillci_lift_ci_upper` (the lift interval at `--confidence`; absent for runs without trial scores). Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance and beyond noise). Gauge `skillci_inconclusive{skill,version}` (1 when it scores worse beyond the tolerance but the interval includes 0, and no model regressed beyond noise). Gauge `skillci_publication{skill,version,model,status}` is 1 for the publication status of the run (`passed`, `failed` or `incomplete`; one series per skill, version and model, replaced when a rerun changes the status, absent for runs without a publication status). Gauge `skillci_rejected{skill,version}` is 1 when a required model's run failed Tier 1 or Tier 2. Counter `skillci_skillevals_total{phase}` counts phase transitions. Counter `skillci_retries_total{reason}` counts runs started again after an infrastructure failure (`reason` is `env_start_timeout`, `connection_lost`, `agent_install`, `agent_setup` or `job_lost`; all five series exist at 0 from startup). Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_lift_ci_lower`, `skillci_lift_ci_upper`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_publication` series of its skill, version and model, and the `skillci_stable`, `skillci_obsolete`, `skillci_regressed`, `skillci_inconclusive` and `skillci_rejected` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
 
 ## Reporting site (controller `:8082`)
 
 Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEvals from the manager's cache, channel tags from the Harbor REST API (cached 5 s), reports from the OCI referrers named by `status.reportDigest` (fetched with the registry API using `HARBOR_USERNAME`/`HARBOR_PASSWORD`, cached in memory by digest, 32 MiB). A run without `reportDigest` shows "not stored".
 
 | Route | Content |
-|---|---|
+| --- | --- |
 | `/` | Counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `model`, `verdict`, `phase`, `publication` |
 | `/skills/{skill}` | Versions x models (with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
 | `/runs/{name}` | One SkillEval: scores, the SkillEvaluator tiers with findings, conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
 | `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
 | `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
 | `/healthz` | `ok` |
+
+Lifts show their evidence wherever they appear (runs table, skill matrix cells, run page): `+0.59` with `95% CI +0.41 to +0.73, n=9/9` (the level is `--confidence`, `n` the trials with/without), left out for runs without trial scores. Verdict `Inconclusive` is neutral (hollow marker, text "Inconclusive"). The policy decision says in plain words when a version is "Not proven" (a drop that may be noise: the numbers, "The stable version stays; more trials would show whether the drop is real") or "Not promoted" because a lift is not beyond noise. The "How to read this" legend explains the interval in two sentences.
 
 Unknown runs and skills give a 404 page. Policy decisions use the controller thresholds.
 
@@ -186,7 +247,7 @@ A run that fails for an infrastructure reason is started again, because that fai
 - **Transient** (package `internal/retry`, `Transient(message, jobFailedWithoutMessage)`), for a run that ends `Failed` without a result:
   - the Job failed and the runner left no termination message, or a pod of the Job was evicted/disrupted and left no readable result (`job_lost`);
   - the failure message names a Kubernetes-level loss: `DeadlineExceeded`, `Evicted`, `Preempt*`, `FailedScheduling`, `Unschedulable`, `ImagePullBackOff`, `ErrImagePull` (`job_lost`);
-  - the runner error (the SkillEvaluator `execution_errors` of all trials, joined with `; ` after `no scores in result.json:`) consists only of transient parts. It is split at every `<Name>Error:` token and every part must qualify, so one agent error in the mix makes the run a real result:
+  - the runner error (the SkillEvaluator `execution_errors` of all trials, joined with a semicolon and a space after `no scores in result.json:`) consists only of transient parts. It is split at every `<Name>Error:` token and every part must qualify, so one agent error in the mix makes the run a real result:
     - `EnvironmentStartTimeoutError` (`env_start_timeout`);
     - any part containing `Connection to remote host was lost` (`connection_lost`);
     - `NonZeroAgentExitCodeError` whose failed command starts like the agent install (`apt-get`, `apk`, `yum`, `dnf`, `set -euo pipefail; if command -v apk`, `npm install`, `pip install`, `curl ... | sh`) (`agent_install`) or the agent setup (`mkdir -p $CLAUDE_CONFIG_DIR`) (`agent_setup`). Only the start of the command counts, because the agent's own task command carries the task text, which may mention anything.

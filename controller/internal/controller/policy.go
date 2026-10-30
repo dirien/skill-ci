@@ -27,10 +27,16 @@ const (
 	ConditionRegressed = "Regressed"
 	// ConditionRejected records that Tier 1 or Tier 2 failed for the run.
 	ConditionRejected = "Rejected"
+	// ConditionInconclusive records a drop below the stable version that the
+	// trials do not show beyond noise.
+	ConditionInconclusive = "Inconclusive"
 )
 
 // ReasonWorseThanStable is the reason of the Regressed condition and its event.
 const ReasonWorseThanStable = "WorseThanStable"
+
+// ReasonNotEnoughEvidence is the reason of the Inconclusive condition and its event.
+const ReasonNotEnoughEvidence = "NotEnoughEvidence"
 
 // Reasons of the Rejected condition and its event.
 const (
@@ -40,19 +46,30 @@ const (
 	ReasonTier2Failed = "Tier2Failed"
 )
 
-// regression says which models of a candidate scored worse than the stable version.
+// regression says which models of a candidate scored lower than the stable
+// version, and which of those drops hold beyond noise.
 type regression struct {
-	regs    []policy.Regression
-	message string
+	regs []policy.Regression
+	// regressed and inconclusive are the condition messages; empty when there is no such drop.
+	regressed, inconclusive string
 }
 
-// has reports whether the model (agent/model key) regressed. It is safe on nil.
-func (g *regression) has(model string) bool {
+// has reports whether the model (agent/model key) regressed beyond noise. It is safe on nil.
+func (g *regression) has(model string) bool { return g.hasKind(model, false) }
+
+// unsure reports whether the model dropped, but not beyond noise. It is safe on nil.
+func (g *regression) unsure(model string) bool { return g.hasKind(model, true) }
+
+func (g *regression) hasKind(model string, inconclusive bool) bool {
 	if g == nil {
 		return false
 	}
-	return slices.ContainsFunc(g.regs, func(r policy.Regression) bool { return r.Model == model })
+	return slices.ContainsFunc(g.regs, func(r policy.Regression) bool { return r.Model == model && r.Inconclusive == inconclusive })
 }
+
+// confirmed and doubtful say whether any model regressed beyond noise, or only maybe. Both are safe on nil.
+func (g *regression) confirmed() bool { return g != nil && g.regressed != "" }
+func (g *regression) doubtful() bool  { return g != nil && g.inconclusive != "" }
 
 // applyPolicy looks at every SkillEval of the digest, and once all required
 // models have a result it moves the beta and stable tags in Harbor.
@@ -115,7 +132,8 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 		metrics.SetObsolete(se.Spec.Skill, group[0].Spec.Version, outcomes[d].Obsolete)
 		metrics.SetRejected(se.Spec.Skill, group[0].Spec.Version, outcomes[d].Rejected)
 	}
-	metrics.SetRegressed(se.Spec.Skill, se.Spec.Version, reg != nil)
+	metrics.SetRegressed(se.Spec.Skill, se.Spec.Version, reg.confirmed())
+	metrics.SetInconclusive(se.Spec.Skill, se.Spec.Version, reg.doubtful() && !reg.confirmed())
 	return r.record(ctx, byDigest[digest], out, ops, reg)
 }
 
@@ -131,14 +149,46 @@ func regressionOf(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillEva
 		if len(regs) == 0 {
 			return nil
 		}
-		msgs := make([]string, len(regs))
-		for i, g := range regs {
-			msgs[i] = fmt.Sprintf("%s scores %.2f with %s, stable %s scored %.2f",
-				g.Model, g.Candidate, byDigest[digest][0].Spec.Version, stable[0].Spec.Version, g.Stable)
+		g := &regression{regs: regs}
+		cand, base := byDigest[digest][0].Spec.Version, stable[0].Spec.Version
+		var hard, soft []string
+		for _, d := range regs {
+			if d.Inconclusive {
+				soft = append(soft, inconclusiveText(d, cand, base, th))
+			} else {
+				hard = append(hard, regressedText(d, cand, base, th))
+			}
 		}
-		return &regression{regs: regs, message: strings.Join(msgs, "; ") + fmt.Sprintf(" (tolerance %.2f)", th.Regression)}
+		if len(hard) > 0 {
+			g.regressed = strings.Join(hard, "; ") + fmt.Sprintf(" (tolerance %.2f%s)", th.Regression, fixedRuleNote(regs))
+		}
+		g.inconclusive = strings.Join(soft, "; ")
+		return g
 	}
 	return nil
+}
+
+// regressedText describes one confirmed drop: scores, and the interval when there is one.
+func regressedText(d policy.Regression, candidate, stable string, th policy.Thresholds) string {
+	text := fmt.Sprintf("%s scores %.2f with %s, stable %s scored %.2f", d.Model, d.Candidate, candidate, stable, d.Stable)
+	if d.CI != nil {
+		text += fmt.Sprintf(": difference %+.2f, %s CI %s", d.Diff(), th.Percent(), formatCI(d.CI))
+	}
+	return text
+}
+
+// inconclusiveText describes one drop that may be noise.
+func inconclusiveText(d policy.Regression, candidate, stable string, th policy.Thresholds) string {
+	return fmt.Sprintf("%s: %.2f with %s vs %.2f with stable %s, difference %+.2f, %s CI %s; not enough evidence to call it a regression",
+		d.Model, d.Candidate, candidate, d.Stable, stable, d.Diff(), th.Percent(), formatCI(d.CI))
+}
+
+// fixedRuleNote says that a drop was judged by the fixed tolerance alone.
+func fixedRuleNote(regs []policy.Regression) string {
+	if slices.ContainsFunc(regs, func(r policy.Regression) bool { return !r.Inconclusive && r.CI == nil }) {
+		return "; fixed rule, no trial scores to test it"
+	}
+	return ""
 }
 
 // yieldsToStable reports whether the digest is older than the current stable
@@ -155,7 +205,8 @@ func yieldsToStable(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillE
 		if semver.Compare(stable[0].Spec.Version, byDigest[digest][0].Spec.Version) <= 0 {
 			return false
 		}
-		return len(th.Regressions(withScores(stable), withScores(byDigest[digest]))) == 0
+		// Only a drop beyond noise lets the older version take stable back.
+		return len(policy.Confirmed(th.Regressions(withScores(stable), withScores(byDigest[digest])))) == 0
 	}
 	return false
 }
@@ -168,7 +219,8 @@ func withScores(group []*v1alpha1.SkillEval) []policy.Score {
 			continue
 		}
 		if with, _, _, err := scores(e); err == nil {
-			out = append(out, policy.Score{Model: e.Spec.Agent + "/" + e.Spec.Model, Required: e.Spec.Required, With: with})
+			with2, _ := trialScores(e)
+			out = append(out, policy.Score{Model: e.Spec.Agent + "/" + e.Spec.Model, Required: e.Spec.Required, With: with, Samples: with2})
 		}
 	}
 	return out
@@ -212,14 +264,15 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 		}
 		msg = "tag changes: " + strings.Join(changes, " ")
 	}
+	msg += evidenceNote(group, r.Config.Thresholds)
 	for _, e := range group {
 		changed := meta.SetStatusCondition(&e.Status.Conditions, metav1.Condition{
 			Type: ConditionPolicy, Status: metav1.ConditionTrue, Reason: reason, Message: msg,
 			ObservedGeneration: e.Generation,
 		})
-		regChanged := markRegression(e, reg, r.Config.Thresholds)
+		regChanged, incChanged, verdictChanged := markRegression(e, reg, r.Config.Thresholds)
 		rejReason, rejMsg, rejChanged := markRejected(e)
-		if !changed && !regChanged && !rejChanged && len(ops) == 0 {
+		if !changed && !regChanged && !incChanged && !verdictChanged && !rejChanged && len(ops) == 0 {
 			continue
 		}
 		if err := r.Status().Update(ctx, e); err != nil {
@@ -228,8 +281,11 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 		if changed || len(ops) > 0 {
 			r.Recorder.Eventf(e, nil, eventType, reason, "ApplyPolicy", "%s", msg)
 		}
-		if regChanged && reg != nil {
-			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, ReasonWorseThanStable, "ApplyPolicy", "%s", reg.message)
+		if regChanged && reg.confirmed() {
+			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, ReasonWorseThanStable, "ApplyPolicy", "%s", reg.regressed)
+		}
+		if incChanged && reg.doubtful() {
+			r.Recorder.Eventf(e, nil, corev1.EventTypeNormal, ReasonNotEnoughEvidence, "ApplyPolicy", "%s", reg.inconclusive)
 		}
 		if rejChanged && rejReason != "" {
 			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, rejReason, "ApplyPolicy", "%s", rejMsg)
@@ -238,25 +294,53 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 	return nil
 }
 
-// markRegression sets or clears the Regressed condition and the Regressed
-// verdict of one SkillEval. Without a regression the verdict goes back to the
-// one the scores earn. It reports whether anything changed.
-func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds) bool {
-	changed := false
-	if reg == nil {
-		changed = meta.RemoveStatusCondition(&e.Status.Conditions, ConditionRegressed)
-	} else {
-		changed = meta.SetStatusCondition(&e.Status.Conditions, metav1.Condition{
-			Type: ConditionRegressed, Status: metav1.ConditionTrue, Reason: ReasonWorseThanStable,
-			Message: reg.message, ObservedGeneration: e.Generation,
-		})
+// evidenceNote explains, for the PolicyApplied message, where the gate had no
+// evidence: a lift that reaches the promote threshold but not beyond noise, and
+// runs that carry no trial scores and so use the fixed thresholds.
+func evidenceNote(group []*v1alpha1.SkillEval, th policy.Thresholds) string {
+	var unproven, fixed []string
+	for _, e := range group {
+		if !e.Spec.Required || e.Status.Phase != v1alpha1.PhaseSucceeded || rejectedRun(e) {
+			continue
+		}
+		_, _, lift, err := scores(e)
+		if err != nil {
+			continue
+		}
+		model := e.Spec.Agent + "/" + e.Spec.Model
+		switch ci := liftCI(e, th); {
+		case ci == nil:
+			fixed = append(fixed, model)
+		case lift >= th.Promote-1e-9 && ci.Lower <= 0:
+			unproven = append(unproven, fmt.Sprintf("%s (%+.2f, %s CI %s)", model, lift, th.Percent(), formatCI(ci)))
+		}
 	}
+	var note string
+	if len(unproven) > 0 {
+		note += "; lift not beyond noise on " + strings.Join(unproven, ", ")
+	}
+	if len(fixed) > 0 {
+		note += "; fixed thresholds, no trial scores from " + strings.Join(fixed, ", ")
+	}
+	return note
+}
+
+// markRegression sets or clears the Regressed and Inconclusive conditions and
+// the verdict of one SkillEval. Without a drop the verdict goes back to the one
+// the scores earn. It reports whether each condition and the verdict changed.
+func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds) (regressed, inconclusive, changed bool) {
+	regressed = setCondition(e, ConditionRegressed, ReasonWorseThanStable, reg.confirmed(), func() string { return reg.regressed })
+	inconclusive = setCondition(e, ConditionInconclusive, ReasonNotEnoughEvidence, reg.doubtful(), func() string { return reg.inconclusive })
 	verdict := e.Status.Verdict
 	if _, without, lift, err := scores(e); err == nil {
-		verdict = th.Verdict(lift, without)
+		verdict = th.Verdict(lift, without, liftCI(e, th))
 	}
-	if reg.has(e.Spec.Agent + "/" + e.Spec.Model) {
+	model := e.Spec.Agent + "/" + e.Spec.Model
+	switch {
+	case reg.has(model):
 		verdict = v1alpha1.VerdictRegressed
+	case reg.unsure(model):
+		verdict = v1alpha1.VerdictInconclusive
 	}
 	if rejectedRun(e) {
 		verdict = v1alpha1.VerdictRejected
@@ -264,7 +348,18 @@ func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds
 	if verdict != e.Status.Verdict {
 		e.Status.Verdict, changed = verdict, true
 	}
-	return changed
+	return regressed, inconclusive, changed
+}
+
+// setCondition sets the condition of the given type when on, removes it
+// otherwise, and reports whether that changed it.
+func setCondition(e *v1alpha1.SkillEval, typ, reason string, on bool, message func() string) bool {
+	if !on {
+		return meta.RemoveStatusCondition(&e.Status.Conditions, typ)
+	}
+	return meta.SetStatusCondition(&e.Status.Conditions, metav1.Condition{
+		Type: typ, Status: metav1.ConditionTrue, Reason: reason, Message: message(), ObservedGeneration: e.Generation,
+	})
 }
 
 // markRejected sets or clears the Rejected condition of one SkillEval. The
@@ -303,7 +398,8 @@ func results(group []*v1alpha1.SkillEval, th policy.Thresholds) []policy.Result 
 				res.Succeeded = false
 			}
 			// The stored verdict may be Regressed; the no-skill bands decide here.
-			res.Lift, res.Verdict = lift, th.Verdict(lift, without)
+			res.Lift, res.LiftCI = lift, liftCI(e, th)
+			res.Verdict = th.Verdict(lift, without, res.LiftCI)
 		}
 		out = append(out, res)
 	}

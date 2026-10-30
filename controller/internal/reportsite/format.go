@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"strings"
 	"time"
+
+	"github.com/dirien/skill-ci/controller/internal/policy"
 )
 
 // funcs returns the template helpers. now supplies the clock for ages.
@@ -20,6 +22,7 @@ func funcs(now func() time.Time) template.FuncMap {
 		"dash":     dash,
 		"num":      func(v float64) string { return fmt.Sprintf("%.2f", v) },
 		"signed":   func(v float64) string { return fmt.Sprintf("%+.2f", v) },
+		"pct":      func(c float64) string { return policy.Thresholds{Confidence: c}.Percent() },
 		"status":   func(kind, label string) Status { return Status{Kind: kind, Label: label} },
 		"sel":      newSelect,
 	}

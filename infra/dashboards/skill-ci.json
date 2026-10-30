@@ -6,7 +6,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "editable": true,
   "refresh": "15s",
   "time": {
@@ -24,7 +24,7 @@
       "id": 1,
       "type": "table",
       "title": "Lift per skill version and model",
-      "description": "skillci_lift. Green: lift >= +0.10 (promotes). Yellow: neutral. Red: lift <= -0.10 (demotes).",
+      "description": "skillci_lift. Green: lift >= +0.10 (promotes, if the confidence interval is above 0, see the table below). Yellow: neutral. Red: lift <= -0.10 (demotes).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -320,7 +320,7 @@
           },
           "expr": "label_replace(skillci_with_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} \u00b7 {{short}}",
+          "legendFormat": "{{skill}} {{version}} · {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -373,7 +373,7 @@
           },
           "expr": "label_replace(skillci_without_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} \u00b7 {{short}}",
+          "legendFormat": "{{skill}} {{version}} · {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -807,6 +807,279 @@
       },
       "options": {
         "showHeader": true
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "Lift with confidence interval",
+      "description": "skillci_lift with skillci_lift_ci_lower and skillci_lift_ci_upper (Welch t interval of the per-trial scores, level = controller --confidence). A version is promoted only when the lower bound is above 0 (green). A row without bounds comes from a runner that sends no trial scores: the fixed thresholds apply.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 16,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skillci_lift",
+          "refId": "A",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skillci_lift_ci_lower",
+          "refId": "B",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true,
+          "range": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "skillci_lift_ci_upper",
+          "refId": "C",
+          "legendFormat": "",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "endpoint": true,
+              "namespace": true,
+              "pod": true,
+              "service": true,
+              "container": true
+            },
+            "indexByName": {
+              "skill": 0,
+              "version": 1,
+              "agent": 2,
+              "model": 3,
+              "Value #A": 4,
+              "Value #B": 5,
+              "Value #C": 6
+            },
+            "renameByName": {
+              "Value #A": "lift",
+              "Value #B": "CI lower",
+              "Value #C": "CI upper"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "fields": {},
+            "sort": [
+              {
+                "field": "skill"
+              },
+              {
+                "field": "version"
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          },
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CI lower"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.0001
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Inconclusive versions",
+      "description": "Versions that scored lower than the stable version by more than the tolerance, but not beyond noise (skillci_inconclusive). They are not promoted, stable stays, and they keep beta.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 32,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(skillci_inconclusive == 1) or vector(0)",
+          "refId": "A",
+          "legendFormat": "",
+          "format": "time_series",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "yellow"
+          },
+          "decimals": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Regressed versions",
+      "description": "Versions that scored lower than the stable version by more than the tolerance, with a confidence interval entirely below zero (skillci_regressed).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 32,
+        "w": 4,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "count(skillci_regressed == 1) or vector(0)",
+          "refId": "A",
+          "legendFormat": "",
+          "format": "time_series",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          },
+          "decimals": 0,
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none"
       }
     }
   ]

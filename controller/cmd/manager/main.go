@@ -66,7 +66,7 @@ func run() error {
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
 	flag.StringVar(&cfg.Project, "harbor-project", "skills", "Harbor project that holds skills.")
-	flag.StringVar(&runnerImage, "runner-image", "registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.5.0", "Runner image.")
+	flag.StringVar(&runnerImage, "runner-image", "registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.5.1", "Runner image.")
 	flag.StringVar(&modelsCM, "models-configmap", "skill-ci-models", "ConfigMap with the model list (key models.yaml).")
 	flag.IntVar(&cfg.Attempts, "default-attempts", 1, "Trials per arm for SkillEvals created by the controller.")
 	flag.Float64Var(&th.Helps, "helps-threshold", th.Helps, "Lift at or above which a verdict is Helps.")
@@ -75,6 +75,7 @@ func run() error {
 	flag.Float64Var(&th.Demote, "demote-threshold", th.Demote, "Lift on any required model that removes the stable tag.")
 	flag.Float64Var(&th.Obsolete, "obsolete-baseline", th.Obsolete, "Without-skill score at which a Neutral result is Obsolete.")
 	flag.Float64Var(&th.Regression, "regression-tolerance", th.Regression, "With-skill drop below the stable version, per required model, that still allows promotion.")
+	flag.Float64Var(&th.Confidence, "confidence", th.Confidence, "Confidence level of the intervals the gate uses (0 to 1, exclusive). A lift must clear zero, and a drop below stable must stay below zero, at this level.")
 	flag.IntVar(&cfg.MaxConcurrentJobs, "max-concurrent-jobs", 4, "Running SkillEvals at once; the rest stay Pending.")
 	flag.IntVar(&trialBudget, "trial-budget", 200, "Max trials (attempts x 2 arms) per controller lifetime; 0 is unlimited.")
 	flag.IntVar(&cfg.MaxRetries, "max-retries", 1, "Fresh Jobs a run gets after an infrastructure failure (environment start timeout, lost connection, agent install, lost pod); 0 disables. Real results are never retried.")
@@ -87,6 +88,9 @@ func run() error {
 	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
 	cfg.Thresholds = th
+	if th.Confidence <= 0 || th.Confidence >= 1 {
+		return fmt.Errorf("invalid --confidence %v: must be between 0 and 1", th.Confidence)
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&logOpts)))
 	setupLog := ctrl.Log.WithName("setup")

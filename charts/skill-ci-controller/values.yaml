@@ -46,7 +46,7 @@ controller:
   # --runner-image, rendered as repository:tag or repository@digest.
   runnerImage:
     repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
-    tag: "0.5.0"
+    tag: "0.5.1"
     digest: ""
   modelsConfigMap: skill-ci-models
   # Attempts per arm. One attempt is too noisy for the regression gate: the same
@@ -63,6 +63,12 @@ controller:
     # promotion. Empty omits the flag (controller default 0.05); controller images before
     # 0.2.0 exit on the unknown flag, so set it to "" for those.
     regressionTolerance: "0.05"
+    # --confidence: level of the confidence intervals the gate uses (0 to 1, exclusive). A lift
+    # earns stable only when its interval lies above zero, and a drop below the stable version
+    # blocks promotion as a regression only when its interval lies below zero. A higher level
+    # asks for more evidence. Empty omits the flag; controller images before 0.5.0 exit on the
+    # unknown flag, so set it to "" for those.
+    confidence: "0.95"
   # Deployed with 3 so 3 Jobs x 2 trials fit a small cluster (the flag default is 4).
   maxConcurrentJobs: 3
   # Max trials per controller lifetime, 0 is unlimited.

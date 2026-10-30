@@ -210,6 +210,15 @@
                 "number"
               ],
               "pattern": "^(-?[0-9]+(\\.[0-9]+)?)?$"
+            },
+            "confidence": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "pattern": "^(0?\\.[0-9]*[1-9][0-9]*)?$",
+              "exclusiveMinimum": 0,
+              "exclusiveMaximum": 1
             }
           },
           "additionalProperties": false

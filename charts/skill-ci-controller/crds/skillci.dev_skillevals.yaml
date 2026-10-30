@@ -44,6 +44,14 @@ spec:
     - jsonPath: .status.tiers.tier1
       name: Tier1
       type: string
+    - jsonPath: .status.liftCI
+      name: Lift CI
+      priority: 1
+      type: string
+    - jsonPath: .status.n
+      name: "N"
+      priority: 1
+      type: string
     - jsonPath: .status.publication
       name: Publication
       priority: 1
@@ -204,9 +212,18 @@ spec:
               lift:
                 description: Lift is WithSkill minus WithoutSkill, signed, two decimals.
                 type: string
+              liftCI:
+                description: |-
+                  LiftCI is the confidence interval of the lift (Welch's t), for example [+0.41, +0.73].
+                  The level is the controller's --confidence.
+                type: string
               message:
                 description: Message is a human readable detail, for example a failure
                   reason.
+                type: string
+              "n":
+                description: N is the number of trials behind the scores, with-skill/without-skill,
+                  for example 9/9.
                 type: string
               phase:
                 description: Phase is the lifecycle phase.
@@ -232,6 +249,24 @@ spec:
                   is named <skilleval>-rn. See the Retried condition for the failure.
                 minimum: 0
                 type: integer
+              samples:
+                description: |-
+                  Samples are the per-trial scores the statistics come from; absent for
+                  runs of a runner that does not report them.
+                properties:
+                  withSkill:
+                    description: WithSkill holds the with-skill trial scores.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  withoutSkill:
+                    description: WithoutSkill holds the baseline trial scores.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
               tiers:
                 description: |-
                   Tiers is the outcome of the three SkillEvaluator tiers; absent when the
@@ -255,13 +290,22 @@ spec:
                 - Hurts
                 - Obsolete
                 - Regressed
+                - Inconclusive
                 - Rejected
                 type: string
               withSkill:
                 description: WithSkill is the score with the skill, two decimals.
                 type: string
+              withSkillStdErr:
+                description: WithSkillStdErr is the standard error of the with-skill
+                  trial scores, two decimals.
+                type: string
               withoutSkill:
                 description: WithoutSkill is the score without the skill, two decimals.
+                type: string
+              withoutSkillStdErr:
+                description: WithoutSkillStdErr is the standard error of the baseline
+                  trial scores, two decimals.
                 type: string
             type: object
         required:

@@ -11,11 +11,13 @@
 </label>{{end}}
 
 {{define "legend"}}<ul>
-  <li><strong>Lift</strong> is the with-skill score minus the without-skill score.</li>
-  <li><strong>Helps</strong> at lift {{signed .Helps}} or more. <strong>Hurts</strong> at {{signed .Hurts}} or less. Otherwise <strong>Neutral</strong>, or <strong>Obsolete</strong> when the without-skill score is already {{num .Obsolete}} or more.</li>
-  <li><strong>Stable</strong> needs lift {{signed .Promote}} on every required model and no regression. Stable is removed at {{signed .Demote}} or less on any required model.</li>
+  <li><strong>Lift</strong> is the with-skill score minus the without-skill score. Each score is the mean of its trials, and <strong>n</strong> is the number of trials per arm (with/without).</li>
+  <li><strong>Evidence</strong>: the {{pct .Confidence}} CI is the range the true lift most likely lies in. A lift counts only when the whole range is above zero (or, for a drop, below zero); a range that includes zero is within noise.</li>
+  <li><strong>Helps</strong> at lift {{signed .Helps}} or more with the range above zero. <strong>Hurts</strong> at {{signed .Hurts}} or less with the range below zero. Otherwise <strong>Neutral</strong>, or <strong>Obsolete</strong> when the without-skill score is already {{num .Obsolete}} or more.</li>
+  <li><strong>Stable</strong> needs lift {{signed .Promote}} on every required model, the range above zero, and no regression. Stable is removed at {{signed .Demote}} or less (range below zero) on any required model. A run without trial scores (an older runner) uses the lift bands alone.</li>
   <li><strong>Tiers</strong>: <strong>T1</strong> static, security and quality checks, <strong>T2</strong> deduplication, <strong>T3</strong> live trials with and without the skill. T1 and T2 run first; if either fails, T3 is skipped and no trials are spent. Markers: filled circle passed, square failed, triangle incomplete (a check could not produce trustworthy evidence), hollow circle skipped.</li>
   <li><strong>Rejected</strong>: Tier 1 or Tier 2 failed on a required model. The version never gets <code>beta</code> or <code>stable</code>, and loses <code>stable</code> if it had it.</li>
   <li><strong>Publication</strong> is SkillEvaluator's assessment across all three tiers: passed, failed or incomplete.</li>
-  <li><strong>Regressed</strong>: the with-skill score fell more than {{num .Regression}} below the stable version on a required model. The version keeps <code>beta</code> and does not replace stable.</li>
+  <li><strong>Regressed</strong>: the with-skill score fell more than {{num .Regression}} below the stable version on a required model, and the {{pct .Confidence}} CI of the difference is entirely below zero. The version keeps <code>beta</code> and does not replace stable.</li>
+  <li><strong>Inconclusive</strong>: it fell by more than {{num .Regression}}, but the range of the difference includes zero, so the drop may be noise. The version is not promoted, stable stays, and it keeps <code>beta</code>.</li>
 </ul>{{end}}

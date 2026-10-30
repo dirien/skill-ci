@@ -1,12 +1,21 @@
 // Package policy turns scores into verdicts and verdicts into tag changes.
 // It is pure: no clients, no I/O.
+//
+// A fixed number is a bad gate when the same skill version scores 0.95 on one
+// run and 0.87 on the next. When a run carries its per-trial scores, the gate
+// asks for evidence instead: a lift counts when its confidence interval clears
+// zero, a drop below the stable version counts when its interval stays below
+// zero. Runs without trial scores keep the fixed-number rules.
 package policy
 
 import (
 	"math"
+	"slices"
+	"strconv"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
+	"github.com/dirien/skill-ci/controller/internal/stats"
 )
 
 // Tags managed by the controller.
@@ -35,20 +44,43 @@ type Thresholds struct {
 	// Regression is the with-skill drop below the stable version, per required
 	// model, that is still tolerated. A bigger drop blocks promotion.
 	Regression float64
+	// Confidence is the level of the confidence intervals, for example 0.95.
+	Confidence float64
 }
 
 // DefaultThresholds returns the bands from CONTRACT.md.
 func DefaultThresholds() Thresholds {
-	return Thresholds{Helps: 0.05, Hurts: -0.10, Promote: 0.10, Demote: -0.10, Obsolete: 0.80, Regression: 0.05}
+	return Thresholds{Helps: 0.05, Hurts: -0.10, Promote: 0.10, Demote: -0.10, Obsolete: 0.80, Regression: 0.05, Confidence: 0.95}
 }
 
-// Verdict classifies one result. Scores are compared at two decimals.
-func (t Thresholds) Verdict(lift, without float64) v1alpha1.Verdict {
+// Percent renders the confidence level as text, 0.95 as "95%".
+func (t Thresholds) Percent() string {
+	return strconv.FormatFloat(math.Round(t.Confidence*1000)/10, 'f', -1, 64) + "%"
+}
+
+// CI returns the confidence interval of mean(a) minus mean(b) at the
+// configured confidence: the lift when a and b are the with and without-skill
+// trial scores of one run, the difference between two versions when they are
+// the with-skill scores of both. It is nil when either sample has fewer than
+// two scores, which sends the caller to the fixed-number rules.
+func (t Thresholds) CI(a, b []float64) *stats.Interval {
+	ci, ok := stats.WelchDiff(a, b, t.Confidence)
+	if !ok {
+		return nil
+	}
+	return &ci
+}
+
+// Verdict classifies one result. Scores are compared at two decimals. With a
+// lift interval, Helps also needs the interval's lower bound above zero and
+// Hurts its upper bound below zero; a lift that big but not beyond noise is
+// Neutral. A nil interval (no trial scores) uses the lift bands alone.
+func (t Thresholds) Verdict(lift, without float64, ci *stats.Interval) v1alpha1.Verdict {
 	lift, without = round2(lift), round2(without)
 	switch {
-	case lift >= t.Helps-epsilon:
+	case lift >= t.Helps-epsilon && (ci == nil || ci.Lower > 0):
 		return v1alpha1.VerdictHelps
-	case lift <= t.Hurts+epsilon:
+	case lift <= t.Hurts+epsilon && (ci == nil || ci.Upper < 0):
 		return v1alpha1.VerdictHurts
 	case without >= t.Obsolete-epsilon:
 		return v1alpha1.VerdictObsolete
@@ -67,6 +99,8 @@ type Result struct {
 	Lift float64
 	// Verdict is the classification of this result.
 	Verdict v1alpha1.Verdict
+	// LiftCI is the confidence interval of Lift; nil without trial scores.
+	LiftCI *stats.Interval
 	// Rejected is true when Tier 1 or Tier 2 failed. A rejected result is
 	// finished (Succeeded is true) but has no usable lift.
 	Rejected bool
@@ -82,9 +116,16 @@ type Outcome struct {
 	Demote bool
 	// Obsolete means every required model does fine without the skill.
 	Obsolete bool
-	// Regressed means the digest scores worse than the stable version and
-	// must not replace it.
+	// Regressed means the digest scores worse than the stable version, beyond
+	// noise, and must not replace it.
 	Regressed bool
+	// Inconclusive means the digest scores lower than the stable version by
+	// more than the tolerance, but the interval of the difference includes
+	// zero. It must not replace the stable version either.
+	Inconclusive bool
+	// Unproven means a required model reached the promote lift, but its
+	// confidence interval does not exclude zero.
+	Unproven bool
 	// Rejected means a required model's run failed Tier 1 or Tier 2. The digest
 	// never gets beta or stable and loses stable if it has it.
 	Rejected bool
@@ -108,8 +149,10 @@ func (t Thresholds) Evaluate(results []Result) Outcome {
 			continue
 		}
 		lift := round2(r.Lift)
-		out.Demote = out.Demote || lift <= t.Demote+epsilon
-		allPromote = allPromote && lift >= t.Promote-epsilon
+		out.Demote = out.Demote || (lift <= t.Demote+epsilon && (r.LiftCI == nil || r.LiftCI.Upper < 0))
+		beyondNoise := r.LiftCI == nil || r.LiftCI.Lower > 0
+		out.Unproven = out.Unproven || (lift >= t.Promote-epsilon && !beyondNoise)
+		allPromote = allPromote && lift >= t.Promote-epsilon && beyondNoise
 		allObsolete = allObsolete && r.Verdict == v1alpha1.VerdictObsolete
 	}
 	if required == 0 {
@@ -129,41 +172,73 @@ type Score struct {
 	Required bool
 	// With is the with-skill score.
 	With float64
+	// Samples are the with-skill trial scores; empty when the runner sent none.
+	Samples []float64
 }
 
-// Regression is a required model on which a candidate scores worse than the stable version.
+// Regression is a required model on which a candidate scores lower than the
+// stable version by more than the tolerance.
 type Regression struct {
 	// Model identifies the model.
 	Model string
-	// Candidate is the with-skill score of the candidate digest.
+	// Candidate is the with-skill score of the candidate digest: the mean of
+	// its trial scores, or the run's score without trial scores.
 	Candidate float64
-	// Stable is the with-skill score of the current stable digest.
+	// Stable is the same for the current stable digest.
 	Stable float64
+	// CI is the confidence interval of Candidate minus Stable; nil when either
+	// side has no trial scores, and the drop is taken at face value.
+	CI *stats.Interval
+	// Inconclusive is true when CI includes zero: the drop may be noise.
+	Inconclusive bool
 }
+
+// Diff returns Candidate minus Stable.
+func (r Regression) Diff() float64 { return r.Candidate - r.Stable }
 
 // Regressions compares a candidate with the current stable digest. It returns
 // the required models where the candidate scores lower by more than the
-// tolerance. Models only one side has a score for, and optional models, are
-// not compared.
+// tolerance. A drop whose confidence interval reaches zero or above is marked
+// Inconclusive; without trial scores on both sides every drop counts as real.
+// Models only one side has a score for, and optional models, are not compared.
 func (t Thresholds) Regressions(candidate, stable []Score) []Regression {
-	base := make(map[string]float64, len(stable))
+	base := make(map[string]Score, len(stable))
 	for _, s := range stable {
-		base[s.Model] = s.With
+		base[s.Model] = s
 	}
 	var out []Regression
 	for _, c := range candidate {
-		with, ok := base[c.Model]
-		if ok && c.Required && round2(with-c.With) > t.Regression+epsilon {
-			out = append(out, Regression{Model: c.Model, Candidate: c.With, Stable: with})
+		s, ok := base[c.Model]
+		if !ok || !c.Required {
+			continue
+		}
+		reg := Regression{Model: c.Model, Candidate: c.With, Stable: s.With}
+		if ci := t.CI(c.Samples, s.Samples); ci != nil {
+			reg.CI, reg.Candidate, reg.Stable = ci, stats.Mean(c.Samples), stats.Mean(s.Samples)
+			reg.Inconclusive = ci.Upper >= 0
+		}
+		if round2(reg.Diff()) < -t.Regression-epsilon {
+			out = append(out, reg)
 		}
 	}
 	return out
 }
 
-// Block marks the outcome Regressed and withholds promotion when regs is not empty.
+// Confirmed returns the regressions that hold beyond noise.
+func Confirmed(regs []Regression) []Regression {
+	return slices.DeleteFunc(slices.Clone(regs), func(r Regression) bool { return r.Inconclusive })
+}
+
+// Block withholds promotion when regs is not empty. A confirmed regression
+// marks the outcome Regressed; a drop that may be noise marks it Inconclusive.
 func (o Outcome) Block(regs []Regression) Outcome {
-	if len(regs) > 0 {
-		o.Regressed, o.Promote = true, false
+	for _, r := range regs {
+		if r.Inconclusive {
+			o.Inconclusive = true
+		} else {
+			o.Regressed = true
+		}
+		o.Promote = false
 	}
 	return o
 }

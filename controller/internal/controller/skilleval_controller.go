@@ -213,11 +213,13 @@ func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1
 func applyResult(se *v1alpha1.SkillEval, res runner.Result, th policy.Thresholds) {
 	st := &se.Status
 	st.WithSkill, st.WithoutSkill, st.Lift, st.Verdict = "", "", "", ""
+	setSamples(st, res.Samples)
+	refreshStats(se, th)
 	if res.HasScores() {
 		st.WithSkill = format(*res.WithSkill, "%.2f")
 		st.WithoutSkill = format(*res.WithoutSkill, "%.2f")
 		st.Lift = format(*res.Lift, "%+.2f")
-		st.Verdict = th.Verdict(*res.Lift, *res.WithoutSkill)
+		st.Verdict = th.Verdict(*res.Lift, *res.WithoutSkill, liftCI(se, th))
 	}
 	if res.Rejected() {
 		st.Verdict = v1alpha1.VerdictRejected
@@ -240,10 +242,15 @@ func rejectedRun(se *v1alpha1.SkillEval) bool {
 // afterSucceeded publishes the scores and publication status as metrics and
 // applies the tag policy. A rejected run may have no scores.
 func (r *SkillEvalReconciler) afterSucceeded(ctx context.Context, se *v1alpha1.SkillEval) error {
+	if refreshStats(se, r.Config.Thresholds) { // the confidence flag may have changed since the run
+		if err := r.Status().Update(ctx, se); err != nil {
+			return fmt.Errorf("updating statistics of %s: %w", se.Name, err)
+		}
+	}
 	with, without, lift, err := scores(se)
 	switch {
 	case err == nil:
-		metrics.ObserveScores(se, with, without, lift)
+		metrics.ObserveScores(se, with, without, lift, liftCI(se, r.Config.Thresholds))
 	case !rejectedRun(se):
 		return err
 	}

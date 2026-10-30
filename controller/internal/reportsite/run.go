@@ -17,6 +17,9 @@ const (
 	// conditionRegressed is set by the tag policy on a version that scores
 	// worse than the stable one.
 	conditionRegressed = "Regressed"
+	// conditionInconclusive is set on a version that scores lower than the
+	// stable one, but not beyond noise.
+	conditionInconclusive = "Inconclusive"
 	// conditionRetried is set when a run was started again after an
 	// infrastructure failure; its message is the failure of the earlier Job.
 	conditionRetried = "Retried"
@@ -80,6 +83,16 @@ type Run struct {
 	Conditions []Condition
 	// Regressed is the message of the Regressed condition, empty when absent.
 	Regressed string
+	// Inconclusive is the message of the Inconclusive condition, empty when absent.
+	Inconclusive string
+	// N is the number of trials behind the scores, with-skill/without-skill
+	// (9/9); CI is the lift interval as the controller stores it
+	// ([+0.41, +0.73]). Both are empty for a runner that sent no trial scores.
+	N, CI string
+	// CILower is the lower bound of CI; zero when CI is empty.
+	CILower float64
+	// Confidence is the level of CI as text, for example 95%.
+	Confidence string
 	// Retries is how often the controller started the run again after an infrastructure failure.
 	Retries int
 	// Retried is the message of the Retried condition: the failure that caused the last retry.
@@ -93,8 +106,9 @@ type Run struct {
 	Findings []string
 }
 
-func newRun(se *v1alpha1.SkillEval) Run {
+func newRun(se *v1alpha1.SkillEval, confidence string) Run {
 	r := Run{
+		N: se.Status.N, CI: se.Status.LiftCI, Confidence: confidence,
 		Name: se.Name, Skill: se.Spec.Skill, Version: se.Spec.Version, Digest: se.Spec.Digest,
 		Agent: se.Spec.Agent, Model: se.Spec.Model, Required: se.Spec.Required, Attempts: se.Spec.Attempts,
 		Trigger: string(se.Spec.Trigger), Phase: string(se.Status.Phase), Verdict: string(se.Status.Verdict),
@@ -104,6 +118,11 @@ func newRun(se *v1alpha1.SkillEval) Run {
 	}
 	if t := se.Status.Tiers; t != nil {
 		r.Tier1, r.Tier2, r.Tier3 = t.Tier1, t.Tier2, t.Tier3
+	}
+	if lower, _, ok := parseCI(r.CI); ok {
+		r.CILower = lower
+	} else {
+		r.CI, r.N = "", ""
 	}
 	r.Publication, r.Findings = se.Status.Publication, se.Status.Findings
 	if r.Phase == "" {
@@ -117,6 +136,9 @@ func newRun(se *v1alpha1.SkillEval) Run {
 		if c.Type == conditionRegressed && c.Status == metav1.ConditionTrue {
 			r.Regressed = c.Message
 		}
+		if c.Type == conditionInconclusive && c.Status == metav1.ConditionTrue {
+			r.Inconclusive = c.Message
+		}
 		if c.Type == conditionRetried && c.Status == metav1.ConditionTrue {
 			r.Retried = c.Message
 		}
@@ -127,6 +149,37 @@ func newRun(se *v1alpha1.SkillEval) Run {
 func condition(c metav1.Condition) Condition {
 	return Condition{Type: c.Type, Status: string(c.Status), Reason: c.Reason, Message: c.Message, Changed: c.LastTransitionTime.UTC()}
 }
+
+// parseCI reads an interval as the controller stores it, "[+0.41, +0.73]".
+func parseCI(text string) (lower, upper float64, ok bool) {
+	lo, hi, found := strings.Cut(strings.Trim(text, "[]"), ", ")
+	var err1, err2 error
+	lower, err1 = strconv.ParseFloat(lo, 64)
+	upper, err2 = strconv.ParseFloat(hi, 64)
+	return lower, upper, found && err1 == nil && err2 == nil
+}
+
+// Evidence says how sure the lift is, for example "95% CI +0.41 to +0.73, n=9/9";
+// empty for a run without trial scores.
+func (r Run) Evidence() string {
+	if r.CI == "" {
+		return ""
+	}
+	lo, hi, _ := strings.Cut(strings.Trim(r.CI, "[]"), ", ")
+	return r.Confidence + " CI " + lo + " to " + hi + ", n=" + r.N
+}
+
+// LiftEvidence is the lift with its evidence, for example
+// "+0.59 (95% CI +0.41 to +0.73, n=9/9)"; just the lift without trial scores.
+func (r Run) LiftEvidence() string {
+	if e := r.Evidence(); e != "" {
+		return r.Lift.Text + " (" + e + ")"
+	}
+	return r.Lift.Text
+}
+
+// BeyondNoise reports whether the lift interval exists and lies above zero.
+func (r Run) BeyondNoise() bool { return r.CI != "" && r.CILower > 0 }
 
 // Duration is the time from creation to completion, zero while the run is open.
 func (r Run) Duration() time.Duration {
@@ -178,7 +231,7 @@ func (r Run) VerdictStatus() Status {
 		return Status{"failed", r.Verdict}
 	case v1alpha1.VerdictRegressed:
 		return Status{"regressed", r.Verdict}
-	case v1alpha1.VerdictNeutral, v1alpha1.VerdictObsolete:
+	case v1alpha1.VerdictNeutral, v1alpha1.VerdictObsolete, v1alpha1.VerdictInconclusive:
 		return Status{"neutral", r.Verdict}
 	default:
 		return Status{}

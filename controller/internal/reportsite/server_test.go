@@ -57,7 +57,7 @@ func TestPages(t *testing.T) {
 				"Held back", "claude-code/claude-haiku-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.95",
 				"On stable", "Lift is +0.58 or more on every required model (claude-haiku-5-5 lowest).",
 				"Meets threshold", "v1.1.0 holds stable", "Waiting", "0 of 2 required models have finished.",
-				">stable<", ">beta<", "with 0.95 · without 0.37", "optional", "needs lift +0.10 on every required model and no regression",
+				">stable<", ">beta<", "with 0.95 · without 0.37", "optional", "needs lift +0.10 on every required model, the range above zero, and no regression",
 			},
 		},
 		{

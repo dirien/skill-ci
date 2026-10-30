@@ -12,6 +12,9 @@ import (
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 )
 
+// SafeToEvictAnnotation tells the cluster autoscaler not to evict a pod during scale-down.
+const SafeToEvictAnnotation = "cluster-autoscaler.kubernetes.io/safe-to-evict"
+
 // Names from the runner Job contract in CONTRACT.md.
 const (
 	// ContainerName is the runner container; its termination message carries the result.
@@ -78,7 +81,11 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 			// A stuck run (image pull backoff, hung agent) must free its slot.
 			ActiveDeadlineSeconds: new(int64(2 * 60 * 60)),
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+					// A scale-down must not kill an eval that runs for half an hour.
+					Annotations: map[string]string{SafeToEvictAnnotation: "false"},
+				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: ServiceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,

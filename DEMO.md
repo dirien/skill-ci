@@ -8,7 +8,7 @@ The point of the demo: a skill is an OCI artifact in a registry, and a Kubernete
 
 - The three skills are demo material written for this talk. `acme-release-notes` teaches a made-up format (`ACME-RN/2`), which is why no model knows it without the skill and the lift is large.
 - `acme-release-notes` v1.2.0 is a deliberately worse rewrite whose rules contradict its own evals. It exists to show the gate firing.
-- Each score is one SkillEval: 3 eval cases, one attempt per arm. It is a small sample, not a benchmark.
+- Each score is one SkillEval: 3 eval cases, 3 attempts per arm, so 9 trials per arm. It is a small sample, not a benchmark. The pre-baked results below were recorded before the statistical gate, with one attempt per arm.
 - Every SkillEval takes 11 to 13 minutes. Nothing below waits for a run except the one optional live trigger, and its result arrives after the talk.
 
 ## The state the beats rely on
@@ -40,6 +40,8 @@ Three things to know before you talk about these numbers:
 3. **python-docstrings does not become Obsolete.** The no-skill baseline is 0.52 to 0.59, below the 0.80 Obsolete line. It is a good example of the other failure mode: the skill helps strong models and barely moves the small one (+0.03), so promotion, which needs +0.10 on every required model, stays blocked.
 
 ## Controller version check (do this first)
+
+For the statistical gate (Inconclusive, confidence intervals) run controller 0.5.0 with runner 0.5.1 and apply the CRD first (`kubectl apply --server-side -f charts/skill-ci-controller/crds/`, which `make deploy` does). Older runs have no trial scores and are judged by the fixed thresholds.
 
 Controller images before 0.2.1 have two defects that show up exactly in this state. Both are fixed in 0.2.1 (`controller/internal/controller/siblings.go` and `policy.go`, see CONTRACT.md):
 
@@ -212,12 +214,42 @@ kubectl -n skill-ci get skilleval acme-release-notes-v1-2-0-claude-haiku-5-5 -o 
 Expected output (the stable version named is the one holding `stable` when the gate last ran, v1.1.0 once the controller has settled, v1.0.0 in an older run; both scored 0.95):
 
 ```text
-claude-code/claude-haiku-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.95; claude-code/claude-sonnet-5-5 scores 0.70 with v1.2.0, stable v1.1.0 scored 0.95 (tolerance 0.05)
+claude-code/claude-haiku-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.95; claude-code/claude-sonnet-5-5 scores 0.70 with v1.2.0, stable v1.1.0 scored 0.95 (tolerance 0.05; fixed rule, no trial scores to test it)
 ```
+
+The pre-baked v1.2.0 runs come from a runner that did not send trial scores, so controller 0.5.0 judges them by the fixed tolerance and says so at the end of the message. Runs made by runner 0.5.1 carry their trial scores and the message gains the numbers (next section).
 
 Then `make status`: v1.2.0 carries `beta` (it is the newest) but not `stable`. Point out the opus row: `Helps` at 0.71, because opus is optional and never gates. Kubernetes Events with reason `WorseThanStable` exist too, but events expire after an hour, so do not rely on `kubectl get events` for a pre-run state.
 
 Be honest: v1.2.0 was written to fail. The real-world version of this is a well-meant edit that fixes one case and breaks two.
+
+#### Regressed versus Inconclusive (the talking point: the gate needs evidence, not one number)
+
+Say: the same skill version scored 0.95 on one run and 0.87 on the next. A gate that fires at "more than 0.05 below stable" would have held a good version back on that noise. So the gate does not compare two numbers. Each run keeps its 9 trial scores per arm and the controller puts a 95% confidence interval around the difference.
+
+What the audience sees depends on the evidence. After a re-run on runner 0.5.1 (`make demo-push VERSION=v1.2.0`, or `make retrigger` for an existing version), with the stable version at 0.95:
+
+```bash
+kubectl -n skill-ci get skillevals -l skillci.dev/skill=acme-release-notes -o wide | grep v1-2-0
+```
+
+```text
+v1.2.0  claude-haiku-5-5    Succeeded  0.70  0.36  +0.34  Regressed     ...  [+0.30, +0.38]  9/9
+v1.2.0  claude-sonnet-5-5   Succeeded  0.87  0.31  +0.56  Inconclusive  ...  [+0.38, +0.74]  9/9
+```
+
+These two rows are illustrative (the numbers come from the unit-test fixtures in `controller/internal/policy`), not a measured state. Do not show them as a pre-run result unless you made the run. What the two conditions say:
+
+- **Regressed**: `claude-code/claude-haiku-5-5 scores 0.70 with v1.2.0, stable v1.1.0 scored 0.95: difference -0.25, 95% CI [-0.26, -0.24] (tolerance 0.05)`. The whole interval is below zero: the drop is real. Warning event `WorseThanStable`.
+- **Inconclusive**: `claude-code/claude-sonnet-5-5: 0.87 with v1.2.0 vs 0.95 with stable v1.1.0, difference -0.08, 95% CI [-0.18, +0.03]; not enough evidence to call it a regression`. The drop is bigger than the 0.05 tolerance, but the interval reaches above zero, so noise could explain it. Normal event `NotEnoughEvidence`.
+
+```bash
+kubectl -n skill-ci get skilleval acme-release-notes-v1-2-0-claude-sonnet-5-5 -o jsonpath='{.status.conditions[?(@.type=="Inconclusive")].message}{"\n"}'
+```
+
+Both keep `stable` where it is and give the version `beta`. The difference is what you tell the author: Regressed means fix it, Inconclusive means run more trials before deciding either way. On the reporting site the Inconclusive verdict is neutral (hollow marker, the word "Inconclusive"), and the skill page says "Not proven" with the numbers and "The stable version stays; more trials would show whether the drop is real."
+
+The same rule works for promotion: a lift of +0.12 whose interval runs from -0.05 to +0.29 does not earn `stable`, because the skill may not help at all. The PolicyApplied message and the skill page say "not beyond noise". Set `controller.thresholds.confidence` to `"0.99"` to ask for more evidence, `"0.90"` for less.
 
 ### Beat 6: a skill that does not clear the bar (about 2 minutes)
 

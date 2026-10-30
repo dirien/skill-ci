@@ -5,6 +5,7 @@ Harbor:               {{ .Values.controller.harborUrl }} (project "{{ .Values.co
 Runner image:         {{ include "skill-ci-controller.image" (dict "image" .Values.controller.runnerImage "defaultTag" "") }}
 Model list ConfigMap: {{ .Values.controller.modelsConfigMap }}
 Dry run:              {{ .Values.controller.dryRun }}
+Gate confidence:      {{ if ne (toString .Values.controller.thresholds.confidence) "" }}{{ .Values.controller.thresholds.confidence }} (promote only when the lift interval is above 0; Regressed only when the drop interval is below 0){{ else }}controller default{{ end }}
 
 The chart does not create the namespace, the model list ConfigMap or (by default) any
 Secret. These must exist:
@@ -12,6 +13,9 @@ Secret. These must exist:
   Secret {{ .Values.secrets.harborWebhook.existingSecret }}  key {{ .Values.secrets.harborWebhook.tokenKey }}   (webhook auth{{ if .Values.secrets.harborWebhook.optional }}, optional: without it every webhook is accepted{{ end }})
   Secret {{ .Values.secrets.llmKeys.existingSecret }}  keys anthropic, openai (optional)   (runner Jobs; the controller hardcodes this name)
   ConfigMap {{ .Values.controller.modelsConfigMap }}  key models.yaml
+
+The SkillEval CRD gained status fields (liftCI, samples). Helm does not upgrade crds/, so after
+upgrading from a chart before 0.5.0 run: kubectl apply --server-side -f charts/skill-ci-controller/crds/
 
 Try it:
   kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "skill-ci-controller.fullname" . }}

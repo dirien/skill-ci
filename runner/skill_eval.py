@@ -42,6 +42,7 @@ RETRY_DELAYS = (2, 5, 10)  # seconds to wait before each retry of a failed oras 
 MAX_FINDINGS = 5
 MAX_FINDING_CHARS = 200
 MAX_CATALOG_SKILLS = 200  # other skills compared against in Tier 2
+MAX_SAMPLES = 50  # per-trial scores kept per arm; 3 cases x 3 attempts give 9
 SEMVER_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
@@ -59,6 +60,9 @@ DEFAULTS = {
     "SANDBOX_MEMORY_MB": "2048",
     # Trials running at once per eval; the controller caps how many evals run at once.
     "TRIAL_CONCURRENCY": "2",
+    # Every trial installs the agent CLI in its sandbox; on a busy cluster that
+    # outlasts Harbor's 360 s agent setup timeout.
+    "TIMEOUT_MULTIPLIER": "2",
     # SkillEvaluator validation profile for Tier 1. See runner/README or DEMO.md "Profile".
     "TIER1_PROFILE": "external",
 }
@@ -80,6 +84,14 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
             raise EvalError(f"{name} must be a positive integer, got {config[name]!r}")
+    try:
+        multiplier = float(config["TIMEOUT_MULTIPLIER"])
+    except ValueError:
+        multiplier = 0.0
+    if multiplier <= 0:
+        raise EvalError(
+            f"TIMEOUT_MULTIPLIER must be a positive number, got {config['TIMEOUT_MULTIPLIER']!r}"
+        )
     return config
 
 
@@ -221,6 +233,7 @@ def validate_command(
             "--agent-model", f"{config['AGENT']}={config['MODEL']}",
             "--n-attempts", config["ATTEMPTS"],
             "--n-concurrent", config["TRIAL_CONCURRENCY"],
+            "--timeout-multiplier", config["TIMEOUT_MULTIPLIER"],
             "--results-dir", str(results),
         ]  # fmt: skip
     return cmd
@@ -495,6 +508,24 @@ def newest_result(results: Path) -> Path:
     return candidates[-1]
 
 
+def trial_scores(entry: Mapping[str, Any], arm: str) -> list[float]:
+    """Return the per-trial overall scores of one arm (``with_skill`` or ``without_skill``).
+
+    SkillEvaluator lists every attempt of every case under
+    ``pass_at_k.<arm>.cases.<case>.attempts[].score``; the arm's overall score is their mean.
+    Scores are rounded to two decimals and capped at ``MAX_SAMPLES``. An older result without
+    that block gives an empty list, and the controller then uses its fixed-number rules.
+    """
+    cases = ((entry.get("pass_at_k") or {}).get(arm) or {}).get("cases") or {}
+    scores = [
+        round(float(attempt["score"]), 2)
+        for case in cases.values()
+        for attempt in case.get("attempts") or []
+        if isinstance(attempt.get("score"), int | float)
+    ]
+    return scores[:MAX_SAMPLES]
+
+
 def read_scores(results: Path, agent: str) -> dict[str, Any]:
     """Extract the scores for ``agent`` from the newest ``result.json`` under ``results``."""
     path = newest_result(results)
@@ -511,13 +542,18 @@ def read_scores(results: Path, agent: str) -> dict[str, Any]:
         errors = "; ".join(map(str, result.get("execution_errors", []))) or result.get("error")
         raise EvalError(f"no scores in result.json: {errors or 'unknown reason'}")
     with_skill, without_skill = round(with_skill, 2), round(without_skill, 2)
-    return {
+    payload: dict[str, Any] = {
         "withSkill": with_skill,
         "withoutSkill": without_skill,
         "lift": round(with_skill - without_skill, 2),
         "agent": agent,
         "model": entry.get("model", ""),
     }
+    samples = {"withSkill": trial_scores(entry, "with_skill")}
+    samples["withoutSkill"] = trial_scores(entry, "without_skill")
+    if all(samples.values()):
+        payload["samples"] = samples
+    return payload
 
 
 def tier3_tier(results: Path) -> TierResult:
