@@ -1,0 +1,5 @@
+# Python tools the CI workflows run (see .github/workflows). Dependabot keeps them current.
+# The runner image has its own pins in runner/Dockerfile; the tests need none of them.
+pytest==9.2.0
+ruff==0.17.3
+yamllint==1.38.0

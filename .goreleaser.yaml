@@ -1,0 +1,96 @@
+version: 2
+
+project_name: skill-ci-controller
+
+env:
+  - CGO_ENABLED=0
+
+# The controller is a Go module in controller/. The runner image and the Helm chart are published
+# by .github/workflows/release.yaml, next to this config.
+builds:
+  - id: skill-ci-controller
+    binary: skill-ci-controller
+    dir: controller
+    main: ./cmd/manager
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.FullCommit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+# One multi-arch image per release (a single dockers_v2 entry replaces the exporter's per-arch
+# dockers + docker_manifests, which GoReleaser has phased out). The Dockerfile copies the
+# prebuilt binary from $TARGETPLATFORM/.
+dockers_v2:
+  - images:
+      - ghcr.io/dirien/skill-ci-controller
+    tags:
+      - "{{ .Version }}"
+      # Release candidates (v1.0.0-rc.1) do not move latest.
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    dockerfile: controller/Dockerfile.goreleaser
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: skill-ci-controller
+      org.opencontainers.image.description: Kubernetes controller that evaluates agent skills pushed to Harbor
+      org.opencontainers.image.url: https://github.com/dirien/skill-ci
+      org.opencontainers.image.source: https://github.com/dirien/skill-ci
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+    sbom: true
+
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+docker_signs:
+  - cmd: cosign
+    artifacts: images
+    output: true
+    args:
+      - sign
+      - "${artifact}"
+      - "--yes"
+
+sboms:
+  - artifacts: archive
+
+release:
+  # v1.0.0-rc.1 is published as a pre-release.
+  prerelease: auto
+
+changelog:
+  use: github
+  groups:
+    - title: "Features"
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: "Others"
+      order: 999

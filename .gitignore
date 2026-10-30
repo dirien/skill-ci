@@ -11,3 +11,4 @@ results/
 *.kubeconfig
 # Pulled eval reports
 reports/
+dist/

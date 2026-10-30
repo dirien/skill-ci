@@ -31,7 +31,9 @@ CRD_CATALOG ?= https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.G
 # Optional lint tools.
 SHELLCHECK ?= shellcheck
 YAMLLINT ?= uvx yamllint
-MARKDOWNLINT ?= npx --yes markdownlint-cli2
+MARKDOWNLINT ?= npx --yes markdownlint-cli2@0.24.0
+ACTIONLINT ?= actionlint
+GORELEASER ?= goreleaser
 
 export BUILDCTL DOCKER_CONFIG DOCR_DOCKER_CONFIG CONTROLLER_TAG RUNNER_TAG REGISTRY
 
@@ -107,11 +109,19 @@ check-skills: ## Dataset-only check of the sample skills (no LLM calls)
 
 .PHONY: lint
 lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
-	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh
-	$(YAMLLINT) -c .yamllint.yaml infra demo .yamllint.yaml .markdownlint.yaml
+	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh .github/scripts/*.sh
+	$(YAMLLINT) -c .yamllint.yaml infra demo .github .goreleaser.yaml .yamllint.yaml .markdownlint.yaml
 	$(MARKDOWNLINT) README.md DEMO.md "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
+
+.PHONY: lint-workflows
+lint-workflows: ## actionlint on .github/workflows (needs actionlint)
+	$(ACTIONLINT)
+
+.PHONY: release-snapshot
+release-snapshot: ## Dry-run the release: controller binaries, archives and image, no publish or signing (needs goreleaser, docker)
+	$(GORELEASER) release --snapshot --clean --skip=publish,sign,sbom
 
 .PHONY: chart-crds
 chart-crds: ## Copy config/crd into the chart (crds/ is generated, never hand-edited)

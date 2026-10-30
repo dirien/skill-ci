@@ -31,11 +31,48 @@ reports/               Eval reports downloaded by `make report`
 harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox
 skillevaluator-patch/  Eleven-hunk patch: that environment, its sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
+.github/               CI and release workflows, Dependabot (see Releases)
+.goreleaser.yaml       Controller binaries and image of a release
 ```
 
 ## Helm chart
 
 `charts/skill-ci-controller/` packages the controller (CRD, RBAC, runner ServiceAccount, Deployment, Service, optional ServiceMonitor) as a Helm 4 chart. `make deploy` installs it (and applies the CRD first, because Helm never upgrades `crds/`); `kubectl apply -k config/` still works as a plain-manifest alternative. `make chart-crds` copies `config/crd/` into the chart, `make chart-lint` runs `helm lint --strict`, kubeconform, yamllint and a packaging check. See [the chart README](charts/skill-ci-controller/README.md) for values, adopting an existing install with `--take-ownership` and pushing the chart to an OCI registry.
+
+## Releases
+
+Pushing a tag `vX.Y.Z` runs `.github/workflows/release.yaml` and publishes everything from the tag with the workflow's `GITHUB_TOKEN` (no other secret). Tags with a suffix (`v0.7.0-rc.1`) are pre-releases and do not move `latest`.
+
+| What | Where | Built by |
+| ---- | ----- | -------- |
+| Controller binaries (linux, darwin; amd64, arm64), checksums, SBOMs, release notes | GitHub release | GoReleaser (`.goreleaser.yaml`) |
+| Controller image, linux/amd64 and linux/arm64 | `ghcr.io/dirien/skill-ci-controller:X.Y.Z` | GoReleaser, `controller/Dockerfile.goreleaser` |
+| Runner image, linux/amd64 | `ghcr.io/dirien/skill-ci-runner:X.Y.Z` | `docker/build-push-action`, `runner/Dockerfile` |
+| Helm chart, version and appVersion `X.Y.Z` | `oci://ghcr.io/dirien/charts/skill-ci-controller` | `helm package` + `helm push` |
+
+The checksums file and the images are signed with Cosign (keyless, the workflow identity).
+
+The published chart differs from `charts/skill-ci-controller/` in one way: its default images are the release's GHCR images and it has no `docr` pull secret (`.github/scripts/chart-release-values.sh`). The chart in the repository keeps the DOCR defaults, which is what the demo cluster uses.
+
+```bash
+helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version X.Y.Z \
+  --namespace skill-ci --create-namespace
+```
+
+The GHCR packages of a private repository are private. Make them public in the package settings, or give the cluster pull credentials: for the controller `--set 'imagePullSecrets[0].name=ghcr'`, and for the runner Job a Secret named `docr`, because the controller hardcodes that pull secret name on the Job (it is also the credential for the task images). Helm never upgrades `crds/`, so apply the CRD of the new version before an upgrade: `helm show crds oci://ghcr.io/dirien/charts/skill-ci-controller --version X.Y.Z | kubectl apply --server-side -f -`.
+
+The demo flow is unchanged: `make build` pushes both images to DOCR with the in-cluster BuildKit, `make deploy` installs the chart from the working tree. `make release-snapshot` dry-runs the GoReleaser build locally (needs `goreleaser` and Docker).
+
+### CI
+
+| Workflow | Trigger | Checks |
+| -------- | ------- | ------ |
+| `ci.yaml` | push and PR on main | `go vet`, `go test -race`, `go build`; pytest; Docker build of both images (no push); `goreleaser check` and a snapshot release |
+| `lint.yaml` | push and PR on main | golangci-lint; ruff check and format; `make lint` (shellcheck, yamllint, markdownlint, JSON, sample skills); actionlint |
+| `chart.yaml` | push and PR on main | generated code and CRDs up to date; `make chart-lint`; the release chart packages and renders with the GHCR defaults |
+| `release.yaml` | tag `v*` | tests, then GoReleaser, runner image and chart as above |
+
+Dependabot (`.github/dependabot.yaml`) keeps the actions, Go modules, Python pins and Dockerfile base images current.
 
 ## Run the demo
 

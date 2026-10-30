@@ -1,0 +1,70 @@
+name: Chart
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  chart:
+    name: Helm lint and template
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+
+      # The DeepCopy code, the CRD in config/crd and its copy in the chart are generated.
+      - name: Generated files are up to date
+        run: |
+          make -C controller generate manifests
+          make chart-crds
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --short
+            git diff
+            echo "::error::Generated files are stale. Run 'make -C controller generate manifests chart-crds' and commit."
+            exit 1
+          fi
+
+      - name: Chart lint (helm lint --strict, kubeconform, yamllint)
+        run: >-
+          uv run --no-project --with-requirements .github/requirements-ci.txt
+          make chart-lint YAMLLINT=yamllint KUBECONFORM="$(go env GOPATH)/bin/kubeconform"
+
+      # The same steps the release workflow runs, so a broken release chart shows up before a tag.
+      - name: Release chart packages with GHCR defaults
+        run: |
+          release_chart="$RUNNER_TEMP/skill-ci-controller"
+          cp -r charts/skill-ci-controller "$release_chart"
+          .github/scripts/chart-release-values.sh "$release_chart" 0.0.0-ci
+          helm lint --strict "$release_chart"
+          helm package "$release_chart" --version 0.0.0-ci --app-version 0.0.0-ci --destination "$RUNNER_TEMP/out"
+          helm template skill-ci "$RUNNER_TEMP"/out/skill-ci-controller-0.0.0-ci.tgz --namespace skill-ci \
+            | grep -F -e 'image: "ghcr.io/dirien/skill-ci-controller:0.0.0-ci"' -e '--runner-image=ghcr.io/dirien/skill-ci-runner:0.0.0-ci'

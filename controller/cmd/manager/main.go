@@ -28,6 +28,13 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/webhook"
 )
 
+// Build information, set with -ldflags "-X main.version=..." by GoReleaser.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -94,6 +101,7 @@ func run() error {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&logOpts)))
 	setupLog := ctrl.Log.WithName("setup")
+	setupLog.Info("starting skill-ci controller", "version", version, "commit", commit, "date", date)
 
 	u, err := url.Parse(harborURL)
 	if err != nil || u.Host == "" {
