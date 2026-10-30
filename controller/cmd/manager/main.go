@@ -77,6 +77,7 @@ func run() error {
 	flag.Float64Var(&th.Regression, "regression-tolerance", th.Regression, "With-skill drop below the stable version, per required model, that still allows promotion.")
 	flag.IntVar(&cfg.MaxConcurrentJobs, "max-concurrent-jobs", 4, "Running SkillEvals at once; the rest stay Pending.")
 	flag.IntVar(&trialBudget, "trial-budget", 200, "Max trials (attempts x 2 arms) per controller lifetime; 0 is unlimited.")
+	flag.IntVar(&cfg.MaxRetries, "max-retries", 1, "Fresh Jobs a run gets after an infrastructure failure (environment start timeout, lost connection, agent install, lost pod); 0 disables. Real results are never retried.")
 	flag.BoolVar(&cfg.DryRun, "dry-run", false, "Mark SkillEvals Planned and create no Jobs.")
 	flag.StringVar(&webhookAddr, "webhook-addr", ":8080", "Address for the webhook and health endpoints.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")

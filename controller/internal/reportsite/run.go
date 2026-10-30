@@ -12,9 +12,15 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/semver"
 )
 
-// conditionRegressed is the SkillEval condition the tag policy sets on a
-// version that scores worse than the stable one.
-const conditionRegressed = "Regressed"
+// Condition types the controller sets that the pages read.
+const (
+	// conditionRegressed is set by the tag policy on a version that scores
+	// worse than the stable one.
+	conditionRegressed = "Regressed"
+	// conditionRetried is set when a run was started again after an
+	// infrastructure failure; its message is the failure of the earlier Job.
+	conditionRetried = "Retried"
+)
 
 // Score is a score as the controller stores it, a string with two decimals,
 // plus its numeric value when it parses.
@@ -74,6 +80,10 @@ type Run struct {
 	Conditions []Condition
 	// Regressed is the message of the Regressed condition, empty when absent.
 	Regressed string
+	// Retries is how often the controller started the run again after an infrastructure failure.
+	Retries int
+	// Retried is the message of the Retried condition: the failure that caused the last retry.
+	Retried string
 	// Tier1, Tier2 and Tier3 are the tier statuses the runner reported;
 	// empty when it did not (runs before the tiers existed).
 	Tier1, Tier2, Tier3 string
@@ -89,7 +99,7 @@ func newRun(se *v1alpha1.SkillEval) Run {
 		Agent: se.Spec.Agent, Model: se.Spec.Model, Required: se.Spec.Required, Attempts: se.Spec.Attempts,
 		Trigger: string(se.Spec.Trigger), Phase: string(se.Status.Phase), Verdict: string(se.Status.Verdict),
 		With: newScore(se.Status.WithSkill), Without: newScore(se.Status.WithoutSkill), Lift: newScore(se.Status.Lift),
-		JobName: se.Status.JobName, Message: se.Status.Message, ReportDigest: se.Status.ReportDigest,
+		JobName: se.Status.JobName, Message: se.Status.Message, ReportDigest: se.Status.ReportDigest, Retries: se.Status.Retries,
 		Created: se.CreationTimestamp.UTC(),
 	}
 	if t := se.Status.Tiers; t != nil {
@@ -106,6 +116,9 @@ func newRun(se *v1alpha1.SkillEval) Run {
 		r.Conditions = append(r.Conditions, condition(c))
 		if c.Type == conditionRegressed && c.Status == metav1.ConditionTrue {
 			r.Regressed = c.Message
+		}
+		if c.Type == conditionRetried && c.Status == metav1.ConditionTrue {
+			r.Retried = c.Message
 		}
 	}
 	return r
@@ -281,6 +294,24 @@ func (r Run) Tier3Note() string {
 	default:
 		return "Tier 3 not run: the runner skipped the live trials."
 	}
+}
+
+// RetryNote says in a sentence that the run was started again after an
+// infrastructure failure, and what failed; empty when it was not retried.
+func (r Run) RetryNote() string {
+	var note string
+	switch {
+	case r.Retries <= 0:
+		return ""
+	case r.Retries == 1:
+		note = "Retried once after an infrastructure failure"
+	default:
+		note = "Retried " + strconv.Itoa(r.Retries) + " times after infrastructure failures; the last failure"
+	}
+	if r.Retried == "" {
+		return note + "."
+	}
+	return note + ": " + r.Retried
 }
 
 // HasReport reports whether the runner stored a report for this run.

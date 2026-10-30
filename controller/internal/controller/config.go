@@ -20,6 +20,9 @@ type Config struct {
 	Attempts int
 	// MaxConcurrentJobs caps Running SkillEvals; extra ones stay Pending.
 	MaxConcurrentJobs int
+	// MaxRetries is how many times a run that failed for an infrastructure
+	// reason is started again with a fresh Job; zero disables retries.
+	MaxRetries int
 	// DryRun records SkillEvals as Planned and creates no Jobs.
 	DryRun bool
 	// Thresholds are the verdict and tag policy bands.

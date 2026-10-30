@@ -56,7 +56,8 @@ spec:
   trigger: push                     # push | model-change | manual
 status:
   phase: Pending                    # Pending | Running | Succeeded | Failed | Planned (dry run)
-  jobName: ...
+  jobName: ...                      # <skilleval name>, or <name>-r1, <name>-r2 for a retry
+  retries: 1                        # optional: fresh Jobs started after an infrastructure failure (see "Retry")
   withSkill: "0.95"                 # strings, two decimals
   withoutSkill: "0.36"
   lift: "+0.59"
@@ -72,7 +73,7 @@ Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex withou
 
 ## Runner Job contract
 
-The controller creates one `batch/v1` Job per SkillEval (owner reference to the SkillEval, `backoffLimit: 0`, `ttlSecondsAfterFinished: 3600`, ServiceAccount `skill-eval-runner`, imagePullSecrets `docr`). Container `skill-eval` runs the runner image with no args and these env vars:
+The controller creates one `batch/v1` Job per SkillEval attempt, named like the SkillEval (a retry adds `-r1`, `-r2`, see "Retry"; cut short to fit 63 characters; the runner does not depend on the name) (owner reference to the SkillEval, `backoffLimit: 0`, `ttlSecondsAfterFinished: 3600`, ServiceAccount `skill-eval-runner`, imagePullSecrets `docr`). Container `skill-eval` runs the runner image with no args and these env vars:
 
 | Env | Example |
 |---|---|
@@ -160,7 +161,7 @@ Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repo
 
 ## Metrics (controller `:8081/metrics`)
 
-Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Gauge `skillci_publication{skill,version,model,status}` is 1 for the publication status of the run (`passed`, `failed` or `incomplete`; one series per skill, version and model, replaced when a rerun changes the status, absent for runs without a publication status). Gauge `skillci_rejected{skill,version}` is 1 when a required model's run failed Tier 1 or Tier 2. Counter `skillci_skillevals_total{phase}` counts phase transitions. Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_publication` series of its skill, version and model, and the `skillci_stable`, `skillci_obsolete`, `skillci_regressed` and `skillci_rejected` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
+Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Gauge `skillci_publication{skill,version,model,status}` is 1 for the publication status of the run (`passed`, `failed` or `incomplete`; one series per skill, version and model, replaced when a rerun changes the status, absent for runs without a publication status). Gauge `skillci_rejected{skill,version}` is 1 when a required model's run failed Tier 1 or Tier 2. Counter `skillci_skillevals_total{phase}` counts phase transitions. Counter `skillci_retries_total{reason}` counts runs started again after an infrastructure failure (`reason` is `env_start_timeout`, `connection_lost`, `agent_install`, `agent_setup` or `job_lost`; all five series exist at 0 from startup). Gauge `skillci_skillevals{phase}` is the current number of SkillEvals per phase (Pending, Running, Succeeded, Failed, Planned; recounted from the cache every 5 s, zero when none). When a SkillEval is deleted the controller removes its `skillci_lift`, `skillci_with_score` and `skillci_without_score` series, and the `skillci_publication` series of its skill, version and model, and the `skillci_stable`, `skillci_obsolete`, `skillci_regressed` and `skillci_rejected` series of its version once no SkillEval of that skill and version remains, so dashboards never show the numbers of a deleted run.
 
 ## Reporting site (controller `:8082`)
 
@@ -170,12 +171,27 @@ Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEva
 |---|---|
 | `/` | Counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `model`, `verdict`, `phase`, `publication` |
 | `/skills/{skill}` | Versions x models (with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
-| `/runs/{name}` | One SkillEval: scores, the SkillEvaluator tiers with findings, conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks |
+| `/runs/{name}` | One SkillEval: scores, the SkillEvaluator tiers with findings, conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
 | `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
 | `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
 | `/healthz` | `ok` |
 
 Unknown runs and skills give a 404 page. Policy decisions use the controller thresholds.
+
+## Retry
+
+A run that fails for an infrastructure reason is started again, because that failure says nothing about the skill. A run with a real result is never retried: retrying bad answers until they pass would bias the score. This mirrors Harbor 0.25's error classification (infrastructure errors retried, agent errors not).
+
+- **Never retried**: a run with scores, a Tier 1 or Tier 2 failure (`Rejected`), a failed Job that also wrote a result, a runner `error` that comes with scores, and everything the classifier does not recognise. Unknown means not transient.
+- **Transient** (package `internal/retry`, `Transient(message, jobFailedWithoutMessage)`), for a run that ends `Failed` without a result:
+  - the Job failed and the runner left no termination message, or a pod of the Job was evicted/disrupted and left no readable result (`job_lost`);
+  - the failure message names a Kubernetes-level loss: `DeadlineExceeded`, `Evicted`, `Preempt*`, `FailedScheduling`, `Unschedulable`, `ImagePullBackOff`, `ErrImagePull` (`job_lost`);
+  - the runner error (the SkillEvaluator `execution_errors` of all trials, joined with `; ` after `no scores in result.json:`) consists only of transient parts. It is split at every `<Name>Error:` token and every part must qualify, so one agent error in the mix makes the run a real result:
+    - `EnvironmentStartTimeoutError` (`env_start_timeout`);
+    - any part containing `Connection to remote host was lost` (`connection_lost`);
+    - `NonZeroAgentExitCodeError` whose failed command starts like the agent install (`apt-get`, `apk`, `yum`, `dnf`, `set -euo pipefail; if command -v apk`, `npm install`, `pip install`, `curl ... | sh`) (`agent_install`) or the agent setup (`mkdir -p $CLAUDE_CONFIG_DIR`) (`agent_setup`). Only the start of the command counts, because the agent's own task command carries the task text, which may mention anything.
+  - `AgentTimeoutError` is the agent's own failure on its task and is never transient, nor is a `NonZeroAgentExitCodeError` of any other command.
+- **Mechanics**: the budget is `--max-retries` (default 1, Helm `controller.maxRetries`; 0 disables). When a run would become `Failed`, the failure is transient and `status.retries < --max-retries`, the controller sets `status.retries` +1 and the condition `Retried` (`True`, reason `InfrastructureFailure`, message the failure of the previous Job), writes phase `Pending`, emits a Normal event `InfrastructureFailure`, and only then deletes the old Job (propagation Background; the status write comes first so a lost race never reads a missing Job as a failure). The run then goes through the normal Pending path with a new Job named `<skilleval>-r<n>`: it waits for a slot (`--max-concurrent-jobs`) and spends its trials from `--trial-budget` again. The failed attempt keeps what it spent: the budget counts every Job started. When the budget is exhausted the retry stays `Pending` ("trial budget exhausted"). `completedAt` is set only when the run ends. The `Retried` condition stays after the run finishes; a second transient failure ends `Failed` with that failure as `status.message`.
 
 ## Webhook auth
 
@@ -191,4 +207,4 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 
 ## Cost guard
 
-Controller flags `--max-concurrent-jobs` (default 4, deployed with 3 so 3 Jobs x 2 trials fit a small cluster; extra SkillEvals stay Pending), `--trial-budget` (max trials per controller lifetime, default 200; trials = attempts x 2 arms), `--dry-run` (create SkillEvals in phase Planned, log matrix size, create no Jobs).
+Controller flags `--max-retries` (default 1, see "Retry"; every retry Job spends its trials again), `--max-concurrent-jobs` (default 4, deployed with 3 so 3 Jobs x 2 trials fit a small cluster; extra SkillEvals stay Pending), `--trial-budget` (max trials per controller lifetime, default 200; trials = attempts x 2 arms), `--dry-run` (create SkillEvals in phase Planned, log matrix size, create no Jobs).

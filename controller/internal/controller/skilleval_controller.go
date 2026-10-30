@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"slices"
 	"strconv"
 	"time"
 
@@ -87,7 +88,7 @@ func (r *SkillEvalReconciler) reconcile(ctx context.Context, se *v1alpha1.SkillE
 	case "", v1alpha1.PhasePending:
 		return r.reconcilePending(ctx, se)
 	case v1alpha1.PhaseRunning:
-		return ctrl.Result{}, r.reconcileRunning(ctx, se)
+		return r.reconcileRunning(ctx, se)
 	case v1alpha1.PhaseSucceeded:
 		return ctrl.Result{}, r.afterSucceeded(ctx, se) // re-run after a restart: gauges and tags converge
 	case v1alpha1.PhaseFailed, v1alpha1.PhasePlanned:
@@ -161,45 +162,49 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 	return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseRunning, "")
 }
 
-func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1.SkillEval) error {
+func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1.SkillEval) (ctrl.Result, error) {
 	var job batchv1.Job
 	err := r.Get(ctx, types.NamespacedName{Namespace: se.Namespace, Name: se.Status.JobName}, &job)
 	if apierrors.IsNotFound(err) {
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job "+se.Status.JobName+" not found")
+		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job "+se.Status.JobName+" not found")
 	}
 	if err != nil {
-		return fmt.Errorf("getting job %s: %w", se.Status.JobName, err)
+		return ctrl.Result{}, fmt.Errorf("getting job %s: %w", se.Status.JobName, err)
 	}
 	complete, failed, reason := jobOutcome(&job)
 	if !complete && !failed {
-		return nil // the next Job event reconciles again
+		return ctrl.Result{}, nil // the next Job event reconciles again
 	}
 
-	msg, err := r.terminationMessage(ctx, &job)
+	msg, podLost, err := r.jobEvidence(ctx, &job)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
-	if msg == "" && failed {
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job failed: "+reason)
-	}
-	res, err := runner.ParseResult(msg)
+	res, parseErr := runner.ParseResult(msg)
 	switch {
-	case err != nil:
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, err.Error())
+	case failed && (msg == "" || (podLost && parseErr != nil)):
+		// No result at all: the pod was evicted, never ran or went away.
+		return r.fail(ctx, se, "job failed: "+reason, true)
+	case parseErr != nil:
+		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, parseErr.Error())
 	case res.Error != "":
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, res.Error)
+		// Scores or a rejection next to an error are a result, not a lost run.
+		if res.HasScores() || res.Rejected() {
+			return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, res.Error)
+		}
+		return r.fail(ctx, se, res.Error, false)
 	case failed:
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job failed: "+reason)
+		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, "job failed: "+reason)
 	}
 
 	if !res.HasScores() && !res.Rejected() {
-		return r.setPhase(ctx, se, v1alpha1.PhaseFailed, "runner reported no scores and no failed tier")
+		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, "runner reported no scores and no failed tier")
 	}
 	applyResult(se, res, r.Config.Thresholds)
 	if err := r.setPhase(ctx, se, v1alpha1.PhaseSucceeded, ""); err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
-	return r.afterSucceeded(ctx, se)
+	return ctrl.Result{}, r.afterSucceeded(ctx, se)
 }
 
 // applyResult copies a parsed runner result into the status. A run whose
@@ -261,21 +266,26 @@ func (r *SkillEvalReconciler) countRunning(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// terminationMessage returns the runner container's termination message, or "" if there is none.
-func (r *SkillEvalReconciler) terminationMessage(ctx context.Context, job *batchv1.Job) (string, error) {
+// jobEvidence returns the runner container's termination message, or "" if
+// there is none, and whether a pod of the Job was evicted or disrupted.
+func (r *SkillEvalReconciler) jobEvidence(ctx context.Context, job *batchv1.Job) (msg string, podLost bool, err error) {
 	var pods corev1.PodList
-	err := r.Reader.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels{"batch.kubernetes.io/job-name": job.Name})
+	err = r.Reader.List(ctx, &pods, client.InNamespace(job.Namespace), client.MatchingLabels{"batch.kubernetes.io/job-name": job.Name})
 	if err != nil {
-		return "", fmt.Errorf("listing pods of job %s: %w", job.Name, err)
+		return "", false, fmt.Errorf("listing pods of job %s: %w", job.Name, err)
 	}
-	for _, pod := range pods.Items {
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		podLost = podLost || pod.Status.Reason == "Evicted" || slices.ContainsFunc(pod.Status.Conditions, func(c corev1.PodCondition) bool {
+			return c.Type == corev1.DisruptionTarget && c.Status == corev1.ConditionTrue
+		})
 		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.Name == runner.ContainerName && cs.State.Terminated != nil {
-				return cs.State.Terminated.Message, nil
+			if cs.Name == runner.ContainerName && cs.State.Terminated != nil && msg == "" {
+				msg = cs.State.Terminated.Message
 			}
 		}
 	}
-	return "", nil
+	return msg, podLost, nil
 }
 
 // setPhase writes the phase and counts the transition.

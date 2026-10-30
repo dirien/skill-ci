@@ -89,7 +89,7 @@ keys are rejected.
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
 | `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
-| `image.tag` | `""` (chart `appVersion`, `0.4.0`) | |
+| `image.tag` | `""` (chart `appVersion`, `0.4.1`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[{name: docr}]` | |
@@ -109,6 +109,7 @@ keys are rejected.
 | `controller.thresholds.regressionTolerance` | `""` (flag omitted, controller default `0.05`) | `--regression-tolerance`; set only with a controller image that has the flag |
 | `controller.maxConcurrentJobs` | `3` | `--max-concurrent-jobs` |
 | `controller.trialBudget` | `200` | `--trial-budget` (0 is unlimited) |
+| `controller.maxRetries` | `1` | `--max-retries`: fresh Jobs after an infrastructure failure, 0 disables; needs controller image 0.4.1 or newer |
 | `controller.dryRun` | `false` | `--dry-run` |
 | `controller.leaderElect` | `false` | `--leader-elect` |
 | `controller.logging.level`, `.encoder`, `.development` | `""`, `""`, `false` | `--zap-log-level`, `--zap-encoder`, `--zap-devel` |

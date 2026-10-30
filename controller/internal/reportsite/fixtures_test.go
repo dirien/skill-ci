@@ -54,6 +54,8 @@ type spec struct {
 	publication           string
 	findings              []string
 	rejected              string // message of the Rejected condition
+	retries               int
+	retried               string // message of the Retried condition
 }
 
 func at(hour, minute int) time.Time {
@@ -93,6 +95,13 @@ func (s spec) object() *v1alpha1.SkillEval {
 		se.Status.Conditions = append(se.Status.Conditions, metav1.Condition{
 			Type: "Rejected", Status: metav1.ConditionTrue, Reason: "Tier1Failed", Message: s.rejected,
 			LastTransitionTime: metav1.NewTime(s.started.Add(s.took)),
+		})
+	}
+	se.Status.Retries = s.retries
+	if s.retried != "" {
+		se.Status.Conditions = append(se.Status.Conditions, metav1.Condition{
+			Type: "Retried", Status: metav1.ConditionTrue, Reason: "InfrastructureFailure", Message: s.retried,
+			LastTransitionTime: metav1.NewTime(s.started),
 		})
 	}
 	if s.regressed != "" {

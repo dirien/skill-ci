@@ -225,3 +225,29 @@ func TestNewJob(t *testing.T) {
 		t.Errorf("volume = %+v", pod.Volumes[0])
 	}
 }
+
+func TestJobName(t *testing.T) {
+	long := strings.Repeat("a", 56) + "-0a1b2c" // 63 characters, as the longest SkillEval name
+	tests := []struct {
+		name    string
+		se      string
+		retries int
+		want    string
+	}{
+		{"first attempt keeps the name", "acme-v1-0-0-haiku", 0, "acme-v1-0-0-haiku"},
+		{"first retry", "acme-v1-0-0-haiku", 1, "acme-v1-0-0-haiku-r1"},
+		{"second retry", "acme-v1-0-0-haiku", 2, "acme-v1-0-0-haiku-r2"},
+		{"long name is cut to fit", long, 1, long[:60] + "-r1"},
+		{"cut never leaves a trailing dash", strings.Repeat("a", 59) + "-bcd", 1, strings.Repeat("a", 59) + "-r1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &v1alpha1.SkillEval{Name: tt.se}
+			se.Status.Retries = tt.retries
+			got := JobName(se)
+			if got != tt.want || len(got) > 63 {
+				t.Errorf("JobName(%q, retries %d) = %q (%d chars), want %q", tt.se, tt.retries, got, len(got), tt.want)
+			}
+		})
+	}
+}

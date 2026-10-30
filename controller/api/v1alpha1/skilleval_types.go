@@ -150,6 +150,12 @@ type SkillEvalStatus struct {
 	Findings []string `json:"findings,omitempty"`
 	// ReportDigest is the digest of the eval report attached to the skill in the registry.
 	ReportDigest string `json:"reportDigest,omitempty"`
+	// Retries counts the times the controller started a fresh Job after an
+	// infrastructure failure. The first Job is not a retry; the Job of retry n
+	// is named <skilleval>-rn. See the Retried condition for the failure.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	Retries int `json:"retries,omitempty"`
 	// Message is a human readable detail, for example a failure reason.
 	Message string `json:"message,omitempty"`
 	// CompletedAt is when the eval reached Succeeded or Failed.

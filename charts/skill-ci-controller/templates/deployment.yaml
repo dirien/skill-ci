@@ -56,6 +56,7 @@ spec:
             {{- end }}
             - --max-concurrent-jobs={{ $ctl.maxConcurrentJobs }}
             - --trial-budget={{ $ctl.trialBudget }}
+            - --max-retries={{ $ctl.maxRetries }}
             - --dry-run={{ $ctl.dryRun }}
             - --webhook-addr=:{{ .Values.ports.webhook }}
             - --metrics-addr=:{{ .Values.ports.metrics }}

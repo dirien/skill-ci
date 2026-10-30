@@ -67,6 +67,11 @@ controller:
   maxConcurrentJobs: 3
   # Max trials per controller lifetime, 0 is unlimited.
   trialBudget: 200
+  # --max-retries: fresh Jobs a run gets after an infrastructure failure (environment start
+  # timeout, lost connection, agent install or setup step failing, evicted or lost pod).
+  # Runs with scores, Tier 1/2 rejections and agent failures are never retried. 0 disables.
+  # Needs controller image 0.4.1 or newer; older images exit on the unknown flag.
+  maxRetries: 1
   # Create SkillEvals in phase Planned and no Jobs.
   dryRun: false
   leaderElect: false

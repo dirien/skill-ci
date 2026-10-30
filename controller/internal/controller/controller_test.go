@@ -96,8 +96,9 @@ func (e *env) get(se *v1alpha1.SkillEval) *v1alpha1.SkillEval {
 func (e *env) finishJob(se *v1alpha1.SkillEval, message string, failed bool) {
 	e.t.Helper()
 	ctx := context.Background()
+	jobName := e.get(se).Status.JobName
 	var job batchv1.Job
-	if err := e.client.Get(ctx, client.ObjectKeyFromObject(se), &job); err != nil {
+	if err := e.client.Get(ctx, types.NamespacedName{Namespace: ns, Name: jobName}, &job); err != nil {
 		e.t.Fatal(err)
 	}
 	cond := batchv1.JobCondition{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}
@@ -112,7 +113,7 @@ func (e *env) finishJob(se *v1alpha1.SkillEval, message string, failed bool) {
 		return
 	}
 	pod := &corev1.Pod{
-		Name: se.Name + "-abcde", Namespace: ns, Labels: map[string]string{"batch.kubernetes.io/job-name": se.Name},
+		Name: jobName + "-abcde", Namespace: ns, Labels: map[string]string{"batch.kubernetes.io/job-name": jobName},
 		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{
 			Name: runner.ContainerName, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Message: message}},
 		}}},

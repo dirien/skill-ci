@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/retry"
 )
 
 var (
@@ -38,6 +39,9 @@ var (
 	skillEvalsNow = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_skillevals", Help: "SkillEvals that exist now, by phase."}, []string{"phase"})
 
+	retries = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "skillci_retries_total", Help: "Runs started again after an infrastructure failure, by failure class."}, []string{"reason"})
+
 	phases = []v1alpha1.Phase{
 		v1alpha1.PhasePending, v1alpha1.PhaseRunning, v1alpha1.PhaseSucceeded, v1alpha1.PhaseFailed, v1alpha1.PhasePlanned,
 	}
@@ -53,8 +57,11 @@ type evalKey struct{ skill, version, agent, model string }
 
 // Register adds the metrics to reg and starts the phase gauge at zero.
 func Register(reg prometheus.Registerer) {
-	reg.MustRegister(lift, withScore, withoutScore, stable, obsolete, regressed, rejected, publication, skillEvals, skillEvalsNow)
+	reg.MustRegister(lift, withScore, withoutScore, stable, obsolete, regressed, rejected, publication, skillEvals, skillEvalsNow, retries)
 	SetPhaseCounts(nil)
+	for _, r := range retry.Reasons() {
+		retries.WithLabelValues(string(r)) // visible at zero before the first retry
+	}
 }
 
 // ObserveScores records the scores of a finished SkillEval.
@@ -174,6 +181,11 @@ func SetRegressed(skill, version string, v bool) {
 // SetRejected records whether a required model's run of a skill version failed Tier 1 or Tier 2.
 func SetRejected(skill, version string, v bool) {
 	rejected.WithLabelValues(skill, version).Set(boolToFloat(v))
+}
+
+// CountRetry counts one run started again after an infrastructure failure of the given class.
+func CountRetry(reason retry.Reason) {
+	retries.WithLabelValues(string(reason)).Inc()
 }
 
 // CountPhase counts one SkillEval entering phase.

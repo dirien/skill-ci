@@ -3,6 +3,7 @@ package runner
 
 import (
 	"strconv"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,8 +31,27 @@ type Config struct {
 	Project string
 }
 
-// NewJob renders the Job that evaluates one SkillEval. The Job takes the
-// SkillEval's name and is owned by it.
+// maxJobName is the longest Job name that still fits the job-name label of its pods.
+const maxJobName = 63
+
+// JobName returns the name of the Job for the SkillEval's current attempt: the
+// SkillEval's name, then <name>-r1, <name>-r2 and so on for each retry. A name
+// too long for the suffix is cut short before it, so the result fits the
+// 63 characters a label value allows.
+func JobName(se *v1alpha1.SkillEval) string {
+	if se.Status.Retries <= 0 {
+		return se.Name
+	}
+	suffix := "-r" + strconv.Itoa(se.Status.Retries)
+	base := se.Name
+	if len(base)+len(suffix) > maxJobName {
+		base = strings.TrimRight(base[:maxJobName-len(suffix)], "-")
+	}
+	return base + suffix
+}
+
+// NewJob renders the Job that evaluates one SkillEval. The Job is named by
+// JobName and is owned by the SkillEval.
 func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 	secretEnv := func(name, key string, optional bool) corev1.EnvVar {
 		return corev1.EnvVar{Name: name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
@@ -46,7 +66,7 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 		v1alpha1.LabelModel:  se.Labels[v1alpha1.LabelModel],
 	}
 	return &batchv1.Job{
-		Name:      se.Name,
+		Name:      JobName(se),
 		Namespace: se.Namespace,
 		Labels:    labels,
 		OwnerReferences: []metav1.OwnerReference{

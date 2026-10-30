@@ -12,7 +12,7 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 | [BuildKit](https://github.com/moby/buildkit) | Builds task images in the cluster | v0.34.1 |
 | DOKS + DOCR | Cluster and image registry (DOCR professional tier) | Kubernetes 1.36.5 |
 | [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
-| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.4.0 (Helm chart `charts/skill-ci-controller`) |
+| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.4.1 (Helm chart `charts/skill-ci-controller`) |
 | skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, report upload | 0.4.1 |
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
@@ -45,7 +45,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | --- | --- |
 | `make up` | `pulumi up`: cluster, registry, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
 | `make docr-login` | Writes DOCR push credentials from the cluster to `~/.cache/skill-ci/docker` (used by `make build` when present) |
-| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.4.0`, `RUNNER_TAG=0.4.1`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
+| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.4.1`, `RUNNER_TAG=0.4.1`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
 | `make deploy` | Applies the CRD and installs the controller with its Helm chart (`helm upgrade --install --take-ownership`), pinning the controller and runner tags |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |

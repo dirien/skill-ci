@@ -16,6 +16,7 @@
     <div><dt>Phase</dt><dd class="status-dd">{{template "status" .Run.PhaseStatus}}</dd></div>
   </dl>
   {{if .Run.Message}}<p class="notice{{if eq .Run.Phase "Failed"}} failed{{end}}">{{.Run.Message}}</p>{{end}}
+  {{with .Run.RetryNote}}<p class="notice">{{.}}</p>{{end}}
   {{with .Run.Tier3Note}}<p class="notice{{if $.Run.Rejected}} failed{{end}}">{{.}}</p>{{end}}
 </section>
 

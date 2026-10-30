@@ -222,6 +222,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "maxRetries": {
+          "type": "integer",
+          "minimum": 0
+        },
         "dryRun": {
           "type": "boolean"
         },

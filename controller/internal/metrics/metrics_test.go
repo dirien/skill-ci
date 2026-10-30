@@ -35,8 +35,8 @@ skillci_regressed{skill="acme",version="v1.2.0"} 1
 	if err := testutil.GatherAndCompare(reg, strings.NewReader(want), "skillci_lift", "skillci_stable", "skillci_regressed"); err != nil {
 		t.Error(err)
 	}
-	if n, err := testutil.GatherAndCount(reg); err != nil || n != 12 {
-		t.Errorf("series = %d, %v; want 12", n, err)
+	if n, err := testutil.GatherAndCount(reg); err != nil || n != 17 {
+		t.Errorf("series = %d, %v; want 17", n, err)
 	}
 }
 

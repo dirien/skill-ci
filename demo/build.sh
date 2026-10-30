@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Build the controller and runner images in the cluster's BuildKit and push them to DOCR.
 #   demo/build.sh [controller|runner|all]
-# Env: CONTROLLER_TAG (default 0.4.0), RUNNER_TAG (default 0.4.1), BUILDCTL (default buildctl), DOCKER_CONFIG (DOCR push credentials),
+# Env: CONTROLLER_TAG (default 0.4.1), RUNNER_TAG (default 0.4.1), BUILDCTL (default buildctl), DOCKER_CONFIG (DOCR push credentials),
 #      REGISTRY, BUILDKIT_PORT (local port for the port-forward, default 1234).
 set -euo pipefail
 # shellcheck source=demo/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 what="${1:-all}"
-controller_tag="${CONTROLLER_TAG:-0.4.0}"
+controller_tag="${CONTROLLER_TAG:-0.4.1}"
 runner_tag="${RUNNER_TAG:-0.4.1}"
 registry="${REGISTRY:-registry.digitalocean.com/skill-ci-dirien}"
 buildctl="${BUILDCTL:-buildctl}"
