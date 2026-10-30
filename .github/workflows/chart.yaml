@@ -74,3 +74,43 @@ jobs:
             echo "::error::The release chart must default to public GHCR images without pull secrets."
             exit 1
           fi
+
+  vanilla:
+    name: Vanilla deploy path
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+
+      - name: Install kubeconform
+        run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+
+      # deploy/versions.env and infra/Pulumi.yaml must install the same component versions.
+      - name: Versions match the Pulumi program
+        run: deploy/check-versions.sh
+
+      - name: Generated manifests are up to date
+        run: deploy/generate.sh --check
+
+      # ServiceMonitor has no schema in kubeconform's default catalog, so it is skipped.
+      - name: Manifests and values render and validate
+        run: |
+          kc="$(go env GOPATH)/bin/kubeconform"
+          for dir in deploy/manifests deploy/manifests/monitoring deploy/manifests/harbor-setup; do
+            kubectl kustomize "$dir" | "$kc" -strict -summary -ignore-missing-schemas -
+          done
+          "$kc" -strict -summary deploy/manifests/seed/*.yaml deploy/manifests/secrets/*.example.yaml
+          helm template skill-ci charts/skill-ci-controller --namespace skill-ci \
+            -f deploy/helm/values/skill-ci-controller.yaml | "$kc" -strict -summary -ignore-missing-schemas -
