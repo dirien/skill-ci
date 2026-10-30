@@ -21,13 +21,15 @@ var (
 		Name: "skillci_stable", Help: "1 when the skill version is tagged stable."}, versionLabels)
 	obsolete = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "skillci_obsolete", Help: "1 when every required model does fine without the skill version."}, versionLabels)
+	regressed = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "skillci_regressed", Help: "1 when the skill version scores worse than the stable version."}, versionLabels)
 	skillEvals = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "skillci_skillevals_total", Help: "SkillEval phase transitions."}, []string{"phase"})
 )
 
 // Register adds the metrics to reg.
 func Register(reg prometheus.Registerer) {
-	reg.MustRegister(lift, withScore, withoutScore, stable, obsolete, skillEvals)
+	reg.MustRegister(lift, withScore, withoutScore, stable, obsolete, regressed, skillEvals)
 }
 
 // ObserveScores records the scores of a finished SkillEval.
@@ -46,6 +48,11 @@ func SetStable(skill, version string, v bool) {
 // SetObsolete records whether a skill version is flagged obsolete.
 func SetObsolete(skill, version string, v bool) {
 	obsolete.WithLabelValues(skill, version).Set(boolToFloat(v))
+}
+
+// SetRegressed records whether a skill version scores worse than the stable version.
+func SetRegressed(skill, version string, v bool) {
+	regressed.WithLabelValues(skill, version).Set(boolToFloat(v))
 }
 
 // CountPhase counts one SkillEval entering phase.

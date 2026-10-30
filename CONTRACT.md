@@ -60,12 +60,13 @@ status:
   withSkill: "0.95"                 # strings, two decimals
   withoutSkill: "0.36"
   lift: "+0.59"
-  verdict: Helps                    # Helps | Neutral | Hurts | Obsolete
+  verdict: Helps                    # Helps | Neutral | Hurts | Obsolete | Regressed
+  reportDigest: sha256:...          # optional: the eval report attached to the skill digest in Harbor
   message: ...
   completedAt: ...
 ```
 
-Printer columns: Skill, Version, Model, Phase, With, Without, Lift, Verdict, Age.
+Printer columns: Skill, Version, Model, Phase, With, Without, Lift, Verdict, Age; Report (`status.reportDigest`) at priority 1 (`-o wide`).
 
 Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex without `sha256:`, first 32 chars), `skillci.dev/model`.
 
@@ -88,12 +89,26 @@ The runner image provides the rest as defaults (overridable env): `REGISTRY_CONF
 The container sets `terminationMessagePolicy: FallbackToLogsOnError`. On completion it writes one JSON object to `/dev/termination-log` and exits 0:
 
 ```json
-{"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "claude-haiku-5-5"}
+{"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "claude-haiku-5-5", "report": "sha256:..."}
 ```
+
+`report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds.
 
 If no score was produced it writes `{"error": "<reason>"}` and exits 1.
 
 The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; the controller manifests own them from now on.
+
+## Eval reports
+
+After scoring, the runner attaches the SkillEvaluator output to the evaluated skill digest as an OCI referrer, so it outlives the pod:
+
+```text
+oras attach --artifact-type application/vnd.skillci.report.v1+json \
+  --annotation skillci.dev/model=<model> --annotation skillci.dev/agent=<agent> --annotation skillci.dev/lift=<+0.59> \
+  <SKILL_REF> report.html:text/html result.json:application/json [BENCHMARK.md:text/markdown]
+```
+
+`SKILL_REF` is pinned to the digest, so the subject is exactly the version that was scored. Re-running an eval adds another referrer. `make report SKILL=<skill> VERSION=<vX.Y.Z> [MODEL=<model>] OUT=reports/` lists the referrers (`oras discover`) and downloads the newest report per model.
 
 ## Triggers
 
@@ -102,20 +117,21 @@ The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; 
 
 ## Policy
 
-Per SkillEval verdict (SkillEvaluator bands): `lift >= +0.05` Helps, `lift <= -0.10` Hurts, otherwise Neutral; Neutral with `withoutSkill >= 0.80` is Obsolete.
+Per SkillEval verdict (SkillEvaluator bands): `lift >= +0.05` Helps, `lift <= -0.10` Hurts, otherwise Neutral; Neutral with `withoutSkill >= 0.80` is Obsolete. The version-over-version gate below overrides the verdict with `Regressed` on the models that scored worse than the stable version; the policy itself always reads the no-skill bands, never the stored verdict.
 
 Per digest, once every required model has a Succeeded SkillEval:
 
 - Tag the digest `beta` when it is the newest evaluated version (controller manages `beta`).
-- **Promote**: lift `>= +0.10` on all required models: add tag `stable` (move it from any other digest of that skill).
+- **Promote**: lift `>= +0.10` on all required models, and no regression against the current stable version (below): add tag `stable` (move it from any other digest of that skill).
+- **Regression gate**: if another digest of the skill is tagged `stable`, compare the candidate's with-skill score with that digest's, per model. A model counts when it is required and both digests have a Succeeded SkillEval for it. If the candidate scores lower by more than `--regression-tolerance` (default `0.05`, scores compared at two decimals, a drop of exactly the tolerance passes) on any such model, the digest is not promoted and the current stable stays. The candidate still gets `beta`. Its SkillEvals get condition `Regressed` (reason `WorseThanStable`, message names the model, both versions and both scores), a Warning event, and verdict `Regressed` on the models that dropped. Optional models never gate. With no current stable version, or when the candidate is the stable digest, nothing is compared.
 - **Demote**: lift `<= -0.10` on any required model: remove tag `stable` from that digest.
 - **Obsolete**: verdict Obsolete on all required models: flag only (metric + condition), never delete.
 
-Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repositories/<skill>/artifacts/<digest>/tags`, `DELETE .../artifacts/<digest>/tags/<tag>`). Unlike `oras tag`, these do not fire `PUSH_ARTIFACT`. Thresholds are controller flags.
+Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repositories/<skill>/artifacts/<digest>/tags`, `DELETE .../artifacts/<digest>/tags/<tag>`). Unlike `oras tag`, these do not fire `PUSH_ARTIFACT`. Thresholds are controller flags (`--helps-threshold`, `--hurts-threshold`, `--promote-threshold`, `--demote-threshold`, `--obsolete-baseline`, `--regression-tolerance`).
 
 ## Metrics (controller `:8081/metrics`)
 
-Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Counter `skillci_skillevals_total{phase}`.
+Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Gauge `skillci_regressed{skill,version}` (1 when the version scores worse than the stable version beyond the tolerance). Counter `skillci_skillevals_total{phase}`.
 
 ## Webhook auth
 

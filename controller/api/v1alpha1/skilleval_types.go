@@ -59,6 +59,8 @@ const (
 	VerdictHurts Verdict = "Hurts"
 	// VerdictObsolete means the model already does well without the skill.
 	VerdictObsolete Verdict = "Obsolete"
+	// VerdictRegressed means the version scores worse than the stable version.
+	VerdictRegressed Verdict = "Regressed"
 )
 
 // SkillEvalSpec identifies one skill digest and one model to evaluate it with.
@@ -105,8 +107,10 @@ type SkillEvalStatus struct {
 	// Lift is WithSkill minus WithoutSkill, signed, two decimals.
 	Lift string `json:"lift,omitempty"`
 	// Verdict classifies the lift.
-	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete
+	// +kubebuilder:validation:Enum=Helps;Neutral;Hurts;Obsolete;Regressed
 	Verdict Verdict `json:"verdict,omitempty"`
+	// ReportDigest is the digest of the eval report attached to the skill in the registry.
+	ReportDigest string `json:"reportDigest,omitempty"`
 	// Message is a human readable detail, for example a failure reason.
 	Message string `json:"message,omitempty"`
 	// CompletedAt is when the eval reached Succeeded or Failed.
@@ -129,6 +133,7 @@ type SkillEvalStatus struct {
 // +kubebuilder:printcolumn:name="Without",type=string,JSONPath=`.status.withoutSkill`
 // +kubebuilder:printcolumn:name="Lift",type=string,JSONPath=`.status.lift`
 // +kubebuilder:printcolumn:name="Verdict",type=string,JSONPath=`.status.verdict`
+// +kubebuilder:printcolumn:name="Report",type=string,priority=1,JSONPath=`.status.reportDigest`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type SkillEval struct {
 	metav1.TypeMeta   `json:",inline"`

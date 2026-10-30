@@ -30,27 +30,45 @@ def agent_entry(with_skill: Any, without_skill: Any, model: str = "claude-haiku-
 
 
 GOOD = {"agents": {"claude-code": agent_entry(0.951, 0.364)}}
+REPORT = "sha256:" + "c" * 64
 GOOD_PAYLOAD = {
     "withSkill": 0.95,
     "withoutSkill": 0.36,
     "lift": 0.59,
     "agent": "claude-code",
     "model": "claude-haiku-5-5",
+    "report": REPORT,
 }
+NO_REPORT = {k: v for k, v in GOOD_PAYLOAD.items() if k != "report"}
 
 
 class FakeRun:
     """Stands in for subprocess.run: fakes oras and skillevaluator."""
 
-    def __init__(self, result: Any, eval_exit: int = 0, pull_exit: int = 0, skill_dir: bool = True):
+    def __init__(
+        self,
+        result: Any,
+        eval_exit: int = 0,
+        pull_exit: int = 0,
+        skill_dir: bool = True,
+        attach_exit: int = 0,
+    ):
         self.result = result
         self.eval_exit = eval_exit
         self.pull_exit = pull_exit
         self.skill_dir = skill_dir
+        self.attach_exit = attach_exit
         self.calls: list[list[str]] = []
+        self.attach_cwd: Path | None = None
 
-    def __call__(self, cmd: list[str], **_: Any) -> subprocess.CompletedProcess:
+    def __call__(self, cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
         self.calls.append(cmd)
+        if cmd[:2] == ["oras", "attach"]:
+            self.attach_cwd = kwargs.get("cwd")
+            if self.attach_exit:
+                return subprocess.CompletedProcess(cmd, self.attach_exit, "", "unauthorized")
+            out = f"Attached to [registry] {ENV['SKILL_REF']}\nDigest: {REPORT}\n"
+            return subprocess.CompletedProcess(cmd, 0, out, "")
         if cmd[0] == "oras":
             dest = Path(cmd[cmd.index("--output") + 1])
             if self.skill_dir and self.pull_exit == 0:
@@ -63,6 +81,7 @@ class FakeRun:
             run_dir.mkdir(parents=True)
             text = self.result if isinstance(self.result, str) else json.dumps(self.result)
             (run_dir / "result.json").write_text(text)
+            (run_dir / "report.html").write_text("<html></html>")
         return subprocess.CompletedProcess(cmd, self.eval_exit)
 
 
@@ -81,6 +100,7 @@ def termination(tmp_path, monkeypatch):
     [
         ("good result", FakeRun(GOOD), 0, GOOD_PAYLOAD),
         ("eval exits non-zero but scores exist", FakeRun(GOOD, eval_exit=1), 0, GOOD_PAYLOAD),
+        ("attach fails, eval still succeeds", FakeRun(GOOD, attach_exit=1), 0, NO_REPORT),
         (
             "hurting skill is a valid result",
             FakeRun({"agents": {"claude-code": agent_entry(0.4, 0.9)}}),
@@ -137,7 +157,7 @@ def test_commands(termination, monkeypatch):
     fake = FakeRun(GOOD)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
-    oras, evaluator = fake.calls
+    oras, evaluator, _ = fake.calls
     assert oras[:3] == ["oras", "pull", ENV["SKILL_REF"]]
     assert "--plain-http" in oras
     assert evaluator[:3] == ["skillevaluator", "tier3", "evaluate"]
@@ -159,6 +179,33 @@ def test_commands(termination, monkeypatch):
         "image_pull_secret=docr",
         "skip_image_check=false",
     ]
+
+
+def test_attach_command(termination, monkeypatch):
+    """The report is attached to the evaluated digest as a typed referrer."""
+    fake = FakeRun(GOOD)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    attach = fake.calls[-1]
+    assert attach[:4] == ["oras", "attach", "--artifact-type", skill_eval.REPORT_TYPE]
+    assert "--plain-http" in attach
+    annotations = [attach[i + 1] for i, arg in enumerate(attach) if arg == "--annotation"]
+    assert annotations == [
+        "skillci.dev/model=claude-haiku-5-5",
+        "skillci.dev/agent=claude-code",
+        "skillci.dev/lift=+0.59",
+    ]
+    subject = attach.index(ENV["SKILL_REF"])
+    assert attach[subject + 1 :] == ["report.html:text/html", "result.json:application/json"]
+    assert fake.attach_cwd is not None
+    assert fake.attach_cwd.name == "20260101_000000"
+
+
+def test_termination_message_with_report_fits(tmp_path):
+    """The payload with a report digest stays far below the 4 KB limit."""
+    path = tmp_path / "log"
+    skill_eval.write_termination(GOOD_PAYLOAD, str(path))
+    assert len(path.read_text().encode()) < skill_eval.MAX_MESSAGE_BYTES
 
 
 @pytest.mark.parametrize(

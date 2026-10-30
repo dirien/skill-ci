@@ -9,3 +9,5 @@ controller/bin/
 # Local results and secrets
 results/
 *.kubeconfig
+# Pulled eval reports
+reports/

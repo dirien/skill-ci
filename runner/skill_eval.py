@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,12 @@ from typing import Any
 
 TERMINATION_LOG = "/dev/termination-log"
 MAX_MESSAGE_BYTES = 4000  # Kubernetes caps the termination message at 4096 bytes.
+REPORT_TYPE = "application/vnd.skillci.report.v1+json"
+REPORT_FILES = {  # file name -> media type; BENCHMARK.md is optional, the others are expected
+    "report.html": "text/html",
+    "result.json": "application/json",
+    "BENCHMARK.md": "text/markdown",
+}
 SECRET_ENV = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
 
 # Defaults mirror the runner image; the Job can override any of them.
@@ -55,13 +62,19 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
     return config
 
 
+def registry_flags(config: Mapping[str, str]) -> list[str]:
+    """Return the oras flags that select the registry credentials and transport."""
+    flags = []
+    if Path(config["REGISTRY_CONFIG"]).is_file():
+        flags += ["--registry-config", config["REGISTRY_CONFIG"]]
+    if config["REGISTRY_PLAIN_HTTP"].lower() == "true":
+        flags.append("--plain-http")
+    return flags
+
+
 def pull_skill(config: Mapping[str, str], dest: Path) -> Path:
     """Pull the skill artifact into ``dest`` and return the skill directory."""
-    cmd = ["oras", "pull", config["SKILL_REF"], "--output", str(dest)]
-    if Path(config["REGISTRY_CONFIG"]).is_file():
-        cmd += ["--registry-config", config["REGISTRY_CONFIG"]]
-    if config["REGISTRY_PLAIN_HTTP"].lower() == "true":
-        cmd.append("--plain-http")
+    cmd = ["oras", "pull", config["SKILL_REF"], "--output", str(dest), *registry_flags(config)]
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise EvalError(f"oras pull failed ({proc.returncode}): {proc.stderr.strip()}")
@@ -92,15 +105,21 @@ def evaluate_command(config: Mapping[str, str], skill_dir: Path, results: Path) 
     ]  # fmt: skip
 
 
-def read_scores(results: Path, agent: str) -> dict[str, Any]:
-    """Extract the scores for ``agent`` from the newest ``result.json`` under ``results``."""
+def newest_result(results: Path) -> Path:
+    """Return the newest ``result.json`` under ``results``."""
     candidates = sorted(results.glob("*/*/result.json"), key=lambda p: p.stat().st_mtime)
     if not candidates:
         raise EvalError("SkillEvaluator wrote no result.json")
+    return candidates[-1]
+
+
+def read_scores(results: Path, agent: str) -> dict[str, Any]:
+    """Extract the scores for ``agent`` from the newest ``result.json`` under ``results``."""
+    path = newest_result(results)
     try:
-        result = json.loads(candidates[-1].read_text())
+        result = json.loads(path.read_text())
     except (OSError, ValueError) as err:
-        raise EvalError(f"cannot read {candidates[-1].name}: {err}") from err
+        raise EvalError(f"cannot read {path.name}: {err}") from err
     entry = result.get("agents", {}).get(agent)
     if entry is None:
         raise EvalError(f"result.json has no entry for agent {agent!r}")
@@ -119,6 +138,41 @@ def read_scores(results: Path, agent: str) -> dict[str, Any]:
     }
 
 
+def attach_report(
+    config: Mapping[str, str], run_dir: Path, scores: Mapping[str, Any]
+) -> str | None:
+    """Attach the report files of ``run_dir`` to the evaluated skill digest in Harbor.
+
+    SKILL_REF is already pinned to a digest, so the report becomes an OCI referrer
+    of exactly the version that was scored. Returns the report digest, or ``None``
+    when attaching fails: a missing report must not fail the eval.
+    """
+    files = [
+        f"{name}:{media}" for name, media in REPORT_FILES.items() if (run_dir / name).is_file()
+    ]
+    annotations = {
+        "skillci.dev/model": config["MODEL"],
+        "skillci.dev/agent": config["AGENT"],
+        "skillci.dev/lift": f"{scores['lift']:+.2f}",
+    }
+    cmd = ["oras", "attach", "--artifact-type", REPORT_TYPE, *registry_flags(config)]
+    for key, value in annotations.items():
+        cmd += ["--annotation", f"{key}={value}"]
+    cmd += [config["SKILL_REF"], *files]
+    try:
+        # oras rejects absolute file paths, so run it inside the report directory.
+        proc = subprocess.run(cmd, cwd=run_dir, capture_output=True, text=True, check=False)
+    except OSError as err:
+        print(f"skill-eval: report not attached: {err}", file=sys.stderr)
+        return None
+    found = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", proc.stdout + proc.stderr)
+    if proc.returncode != 0 or not found:
+        detail = (proc.stderr or proc.stdout).strip()
+        print(f"skill-eval: report not attached ({proc.returncode}): {detail}", file=sys.stderr)
+        return None
+    return found.group(1)
+
+
 def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
     """Pull the skill, run SkillEvaluator and return the termination payload."""
     config = load_config(environ)
@@ -130,9 +184,12 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         # fatal: a failed trial can still leave scores for the other arm.
         proc = subprocess.run(evaluate_command(config, skill_dir, results), check=False)
         try:
-            return read_scores(results, config["AGENT"])
+            payload = read_scores(results, config["AGENT"])
         except EvalError as err:
             raise EvalError(f"skillevaluator exited {proc.returncode}: {err}") from err
+        if report := attach_report(config, newest_result(results).parent, payload):
+            payload["report"] = report
+        return payload
 
 
 def write_termination(payload: dict[str, Any], path: str | None = None) -> None:

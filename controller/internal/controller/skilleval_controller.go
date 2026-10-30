@@ -187,6 +187,7 @@ func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1
 	se.Status.WithSkill = format(*res.WithSkill, "%.2f")
 	se.Status.WithoutSkill = format(*res.WithoutSkill, "%.2f")
 	se.Status.Lift = format(*res.Lift, "%+.2f")
+	se.Status.ReportDigest = res.Report
 	se.Status.Verdict = r.Config.Thresholds.Verdict(*res.Lift, *res.WithoutSkill)
 	if err := r.setPhase(ctx, se, v1alpha1.PhaseSucceeded, ""); err != nil {
 		return err

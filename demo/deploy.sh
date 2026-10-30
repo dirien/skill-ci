@@ -1,31 +1,30 @@
 #!/usr/bin/env bash
-# Install the controller: CRD, RBAC, Deployment, Service (kubectl apply -k config/), then pin the image tags.
-#   CONTROLLER_TAG=0.1.2 RUNNER_TAG=0.2.2 demo/deploy.sh
+# Install or upgrade the controller with its Helm chart (charts/skill-ci-controller).
+#   CONTROLLER_TAG=0.2.0 RUNNER_TAG=0.3.0 demo/deploy.sh
+# The first run adopts resources applied earlier with `kubectl apply -k config/`.
 set -euo pipefail
 # shellcheck source=demo/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-controller_tag="${CONTROLLER_TAG:-0.1.2}"
-runner_tag="${RUNNER_TAG:-0.2.2}"
-registry="${REGISTRY:-registry.digitalocean.com/skill-ci-dirien}"
+controller_tag="${CONTROLLER_TAG:-0.2.0}"
+runner_tag="${RUNNER_TAG:-0.3.0}"
+chart="${ROOT_DIR}/charts/skill-ci-controller"
 need kubectl
-need python3
+need helm
 
-say "Applying config/ (CRD, RBAC, controller)"
-kubectl apply -k "${ROOT_DIR}/config/"
+# Helm installs crds/ only on first install and never upgrades them, so apply them first.
+say "Applying the SkillEval CRD"
+kubectl apply --server-side -f "${chart}/crds/"
 
-say "Setting the controller image to ${registry}/skill-ci-controller:${controller_tag}"
-kubectl -n "${NS}" set image deployment/skill-ci-controller "*=${registry}/skill-ci-controller:${controller_tag}"
+say "Installing the controller ${controller_tag} with runner ${runner_tag} (Helm release skill-ci)"
+helm upgrade --install skill-ci "${chart}" \
+  --namespace "${NS}" \
+  --take-ownership \
+  `# the old deploy script set the image and args with kubectl; Helm owns them now` \
+  --force-conflicts \
+  --set "image.tag=${controller_tag}" \
+  --set "controller.runnerImage.tag=${runner_tag}" \
+  --wait --timeout 3m
 
-say "Pointing the controller at the runner image ${registry}/skill-ci-runner:${runner_tag}"
-args="$(kubectl -n "${NS}" get deployment skill-ci-controller -o jsonpath='{.spec.template.spec.containers[0].args}')"
-patch="$(printf '%s' "${args:-[]}" | python3 -I -c '
-import json, sys
-args = [a for a in json.load(sys.stdin) if not a.startswith("--runner-image")]
-args.append("--runner-image=" + sys.argv[1])
-print(json.dumps([{"op": "add", "path": "/spec/template/spec/containers/0/args", "value": args}]))
-' "${registry}/skill-ci-runner:${runner_tag}")"
-kubectl -n "${NS}" patch deployment skill-ci-controller --type json -p "${patch}"
-
-say "Waiting for the controller"
-kubectl -n "${NS}" rollout status deployment/skill-ci-controller --timeout=180s
+say "Controller is running"
+kubectl -n "${NS}" get deployment skill-ci-controller

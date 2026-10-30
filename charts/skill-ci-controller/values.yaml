@@ -46,7 +46,7 @@ controller:
   # --runner-image, rendered as repository:tag or repository@digest.
   runnerImage:
     repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
-    tag: "0.2.2"
+    tag: "0.3.0"
     digest: ""
   modelsConfigMap: skill-ci-models
   defaultAttempts: 1
@@ -58,9 +58,9 @@ controller:
     demote: "-0.10"
     obsoleteBaseline: "0.80"
     # --regression-tolerance: with-skill drop below the stable version that still allows
-    # promotion. Empty omits the flag (controller default 0.05). Images before the flag
-    # existed (controller tag 0.1.2) exit on an unknown flag, so set it only with a newer image.
-    regressionTolerance: ""
+    # promotion. Empty omits the flag (controller default 0.05); controller images before
+    # 0.2.0 exit on the unknown flag, so set it to "" for those.
+    regressionTolerance: "0.05"
   # Deployed with 3 so 3 Jobs x 2 trials fit a small cluster (the flag default is 4).
   maxConcurrentJobs: 3
   # Max trials per controller lifetime, 0 is unlimited.

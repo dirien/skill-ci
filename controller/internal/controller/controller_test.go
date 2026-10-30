@@ -512,3 +512,109 @@ func TestStatusConflictRequeues(t *testing.T) {
 		t.Errorf("RequeueAfter = 0, want a requeue after a conflict")
 	}
 }
+
+// scoreWith renders a runner result with explicit with-skill and without-skill scores.
+func scoreWith(with, without float64) string {
+	return strings.NewReplacer("WITHOUT", format(without, "%.2f"), "WITH", format(with, "%.2f"), "LIFT", format(with-without, "%.2f")).
+		Replace(`{"withSkill":WITH,"withoutSkill":WITHOUT,"lift":LIFT}`)
+}
+
+func TestRegressionBlocksPromotion(t *testing.T) {
+	tests := []struct {
+		name         string
+		candidate    [2]float64 // with-skill on haiku and sonnet; stable scored 0.95 on both
+		wantStable   string     // digest holding stable afterwards
+		wantVerdicts [2]v1alpha1.Verdict
+	}{
+		{"much worse on both stays beta", [2]float64{0.69, 0.69}, digestA, [2]v1alpha1.Verdict{"Regressed", "Regressed"}},
+		{"worse on one model only", [2]float64{0.69, 0.96}, digestA, [2]v1alpha1.Verdict{"Regressed", "Helps"}},
+		{"drop within tolerance is promoted", [2]float64{0.91, 0.95}, digestB, [2]v1alpha1.Verdict{"Helps", "Helps"}},
+		{"better is promoted", [2]float64{0.99, 0.99}, digestB, [2]v1alpha1.Verdict{"Helps", "Helps"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newEnv(t, Config{MaxConcurrentJobs: 8, Thresholds: policy.DefaultThresholds()}, 200,
+				map[string][]harbor.Artifact{"acme": {
+					{Digest: digestA, Tags: []string{"v1.0.0", "beta", "stable"}},
+					{Digest: digestB, Tags: []string{"v1.2.0"}},
+				}})
+			for _, m := range []models.Model{haiku, sonnet} {
+				e.run(e.create("acme", "v1.0.0", digestA, m), scoreWith(0.95, 0.36))
+			}
+			cand := []*v1alpha1.SkillEval{e.create("acme", "v1.2.0", digestB, haiku), e.create("acme", "v1.2.0", digestB, sonnet)}
+			for i, se := range cand {
+				e.run(se, scoreWith(tt.candidate[i], 0.36))
+			}
+
+			if got := tags(t, e.harbor, "acme", tt.wantStable); !slices.Contains(got, "stable") {
+				t.Errorf("tags of %s = %v, want stable", tt.wantStable[:10], got)
+			}
+			if got := tags(t, e.harbor, "acme", digestB); !slices.Contains(got, "beta") {
+				t.Errorf("tags of v1.2.0 = %v, want beta", got)
+			}
+			regressed := tt.wantVerdicts[0] == "Regressed" || tt.wantVerdicts[1] == "Regressed"
+			for i, se := range cand {
+				got := e.get(se)
+				if got.Status.Verdict != tt.wantVerdicts[i] {
+					t.Errorf("verdict[%d] = %s, want %s", i, got.Status.Verdict, tt.wantVerdicts[i])
+				}
+				cond := findCondition(got.Status.Conditions, ConditionRegressed)
+				if (cond != nil) != regressed {
+					t.Fatalf("Regressed condition = %+v, want present: %v", cond, regressed)
+				}
+				if cond != nil {
+					for _, want := range []string{"claude-haiku-5-5", "v1.2.0", "v1.0.0", "0.95"} {
+						if cond.Reason != ReasonWorseThanStable || !strings.Contains(cond.Message, want) {
+							t.Errorf("condition = %+v, want reason %s and %q in message", cond, ReasonWorseThanStable, want)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRegressionWithoutStableBehavesAsBefore(t *testing.T) {
+	e := newEnv(t, Config{MaxConcurrentJobs: 8, Thresholds: policy.DefaultThresholds()}, 200,
+		map[string][]harbor.Artifact{"acme": {{Digest: digestB, Tags: []string{"v1.2.0"}}}})
+	for _, m := range []models.Model{haiku, sonnet} {
+		e.run(e.create("acme", "v1.2.0", digestB, m), scoreWith(0.69, 0.36))
+	}
+	if got := tags(t, e.harbor, "acme", digestB); !slices.Contains(got, "stable") {
+		t.Errorf("tags = %v, want stable when there is no stable version to regress from", got)
+	}
+}
+
+func TestRegressionEmitsWarningEvent(t *testing.T) {
+	e := newEnv(t, Config{MaxConcurrentJobs: 8, Thresholds: policy.DefaultThresholds()}, 200,
+		map[string][]harbor.Artifact{"acme": {
+			{Digest: digestA, Tags: []string{"v1.0.0", "stable"}},
+			{Digest: digestB, Tags: []string{"v1.2.0"}},
+		}})
+	for _, m := range []models.Model{haiku, sonnet} {
+		e.run(e.create("acme", "v1.0.0", digestA, m), scoreWith(0.95, 0.36))
+		e.run(e.create("acme", "v1.2.0", digestB, m), scoreWith(0.69, 0.36))
+	}
+	rec, ok := e.r.Recorder.(*events.FakeRecorder)
+	if !ok {
+		t.Fatalf("recorder is %T", e.r.Recorder)
+	}
+	close(rec.Events)
+	var found bool
+	for ev := range rec.Events {
+		found = found || strings.Contains(ev, "Warning") && strings.Contains(ev, ReasonWorseThanStable)
+	}
+	if !found {
+		t.Error("no Warning WorseThanStable event")
+	}
+}
+
+func TestReportDigestIsStored(t *testing.T) {
+	const report = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	e := newEnv(t, Config{MaxConcurrentJobs: 8, Thresholds: policy.DefaultThresholds()}, 200,
+		map[string][]harbor.Artifact{"acme": {{Digest: digestA, Tags: []string{"v1.0.0"}}}})
+	se := e.run(e.create("acme", "v1.0.0", digestA, haiku), `{"withSkill":0.95,"withoutSkill":0.36,"lift":0.59,"report":"`+report+`"}`)
+	if se.Status.ReportDigest != report {
+		t.Errorf("reportDigest = %q, want %q", se.Status.ReportDigest, report)
+	}
+}

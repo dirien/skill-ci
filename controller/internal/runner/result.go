@@ -15,6 +15,8 @@ type Result struct {
 	WithoutSkill *float64 `json:"withoutSkill"`
 	// Lift is WithSkill minus WithoutSkill.
 	Lift *float64 `json:"lift"`
+	// Report is the digest of the report the runner attached to the skill, if any.
+	Report string `json:"report,omitempty"`
 	// Error is set when the runner produced no scores.
 	Error string `json:"error"`
 }
@@ -33,6 +35,9 @@ func ParseResult(msg string) (Result, error) {
 		if json.Unmarshal([]byte(last), &res) != nil {
 			return Result{}, fmt.Errorf("termination message is not a result: %.200s", last)
 		}
+	}
+	if !strings.HasPrefix(res.Report, "sha256:") {
+		res.Report = ""
 	}
 	if res.Error != "" {
 		return res, nil

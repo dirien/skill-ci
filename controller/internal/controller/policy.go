@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -18,8 +19,30 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/semver"
 )
 
-// ConditionPolicy is the condition type that records what the tag policy decided.
-const ConditionPolicy = "PolicyApplied"
+// Condition types set on SkillEvals.
+const (
+	// ConditionPolicy records what the tag policy decided.
+	ConditionPolicy = "PolicyApplied"
+	// ConditionRegressed records that the version scores worse than the stable one.
+	ConditionRegressed = "Regressed"
+)
+
+// ReasonWorseThanStable is the reason of the Regressed condition and its event.
+const ReasonWorseThanStable = "WorseThanStable"
+
+// regression says which models of a candidate scored worse than the stable version.
+type regression struct {
+	regs    []policy.Regression
+	message string
+}
+
+// has reports whether the model (agent/model key) regressed. It is safe on nil.
+func (g *regression) has(model string) bool {
+	if g == nil {
+		return false
+	}
+	return slices.ContainsFunc(g.regs, func(r policy.Regression) bool { return r.Model == model })
+}
 
 // applyPolicy looks at every SkillEval of the digest, and once all required
 // models have a result it moves the beta and stable tags in Harbor.
@@ -40,7 +63,7 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 	outcomes := map[string]policy.Outcome{}
 	newest := "" // digest of the newest fully evaluated version
 	for digest, group := range byDigest {
-		outcomes[digest] = r.Config.Thresholds.Evaluate(results(group))
+		outcomes[digest] = r.Config.Thresholds.Evaluate(results(group, r.Config.Thresholds))
 		if outcomes[digest].Complete && (newest == "" || semver.Compare(group[0].Spec.Version, byDigest[newest][0].Spec.Version) > 0) {
 			newest = digest
 		}
@@ -60,6 +83,10 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 		return nil
 	}
 
+	reg := regressionOf(r.Config.Thresholds, byDigest, arts, digest)
+	if reg != nil {
+		out = out.Block(reg.regs)
+	}
 	ops := policy.Plan(out, digest, digest == newest, arts)
 	for _, op := range ops {
 		if err := r.applyOp(ctx, se.Spec.Skill, op); err != nil {
@@ -75,7 +102,44 @@ func (r *SkillEvalReconciler) applyPolicy(ctx context.Context, se *v1alpha1.Skil
 		metrics.SetStable(se.Spec.Skill, group[0].Spec.Version, harbor.Tagged(arts, d, policy.TagStable))
 		metrics.SetObsolete(se.Spec.Skill, group[0].Spec.Version, outcomes[d].Obsolete)
 	}
-	return r.record(ctx, byDigest[digest], out, ops)
+	metrics.SetRegressed(se.Spec.Skill, se.Spec.Version, reg != nil)
+	return r.record(ctx, byDigest[digest], out, ops, reg)
+}
+
+// regressionOf compares the digest with the current stable digest of the skill.
+// It returns nil when there is no other stable version or nothing got worse.
+func regressionOf(th policy.Thresholds, byDigest map[string][]*v1alpha1.SkillEval, arts []harbor.Artifact, digest string) *regression {
+	for _, a := range arts {
+		stable := byDigest[a.Digest]
+		if a.Digest == digest || !a.HasTag(policy.TagStable) || len(stable) == 0 {
+			continue
+		}
+		regs := th.Regressions(withScores(byDigest[digest]), withScores(stable))
+		if len(regs) == 0 {
+			return nil
+		}
+		msgs := make([]string, len(regs))
+		for i, g := range regs {
+			msgs[i] = fmt.Sprintf("%s scores %.2f with %s, stable %s scored %.2f",
+				g.Model, g.Candidate, byDigest[digest][0].Spec.Version, stable[0].Spec.Version, g.Stable)
+		}
+		return &regression{regs: regs, message: strings.Join(msgs, "; ") + fmt.Sprintf(" (tolerance %.2f)", th.Regression)}
+	}
+	return nil
+}
+
+// withScores converts the finished SkillEvals of one digest into with-skill scores.
+func withScores(group []*v1alpha1.SkillEval) []policy.Score {
+	var out []policy.Score
+	for _, e := range group {
+		if e.Status.Phase != v1alpha1.PhaseSucceeded {
+			continue
+		}
+		if with, _, _, err := scores(e); err == nil {
+			out = append(out, policy.Score{Model: e.Spec.Agent + "/" + e.Spec.Model, Required: e.Spec.Required, With: with})
+		}
+	}
+	return out
 }
 
 func (r *SkillEvalReconciler) applyOp(ctx context.Context, skill string, op policy.Op) error {
@@ -92,7 +156,7 @@ func (r *SkillEvalReconciler) applyOp(ctx context.Context, skill string, op poli
 
 // record sets the PolicyApplied condition on every SkillEval of the digest and
 // emits an event when something changed.
-func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.SkillEval, out policy.Outcome, ops []policy.Op) error {
+func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.SkillEval, out policy.Outcome, ops []policy.Op, reg *regression) error {
 	reason, eventType := "Evaluated", corev1.EventTypeNormal
 	switch {
 	case out.Demote:
@@ -119,28 +183,61 @@ func (r *SkillEvalReconciler) record(ctx context.Context, group []*v1alpha1.Skil
 			Type: ConditionPolicy, Status: metav1.ConditionTrue, Reason: reason, Message: msg,
 			ObservedGeneration: e.Generation,
 		})
-		if !changed && len(ops) == 0 {
+		regChanged := markRegression(e, reg, r.Config.Thresholds)
+		if !changed && !regChanged && len(ops) == 0 {
 			continue
 		}
 		if err := r.Status().Update(ctx, e); err != nil {
 			return fmt.Errorf("recording policy on %s: %w", e.Name, err)
 		}
-		r.Recorder.Eventf(e, nil, eventType, reason, "ApplyPolicy", "%s", msg)
+		if changed || len(ops) > 0 {
+			r.Recorder.Eventf(e, nil, eventType, reason, "ApplyPolicy", "%s", msg)
+		}
+		if regChanged && reg != nil {
+			r.Recorder.Eventf(e, nil, corev1.EventTypeWarning, ReasonWorseThanStable, "ApplyPolicy", "%s", reg.message)
+		}
 	}
 	return nil
 }
 
+// markRegression sets or clears the Regressed condition and the Regressed
+// verdict of one SkillEval. Without a regression the verdict goes back to the
+// one the scores earn. It reports whether anything changed.
+func markRegression(e *v1alpha1.SkillEval, reg *regression, th policy.Thresholds) bool {
+	changed := false
+	if reg == nil {
+		changed = meta.RemoveStatusCondition(&e.Status.Conditions, ConditionRegressed)
+	} else {
+		changed = meta.SetStatusCondition(&e.Status.Conditions, metav1.Condition{
+			Type: ConditionRegressed, Status: metav1.ConditionTrue, Reason: ReasonWorseThanStable,
+			Message: reg.message, ObservedGeneration: e.Generation,
+		})
+	}
+	verdict := e.Status.Verdict
+	if _, without, lift, err := scores(e); err == nil {
+		verdict = th.Verdict(lift, without)
+	}
+	if reg.has(e.Spec.Agent + "/" + e.Spec.Model) {
+		verdict = v1alpha1.VerdictRegressed
+	}
+	if verdict != e.Status.Verdict {
+		e.Status.Verdict, changed = verdict, true
+	}
+	return changed
+}
+
 // results converts the SkillEvals of one digest into policy input.
-func results(group []*v1alpha1.SkillEval) []policy.Result {
+func results(group []*v1alpha1.SkillEval, th policy.Thresholds) []policy.Result {
 	out := make([]policy.Result, 0, len(group))
 	for _, e := range group {
-		res := policy.Result{Required: e.Spec.Required, Succeeded: e.Status.Phase == v1alpha1.PhaseSucceeded, Verdict: e.Status.Verdict}
+		res := policy.Result{Required: e.Spec.Required, Succeeded: e.Status.Phase == v1alpha1.PhaseSucceeded}
 		if res.Succeeded {
-			_, _, lift, err := scores(e)
+			_, without, lift, err := scores(e)
 			if err != nil { // unreadable scores count as not evaluated
 				res.Succeeded = false
 			}
-			res.Lift = lift
+			// The stored verdict may be Regressed; the no-skill bands decide here.
+			res.Lift, res.Verdict = lift, th.Verdict(lift, without)
 		}
 		out = append(out, res)
 	}

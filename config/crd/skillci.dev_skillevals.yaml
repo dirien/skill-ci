@@ -41,6 +41,10 @@ spec:
     - jsonPath: .status.verdict
       name: Verdict
       type: string
+    - jsonPath: .status.reportDigest
+      name: Report
+      priority: 1
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -199,6 +203,10 @@ spec:
                 - Failed
                 - Planned
                 type: string
+              reportDigest:
+                description: ReportDigest is the digest of the eval report attached
+                  to the skill in the registry.
+                type: string
               verdict:
                 description: Verdict classifies the lift.
                 enum:
@@ -206,6 +214,7 @@ spec:
                 - Neutral
                 - Hurts
                 - Obsolete
+                - Regressed
                 type: string
               withSkill:
                 description: WithSkill is the score with the skill, two decimals.

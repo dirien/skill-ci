@@ -10,14 +10,20 @@ PULUMI ?= pulumi
 BUILDCTL ?= buildctl
 DOCR_DOCKER_CONFIG ?= $(HOME)/.cache/skill-ci/docker
 DOCKER_CONFIG ?= $(if $(wildcard $(DOCR_DOCKER_CONFIG)/config.json),$(DOCR_DOCKER_CONFIG),$(HOME)/.docker)
-CONTROLLER_TAG ?= 0.1.2
-RUNNER_TAG ?= 0.2.2
+CONTROLLER_TAG ?= 0.2.0
+RUNNER_TAG ?= 0.3.0
 REGISTRY ?= registry.digitalocean.com/skill-ci-dirien
 
 # Demo beats.
 SKILL ?= acme-release-notes
 VERSION ?= v1.1.0
 MODE ?= add
+
+# Helm chart.
+CHART ?= charts/skill-ci-controller
+HELM ?= helm
+KUBECONFORM ?= kubeconform
+CRD_CATALOG ?= https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
 # Optional lint tools.
 SHELLCHECK ?= shellcheck
@@ -47,7 +53,7 @@ build: ## Build and push the controller and runner images with the in-cluster Bu
 	@demo/build.sh all
 
 .PHONY: deploy
-deploy: ## Install the controller (kubectl apply -k config/) and set the image tags
+deploy: ## Install the controller with its Helm chart (adopts a kubectl apply -k install)
 	@demo/deploy.sh
 
 .PHONY: seed
@@ -65,6 +71,10 @@ demo-model-swap: ## Change the model list (MODE=add|swap|restore)
 .PHONY: status
 status: ## SkillEvals and the tags per skill in Harbor
 	@demo/status.sh
+
+.PHONY: report
+report: ## Download the eval reports of a skill version from Harbor (SKILL=... VERSION=... [MODEL=...] OUT=reports/)
+	@demo/report.sh $(SKILL) $(VERSION) "$(MODEL)" $(or $(OUT),reports)
 
 .PHONY: dashboard
 dashboard: ## Port-forward Grafana and print the login
@@ -91,3 +101,16 @@ lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
 	$(MARKDOWNLINT) README.md "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
+
+.PHONY: chart-crds
+chart-crds: ## Copy config/crd into the chart (crds/ is generated, never hand-edited)
+	@mkdir -p $(CHART)/crds
+	@rm -f $(CHART)/crds/*.yaml
+	@cp config/crd/*.yaml $(CHART)/crds/
+
+.PHONY: chart-lint
+chart-lint: chart-crds ## helm lint --strict, template, kubeconform, yamllint, package (needs helm, kubeconform)
+	$(HELM) lint --strict $(CHART)
+	$(HELM) template skill-ci $(CHART) -n skill-ci --include-crds --set serviceMonitor.enabled=true | $(KUBECONFORM) -strict -summary -ignore-missing-schemas -schema-location default -schema-location '$(CRD_CATALOG)' -
+	$(YAMLLINT) -c .yamllint.yaml $(CHART)/Chart.yaml $(CHART)/values.yaml
+	@d="$$(mktemp -d)" && $(HELM) package $(CHART) -d "$$d" >/dev/null && $(HELM) show chart "$$d"/*.tgz >/dev/null && rm -rf "$$d"

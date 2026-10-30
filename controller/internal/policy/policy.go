@@ -32,11 +32,14 @@ type Thresholds struct {
 	Demote float64
 	// Obsolete is the without-skill score at or above which a Neutral result is Obsolete.
 	Obsolete float64
+	// Regression is the with-skill drop below the stable version, per required
+	// model, that is still tolerated. A bigger drop blocks promotion.
+	Regression float64
 }
 
 // DefaultThresholds returns the bands from CONTRACT.md.
 func DefaultThresholds() Thresholds {
-	return Thresholds{Helps: 0.05, Hurts: -0.10, Promote: 0.10, Demote: -0.10, Obsolete: 0.80}
+	return Thresholds{Helps: 0.05, Hurts: -0.10, Promote: 0.10, Demote: -0.10, Obsolete: 0.80, Regression: 0.05}
 }
 
 // Verdict classifies one result. Scores are compared at two decimals.
@@ -76,6 +79,9 @@ type Outcome struct {
 	Demote bool
 	// Obsolete means every required model does fine without the skill.
 	Obsolete bool
+	// Regressed means the digest scores worse than the stable version and
+	// must not replace it.
+	Regressed bool
 }
 
 // Evaluate applies the promote, demote and obsolete rules to one digest.
@@ -103,6 +109,53 @@ func (t Thresholds) Evaluate(results []Result) Outcome {
 	out.Promote = allPromote && !out.Demote
 	out.Obsolete = allObsolete
 	return out
+}
+
+// Score is the with-skill score of one digest on one model.
+type Score struct {
+	// Model identifies the model, for example claude-code/claude-haiku-5-5.
+	Model string
+	// Required marks models that gate promotion.
+	Required bool
+	// With is the with-skill score.
+	With float64
+}
+
+// Regression is a required model on which a candidate scores worse than the stable version.
+type Regression struct {
+	// Model identifies the model.
+	Model string
+	// Candidate is the with-skill score of the candidate digest.
+	Candidate float64
+	// Stable is the with-skill score of the current stable digest.
+	Stable float64
+}
+
+// Regressions compares a candidate with the current stable digest. It returns
+// the required models where the candidate scores lower by more than the
+// tolerance. Models only one side has a score for, and optional models, are
+// not compared.
+func (t Thresholds) Regressions(candidate, stable []Score) []Regression {
+	base := make(map[string]float64, len(stable))
+	for _, s := range stable {
+		base[s.Model] = s.With
+	}
+	var out []Regression
+	for _, c := range candidate {
+		with, ok := base[c.Model]
+		if ok && c.Required && round2(with-c.With) > t.Regression+epsilon {
+			out = append(out, Regression{Model: c.Model, Candidate: c.With, Stable: with})
+		}
+	}
+	return out
+}
+
+// Block marks the outcome Regressed and withholds promotion when regs is not empty.
+func (o Outcome) Block(regs []Regression) Outcome {
+	if len(regs) > 0 {
+		o.Regressed, o.Promote = true, false
+	}
+	return o
 }
 
 // Op is one tag change.

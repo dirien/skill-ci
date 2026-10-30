@@ -16,8 +16,13 @@ func TestParseResult(t *testing.T) {
 		msg                 string
 		with, without, lift *float64
 		errField            string
+		report              string
 		wantErr             bool
 	}{
+		{name: "report digest", msg: `{"withSkill":0.9,"withoutSkill":0.4,"report":"sha256:abc"}`,
+			with: f(0.9), without: f(0.4), lift: f(0.5), report: "sha256:abc"},
+		{name: "report that is not a digest is dropped", msg: `{"withSkill":0.9,"withoutSkill":0.4,"report":"oops"}`,
+			with: f(0.9), without: f(0.4), lift: f(0.5)},
 		{name: "contract example", msg: `{"withSkill": 0.95, "withoutSkill": 0.36, "lift": 0.59, "agent": "claude-code", "model": "m"}`,
 			with: f(0.95), without: f(0.36), lift: f(0.59)},
 		{name: "trailing newline", msg: "{\"withSkill\":1,\"withoutSkill\":0.5,\"lift\":0.5}\n",
@@ -39,6 +44,9 @@ func TestParseResult(t *testing.T) {
 			}
 			if tt.wantErr {
 				return
+			}
+			if res.Report != tt.report {
+				t.Errorf("Report = %q, want %q", res.Report, tt.report)
 			}
 			if res.Error != tt.errField {
 				t.Errorf("Error = %q, want %q", res.Error, tt.errField)

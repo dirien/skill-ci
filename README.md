@@ -27,6 +27,10 @@ skillevaluator-patch/  Two-hunk patch so SkillEvaluator can use that environment
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
 ```
 
+## Helm chart
+
+`charts/skill-ci-controller/` packages the controller (CRD, RBAC, runner ServiceAccount, Deployment, Service, optional ServiceMonitor) as a Helm 4 chart, an alternative to `kubectl apply -k config/`. `make chart-crds` copies `config/crd/` into the chart, `make chart-lint` runs `helm lint --strict`, kubeconform, yamllint and a packaging check. See [the chart README](charts/skill-ci-controller/README.md) for values, adopting an existing install with `--take-ownership` and pushing the chart to an OCI registry.
+
 ## Run the demo
 
 Everything goes through `make` (`make help` lists the targets). Scripts print what they do in plain words.
@@ -35,8 +39,8 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | --- | --- |
 | `make up` | `pulumi up`: cluster, registry, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
 | `make docr-login` | Writes DOCR push credentials from the cluster to `~/.cache/skill-ci/docker` (used by `make build` when present) |
-| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.1.2`, `RUNNER_TAG=0.2.2`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
-| `make deploy` | `kubectl apply -k config/`, then sets the controller and runner image tags |
+| `make build` | Builds the controller and runner images in the cluster's BuildKit and pushes them to DOCR (`CONTROLLER_TAG=0.2.0`, `RUNNER_TAG=0.3.0`, `BUILDCTL=buildctl`, `DOCKER_CONFIG=...`) |
+| `make deploy` | Applies the CRD and installs the controller with its Helm chart (`helm upgrade --install --take-ownership`), pinning the controller and runner tags |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |
 | `make demo-model-swap` | Changes the model list live (`MODE=add` adds `claude-code/claude-opus-5-5`, `swap` replaces sonnet with opus, `restore` resets) |

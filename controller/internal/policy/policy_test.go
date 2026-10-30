@@ -111,3 +111,52 @@ func TestPlan(t *testing.T) {
 		})
 	}
 }
+
+func TestRegressions(t *testing.T) {
+	const (
+		haiku  = "claude-code/claude-haiku-5-5"
+		sonnet = "claude-code/claude-sonnet-5-5"
+	)
+	req := func(model string, with float64) Score { return Score{Model: model, Required: true, With: with} }
+	tests := []struct {
+		name              string
+		candidate, stable []Score
+		want              []Regression
+	}{
+		{"equal scores", []Score{req(haiku, 0.95)}, []Score{req(haiku, 0.95)}, nil},
+		{"small drop within tolerance", []Score{req(haiku, 0.91)}, []Score{req(haiku, 0.95)}, nil},
+		{"drop of exactly the tolerance", []Score{req(haiku, 0.90)}, []Score{req(haiku, 0.95)}, nil},
+		{"drop beyond tolerance", []Score{req(haiku, 0.69)}, []Score{req(haiku, 0.95)},
+			[]Regression{{Model: haiku, Candidate: 0.69, Stable: 0.95}}},
+		{"one of two required models drops", []Score{req(haiku, 0.69), req(sonnet, 0.96)},
+			[]Score{req(haiku, 0.95), req(sonnet, 0.95)},
+			[]Regression{{Model: haiku, Candidate: 0.69, Stable: 0.95}}},
+		{"optional model drop is ignored", []Score{{Model: haiku, With: 0.2}}, []Score{req(haiku, 0.95)}, nil},
+		{"model without a stable score is skipped", []Score{req(sonnet, 0.1)}, []Score{req(haiku, 0.95)}, nil},
+		{"no stable scores", []Score{req(haiku, 0.69)}, nil, nil},
+		{"candidate is better", []Score{req(haiku, 0.99)}, []Score{req(haiku, 0.80)}, nil},
+	}
+	th := DefaultThresholds()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := th.Regressions(tt.candidate, tt.stable); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Regressions() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBlock(t *testing.T) {
+	promote := Outcome{Complete: true, Promote: true}
+	if got := promote.Block(nil); got != promote {
+		t.Errorf("Block(nil) = %+v, want it unchanged", got)
+	}
+	want := Outcome{Complete: true, Regressed: true}
+	if got := promote.Block([]Regression{{Model: "m"}}); got != want {
+		t.Errorf("Block(regression) = %+v, want %+v", got, want)
+	}
+	ops := Plan(want, "sha256:cur", false, []harbor.Artifact{{Digest: "sha256:old", Tags: []string{"stable"}}, {Digest: "sha256:cur"}})
+	if len(ops) != 0 {
+		t.Errorf("Plan() of a regressed digest = %+v, want no changes", ops)
+	}
+}
