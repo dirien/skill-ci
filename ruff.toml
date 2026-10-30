@@ -1,0 +1,15 @@
+target-version = "py312"
+line-length = 100
+src = ["runner", "harbor-agent-sandbox"]
+extend-exclude = ["infra", "controller"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "S"]
+
+[lint.per-file-ignores]
+# Fixed argv lists run by design: oras and skillevaluator are looked up on PATH.
+"runner/skill_eval.py" = ["S603", "S607"]
+"**/tests/*" = ["S101", "S105", "S106", "S108", "S603", "S607"]
+
+[format]
+quote-style = "double"

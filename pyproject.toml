@@ -1,0 +1,6 @@
+# Tool configuration for the Python parts (runner/, harbor-agent-sandbox/).
+# The package itself is declared in harbor-agent-sandbox/pyproject.toml.
+
+[tool.pytest.ini_options]
+testpaths = ["runner/tests", "harbor-agent-sandbox/tests"]
+pythonpath = ["runner"]

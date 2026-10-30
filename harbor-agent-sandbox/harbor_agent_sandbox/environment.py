@@ -20,13 +20,12 @@ import logging
 import os
 import tarfile
 from pathlib import Path
-from typing import Any, override
-
-from kubernetes import client as k8s_client
-from kubernetes.client.rest import ApiException
+from typing import Any, cast, override
 
 from harbor.environments.ack import ACKEnvironment
 from harbor.models.trial.paths import EnvironmentPaths
+from kubernetes import client as k8s_client
+from kubernetes.client.rest import ApiException
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +43,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
         runtime_class: str | None = None,
         ready_timeout_sec: int = 600,
         **kwargs: Any,
-    ):
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.runtime_class = runtime_class
         self.ready_timeout_sec = int(ready_timeout_sec)
@@ -118,9 +117,13 @@ class AgentSandboxEnvironment(ACKEnvironment):
     async def _wait_for_sandbox_ready(self) -> None:
         api = self._custom_api()
         for _ in range(self.ready_timeout_sec // 2):
-            sandbox = await asyncio.to_thread(
-                api.get_namespaced_custom_object, GROUP, VERSION, self.namespace, PLURAL, self.pod_name
-            )
+            sandbox = cast(
+                "dict[str, Any]",
+                await asyncio.to_thread(
+                    api.get_namespaced_custom_object,
+                    GROUP, VERSION, self.namespace, PLURAL, self.pod_name,
+                ),
+            )  # fmt: skip
             for cond in sandbox.get("status", {}).get("conditions", []):
                 if cond["type"] == "Ready" and cond["status"] == "True":
                     return
@@ -128,13 +131,17 @@ class AgentSandboxEnvironment(ACKEnvironment):
         raise RuntimeError(f"Sandbox {self.pod_name} was not ready after {self.ready_timeout_sec}s")
 
     @override
-    async def start(self, force_build: bool):
+    async def start(self, force_build: bool) -> None:
         await self._ensure_client()
         await self._ensure_image(force_build)
 
         await asyncio.to_thread(
             self._custom_api().create_namespaced_custom_object,
-            GROUP, VERSION, self.namespace, PLURAL, self._sandbox_manifest(),
+            GROUP,
+            VERSION,
+            self.namespace,
+            PLURAL,
+            self._sandbox_manifest(),
         )
         await self._wait_for_sandbox_ready()
 
@@ -148,7 +155,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
         await self._upload_environment_dir_after_start()
 
     @override
-    async def stop(self, delete: bool):
+    async def stop(self, delete: bool) -> None:
         if self._client_manager is None:
             return
         await self._ensure_client()
@@ -156,7 +163,11 @@ class AgentSandboxEnvironment(ACKEnvironment):
             if delete:
                 await asyncio.to_thread(
                     self._custom_api().delete_namespaced_custom_object,
-                    GROUP, VERSION, self.namespace, PLURAL, self.pod_name,
+                    GROUP,
+                    VERSION,
+                    self.namespace,
+                    PLURAL,
+                    self.pod_name,
                 )
         except ApiException as e:
             if e.status != 404:
@@ -164,7 +175,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
         finally:
             try:
                 await self._client_manager.release_client()
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 logger.error(f"Error releasing Kubernetes client: {e}")
             finally:
                 self._client_manager = None

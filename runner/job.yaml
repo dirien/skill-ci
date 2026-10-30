@@ -1,45 +1,7 @@
-# One SkillEval run: SkillEvaluator's live tier for one skill and one pinned model.
+# One manual SkillEval run: SkillEvaluator's live tier for one skill version and
+# one pinned model. The controller creates the same Job per SkillEval (CONTRACT.md,
+# "Runner Job contract"); the skill-eval-runner ServiceAccount and Role live in config/.
 # Trials run as Agent Sandboxes in the same namespace.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: skill-eval-runner
-  namespace: skill-ci
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: skill-eval-runner
-  namespace: skill-ci
-rules:
-  - apiGroups: ["agents.x-k8s.io"]
-    resources: ["sandboxes"]
-    verbs: ["create", "get", "list", "watch", "delete"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create", "get"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    resourceNames: ["docr"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: skill-eval-runner
-  namespace: skill-ci
-subjects:
-  - kind: ServiceAccount
-    name: skill-eval-runner
-    namespace: skill-ci
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: skill-eval-runner
----
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -54,57 +16,40 @@ spec:
       restartPolicy: Never
       imagePullSecrets:
         - name: docr
-      initContainers:
-        # Pull the skill version under test from the registry.
-        - name: pull-skill
-          image: ghcr.io/oras-project/oras:v1.3.0
-          workingDir: /skills
-          args:
-            - pull
-            - --registry-config=/auth/config.json
-            - registry.digitalocean.com/skill-ci-dirien/skill-acme-release-notes:v1.0.0
-          volumeMounts:
-            - name: skills
-              mountPath: /skills
-            - name: registry-auth
-              mountPath: /auth
-              readOnly: true
       containers:
-        - name: skillevaluator
-          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.1.0
-          args:
-            - tier3
-            - evaluate
-            - /skills/acme-release-notes
-            - --agents=claude-code
-            - --env-mode=ack
-            - --ek=namespace=skill-ci
-            - --ek=registry=registry.digitalocean.com/skill-ci-dirien
-            - --ek=image_pull_secret=docr
-            - --ek=skip_image_check=false
-            - --agent-model=claude-code=claude-haiku-5-5
-            - --n-attempts=1
-            - --results-dir=/results
-            - --progress=plain
+        - name: skill-eval
+          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.2.0
+          terminationMessagePolicy: FallbackToLogsOnError
           env:
+            - name: SKILL_REF
+              value: harbor.harbor.svc.cluster.local/skills/acme-release-notes:v1.0.0
+            - name: SKILL_NAME
+              value: acme-release-notes
+            - name: AGENT
+              value: claude-code
+            - name: MODEL
+              value: claude-haiku-5-5
+            - name: ATTEMPTS
+              value: "1"
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: llm-keys
                   key: anthropic
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-keys
+                  key: openai
+                  optional: true
           volumeMounts:
-            - name: skills
-              mountPath: /skills
-            - name: results
-              mountPath: /results
+            - name: registry-auth
+              mountPath: /auth
+              readOnly: true
       volumes:
-        - name: skills
-          emptyDir: {}
         - name: registry-auth
           secret:
-            secretName: docr
+            secretName: harbor-pull
             items:
               - key: .dockerconfigjson
                 path: config.json
-        - name: results
-          emptyDir: {}

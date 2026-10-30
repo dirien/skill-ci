@@ -117,6 +117,18 @@ Tag changes go through the Harbor REST API (`POST /api/v2.0/projects/skills/repo
 
 Gauges labeled `skill`, `version`, `agent`, `model`: `skillci_lift`, `skillci_with_score`, `skillci_without_score`. Gauge `skillci_stable{skill,version}` (1 when tagged stable). Gauge `skillci_obsolete{skill,version}`. Counter `skillci_skillevals_total{phase}`.
 
+## Webhook auth
+
+Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_header` to `Bearer <token>`; the controller rejects requests whose `Authorization` header doesn't match (env `WEBHOOK_TOKEN` from that secret). If `WEBHOOK_TOKEN` is empty, the controller logs a warning and accepts all requests.
+
+## Build and deploy
+
+- `controller/Dockerfile`, build context `controller/`.
+- `runner/Dockerfile`, build context repo root.
+- Images are built by the in-cluster BuildKit (`buildctl --addr tcp://127.0.0.1:1234` through `kubectl -n skill-ci port-forward svc/buildkitd 1234:1234`).
+- All controller-side manifests (CRD, controller Deployment and Service, RBAC, runner ServiceAccount and Role) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/`.
+- Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`; pod label `app.kubernetes.io/name: skill-ci-controller`.
+
 ## Cost guard
 
 Controller flags `--max-concurrent-jobs` (default 4; extra SkillEvals stay Pending), `--trial-budget` (max trials per controller lifetime, default 200; trials = attempts x 2 arms), `--dry-run` (create SkillEvals in phase Planned, log matrix size, create no Jobs).
