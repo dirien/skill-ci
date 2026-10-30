@@ -4,7 +4,10 @@ name: Release
 #   - GitHub release with binaries, checksums, SBOMs and notes (GoReleaser)
 #   - ghcr.io/dirien/skill-ci-controller:0.7.0 (linux/amd64, linux/arm64)
 #   - ghcr.io/dirien/skill-ci-runner:0.7.0 (linux/amd64)
-#   - oci://ghcr.io/dirien/charts/skill-ci-controller, chart version and appVersion 0.7.0
+#   - ghcr.io/dirien/skill-ci-sandbox:0.7.0 (linux/amd64), the generic image every trial sandbox
+#     starts from; the runner of the same release uses it
+#   - oci://ghcr.io/dirien/charts/skill-ci-controller, chart version and appVersion 0.7.0; its
+#     default images are the three above
 # Tags with a hyphen (v0.7.0-rc.1) are pre-releases and do not move latest.
 on:
   push:
@@ -165,6 +168,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          # The runner starts its trials from the sandbox image of the same release.
+          build-args: SKILL_CI_VERSION=${{ steps.meta.outputs.version }}
           labels: |
             org.opencontainers.image.title=skill-ci-runner
             org.opencontainers.image.description=Runs one SkillEval: ORAS pulls the skill, SkillEvaluator checks it through all three tiers
@@ -182,9 +187,81 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign -y "${IMAGE}@${DIGEST}"
 
+  sandbox:
+    name: Sandbox image
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      IMAGE: ghcr.io/dirien/skill-ci-sandbox
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Image tags
+        id: meta
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          {
+            echo "version=${version}"
+            echo "tags<<EOF"
+            echo "${IMAGE}:${version}"
+            if [[ "$version" != *-* ]]; then
+              echo "${IMAGE}:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Build context is sandbox/. The base image and the agent CLI releases are pinned in
+      # sandbox/Dockerfile; the build fails if a CLI is not at its pinned release. The image is
+      # linux/amd64 only, like the nodes and the runner.
+      - name: Build and push sandbox image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: sandbox
+          file: sandbox/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=sandbox
+          cache-to: type=gha,scope=sandbox,mode=max
+
+      - name: Sign sandbox image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign -y "${IMAGE}@${DIGEST}"
+
   chart:
     name: Helm chart
-    needs: [controller, runner]
+    needs: [controller, runner, sandbox]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -210,18 +287,22 @@ jobs:
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      # The chart version and appVersion are the tag, and the chart defaults to the images of this
-      # release (appVersion tag for the controller, the same tag for the runner).
+      # The chart version and appVersion are the tag. The chart's default images are the controller,
+      # runner and sandbox images of that appVersion, so nothing in values.yaml is rewritten.
       - name: Package chart
         env:
           TAG: ${{ github.ref_name }}
         run: |
           version="${TAG#v}"
-          release_chart="$RUNNER_TEMP/skill-ci-controller"
-          cp -r charts/skill-ci-controller "$release_chart"
-          .github/scripts/chart-release-values.sh "$release_chart" "$version"
-          helm lint --strict "$release_chart"
-          helm package "$release_chart" --version "$version" --app-version "$version" --destination .helm-packages
+          helm lint --strict charts/skill-ci-controller
+          helm package charts/skill-ci-controller --version "$version" --app-version "$version" --destination .helm-packages
+          helm template skill-ci ".helm-packages/skill-ci-controller-${version}.tgz" --namespace skill-ci > rendered.yaml
+          for expected in \
+            "image: \"ghcr.io/dirien/skill-ci-controller:${version}\"" \
+            "--runner-image=ghcr.io/dirien/skill-ci-runner:${version}" \
+            "--sandbox-image=ghcr.io/dirien/skill-ci-sandbox:${version}"; do
+            grep -F -e "$expected" rendered.yaml
+          done
 
       - name: Push chart to GHCR and sign it
         run: |

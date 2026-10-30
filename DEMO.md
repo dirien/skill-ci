@@ -57,7 +57,7 @@ Three things to know before you talk about these numbers:
 
 ## Controller version check (do this first)
 
-For the statistical gate (Inconclusive, confidence intervals) and the agent versions run controller 0.6.0 with runner 0.6.0 and apply the CRD first (`kubectl apply --server-side -f charts/skill-ci-controller/crds/`, which `make deploy` does). Older runs have no trial scores and are judged by the fixed thresholds. SkillEvals from before 0.6.0 have no `spec.agentVersion`: the controller treats them as entries without a version, and `kubectl get skillevals` shows an empty `AGENTVER` for them. Applying the pinned list of `demo/models.yaml` on top of them adds the pinned entries, so every `beta` and `stable` skill runs again; for a clean demo state run `make reset` first.
+For the statistical gate (Inconclusive, confidence intervals) and the agent versions run controller 0.6.0 with the runner and sandbox images of the same release (`make deploy` installs all three) and apply the CRD first (`kubectl apply --server-side -f charts/skill-ci-controller/crds/`, which `make deploy` does). Older runs have no trial scores and are judged by the fixed thresholds. SkillEvals from before 0.6.0 have no `spec.agentVersion`: the controller treats them as entries without a version, and `kubectl get skillevals` shows an empty `AGENTVER` for them. Applying the pinned list of `demo/models.yaml` on top of them adds the pinned entries, so every `beta` and `stable` skill runs again; for a clean demo state run `make reset` first.
 
 Controller images before 0.2.1 have two defects that show up exactly in this state. Both are fixed in 0.2.1 (`controller/internal/controller/siblings.go` and `policy.go`, see CONTRACT.md):
 
@@ -86,7 +86,7 @@ One hour before:
 2. Controller image and flapping check (see above).
 
    ```bash
-   kubectl -n skill-ci get deploy skill-ci-controller -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+   kubectl -n skill-ci get deploy skill-ci-controller -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}{.spec.template.spec.containers[0].args}{"\n"}'
    kubectl -n skill-ci logs deploy/skill-ci-controller --since=2m | grep "changed tag"
    ```
 
@@ -98,11 +98,13 @@ One hour before:
 
    Expect 15 SkillEvals, all `Succeeded`, and the tag block shown above. If it does not, go to "Recovery".
 
-4. LLM key and registry credentials exist (only matters for the live trigger).
+4. The LLM key exists (only matters for the live trigger).
 
    ```bash
-   kubectl -n skill-ci get secret llm-keys docr harbor-credentials harbor-pull harbor-webhook
+   kubectl -n skill-ci get secret llm-keys harbor-credentials harbor-pull harbor-webhook
    ```
+
+   The sandbox image (about 1 GB compressed) is pulled once per node. A node the autoscaler added after the last run has not got it yet, so the first sandbox on it waits for the pull. Before a live trigger, run one eval so the nodes you rely on have the image.
 
 5. Reports on disk (they are needed offline, in case the network fails).
 
@@ -351,7 +353,7 @@ If the cluster or the network fails, do not debug on stage.
 | Reporting site unreachable | The port-forward died, or the controller image is older than 0.3.0 (no `--reports-addr`). Run `make reports-ui` again, or use `make report-page` |
 | Grafana unreachable | The port-forward died. Stop terminal 4 and run `make dashboard` again |
 | Dashboard empty | `kubectl -n skill-ci rollout restart deploy/skill-ci-controller`, wait a minute, refresh |
-| `stable` moving back and forth in the controller log | The controller is older than 0.2.1. Run `make build deploy` (see "Controller version check") |
+| `stable` moving back and forth in the controller log | The controller is older than 0.2.1. Run `make deploy` with a newer release (see "Controller version check") |
 | A webhook did not fire, so a pushed version has no SkillEvals | `make seed RETRIGGER=1` re-fires the push webhook for the v1.0.0 tags. For another version, `demo/retrigger.sh <skill> <version>`. The controller dedupes by digest and model, so nothing is evaluated twice |
 | State is wrong beyond repair | `make reset`, then rebuild (below). This deletes every result, and rebuilding takes about 90 minutes. Never do it within an hour of the show |
 
@@ -375,7 +377,7 @@ Watch with `kubectl -n skill-ci get skillevals -w`. Check the end state against 
 
 ## Teardown
 
-This deletes the cluster, Harbor and the registry. Run it by hand, after the talk, when you are sure.
+This deletes the cluster and Harbor. Run it by hand, after the talk, when you are sure.
 
 ```bash
 . ~/.pulumi-local/skill-ci-env.sh && cd infra && pulumi destroy

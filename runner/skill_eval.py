@@ -52,6 +52,9 @@ DEFAULT_AGENT_VERSIONS = {"claude-code": "2.1.292", "codex": "0.161.0", "opencod
 # A version reaches `npm install -g pkg@<version>` in every sandbox: letters, digits, dot, dash,
 # underscore only, which is also a valid Kubernetes label value.
 AGENT_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$")
+# A container image reference (registry, repository, tag or digest) and a Kubernetes Secret name.
+IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$")
+SECRET_NAME = re.compile(r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$")
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 # OpenCode providers served through an OpenAI-compatible Chat Completions endpoint: the model
@@ -72,22 +75,35 @@ MAX_SAMPLES = 50  # per-trial scores kept per arm; 3 cases x 3 attempts give 9
 SEMVER_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
+# The generic sandbox image of the release the runner belongs to. runner/Dockerfile sets
+# SANDBOX_IMAGE to its own release tag; this is the fallback outside the image.
+DEFAULT_SANDBOX_IMAGE = "ghcr.io/dirien/skill-ci-sandbox:latest"
+
 # Defaults mirror the runner image; the Job can override any of them.
 DEFAULTS = {
     "ATTEMPTS": "1",
     "REGISTRY_CONFIG": "/auth/config.json",
     "REGISTRY_PLAIN_HTTP": "true",
     "SANDBOX_NAMESPACE": "skill-ci",
-    "TASK_IMAGE_REGISTRY": "registry.digitalocean.com/skill-ci-dirien",
-    "TASK_IMAGE_PULL_SECRET": "docr",
+    # Every trial runs in this image and nothing is built. The task-specific steps of the
+    # generated Dockerfile (COPY skills, ENV, WORKDIR) are replayed when the sandbox starts.
+    "SANDBOX_IMAGE": DEFAULT_SANDBOX_IMAGE,
+    # Names of image pull secrets for the sandbox pods, comma separated. None: public image.
+    "SANDBOX_PULL_SECRETS": "",
+    # Bring your own builder: with a registry here the trials build and push a task image each
+    # (Harbor's ack build, needs push rights, TASK_IMAGE_PULL_SECRET and a builder you run) and
+    # SANDBOX_IMAGE is not used.
+    "TASK_IMAGE_REGISTRY": "",
+    "TASK_IMAGE_PULL_SECRET": "",
     # Skill tasks write a few files; the 2 CPU / 4 GiB task default starves a small cluster. The
     # size reaches the sandbox as HARBOR_SANDBOX_CPUS / HARBOR_SANDBOX_MEMORY_MB (tool_env).
     "SANDBOX_CPUS": "1",
     "SANDBOX_MEMORY_MB": "2048",
     # Trials running at once per eval; the controller caps how many evals run at once.
     "TRIAL_CONCURRENCY": "2",
-    # Every trial installs the agent CLI in its sandbox; on a busy cluster that
-    # outlasts Harbor's 360 s agent setup timeout.
+    # The sandbox image has the agent CLIs at the default pins, so a trial does not install
+    # them; another AGENT_VERSION is still installed in every sandbox, and on a busy cluster
+    # that can outlast Harbor's 360 s agent setup timeout.
     "TIMEOUT_MULTIPLIER": "2",
     # SkillEvaluator validation profile for Tier 1. See runner/README or DEMO.md "Profile".
     "TIER1_PROFILE": "external",
@@ -112,6 +128,15 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
         raise EvalError(
             f"AGENT_VERSION must be a release like 2.1.292, got {config['AGENT_VERSION']!r}"
         )
+    if not builds_task_images(config):
+        if not IMAGE_REFERENCE.match(config["SANDBOX_IMAGE"]):
+            raise EvalError(
+                f"SANDBOX_IMAGE must be an image reference, got {config['SANDBOX_IMAGE']!r}"
+            )
+        secrets = [n.strip() for n in config["SANDBOX_PULL_SECRETS"].split(",") if n.strip()]
+        if bad := [n for n in secrets if not SECRET_NAME.match(n)]:
+            raise EvalError(f"SANDBOX_PULL_SECRETS must list Secret names, got {bad[0]!r}")
+        config["SANDBOX_PULL_SECRETS"] = ",".join(secrets)
     config["AGENT_MODEL"] = agent_route(config["AGENT"], config["MODEL"], environ).model
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
@@ -248,6 +273,15 @@ class ValidateReport:
     benchmark_path: Path | None = None
 
 
+def builds_task_images(settings: Mapping[str, str]) -> bool:
+    """Return True when trials build task images in a registry of the operator's own.
+
+    That is the optional "bring your own builder" path, selected by ``TASK_IMAGE_REGISTRY``.
+    Otherwise every trial runs the generic sandbox image and nothing is built.
+    """
+    return bool((settings.get("TASK_IMAGE_REGISTRY") or "").strip())
+
+
 def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     """Return the environment for every SkillEvaluator command (all three tiers).
 
@@ -263,7 +297,8 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     with ``OPENAI_BASE_URL`` (the OpenAI endpoint unless the Job says otherwise). OpenCode behind
     a gateway (``agent_route``) gets the gateway key as ``OPENAI_API_KEY``, so Tier 2 embeddings
     keep the real OpenAI key through ``SKILL_EVAL_EMBEDDING_*``. The requested agent release
-    reaches SkillEvaluator as ``SKILLEVALUATOR_AGENT_VERSION`` (patch hunk 7).
+    reaches SkillEvaluator as ``SKILLEVALUATOR_AGENT_VERSION`` (patch hunk 7), and the sandbox
+    image as ``HARBOR_SANDBOX_IMAGE`` (patch hunk 4).
     """
     env = dict(environ)
     route = (
@@ -294,6 +329,12 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     ):
         if not env.get(name):
             env[name] = env.get(source) or DEFAULTS[source]
+    # The generic sandbox image is what the environment runs, unless the Job brings a registry
+    # to build task images in. HARBOR_SANDBOX_IMAGE is the variable the environment reads.
+    if builds_task_images(env):
+        env.pop("HARBOR_SANDBOX_IMAGE", None)
+    else:
+        env["HARBOR_SANDBOX_IMAGE"] = env.get("SANDBOX_IMAGE") or DEFAULTS["SANDBOX_IMAGE"]
     if not env.get("SKILL_EVAL_LLM_PROVIDER"):
         if env.get("ANTHROPIC_API_KEY"):
             env["SKILL_EVAL_LLM_PROVIDER"] = "anthropic"
@@ -339,16 +380,32 @@ def validate_command(
             "--agents", config["AGENT"],
             "--env-mode", "ack",
             "--ek", f"namespace={config['SANDBOX_NAMESPACE']}",
-            "--ek", f"registry={config['TASK_IMAGE_REGISTRY']}",
-            "--ek", f"image_pull_secret={config['TASK_IMAGE_PULL_SECRET']}",
-            "--ek", "skip_image_check=false",
             "--agent-model", f"{config['AGENT']}={config['AGENT_MODEL']}",
             "--n-attempts", config["ATTEMPTS"],
             "--n-concurrent", config["TRIAL_CONCURRENCY"],
             "--timeout-multiplier", config["TIMEOUT_MULTIPLIER"],
             "--results-dir", str(results),
         ]  # fmt: skip
+        cmd += image_flags(config)
     return cmd
+
+
+def image_flags(config: Mapping[str, str]) -> list[str]:
+    """Return the ``--ek`` flags that say where the sandbox gets its image.
+
+    The generic sandbox image itself travels in ``HARBOR_SANDBOX_IMAGE`` (see ``tool_env``);
+    only its pull secrets are a keyword argument. With ``TASK_IMAGE_REGISTRY`` Harbor builds and
+    pushes a task image instead, and the registry, its pull secret and the existence check
+    (``skip_image_check=false``: build only when the image is missing) are needed.
+    """
+    if builds_task_images(config):
+        flags = ["--ek", f"registry={config['TASK_IMAGE_REGISTRY']}"]
+        if config["TASK_IMAGE_PULL_SECRET"]:
+            flags += ["--ek", f"image_pull_secret={config['TASK_IMAGE_PULL_SECRET']}"]
+        return [*flags, "--ek", "skip_image_check=false"]
+    if config["SANDBOX_PULL_SECRETS"]:
+        return ["--ek", f"image_pull_secret={config['SANDBOX_PULL_SECRETS']}"]
+    return []
 
 
 def catalog_build_command(catalog_dir: Path, catalog: Path, out: Path) -> list[str]:

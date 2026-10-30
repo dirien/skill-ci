@@ -30,10 +30,13 @@ rules:
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create", "get"]
+  {{- with .Values.runner.pullSecretName }}
+  # Only for trials that build task images in a registry of your own.
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: [{{ .Values.runner.pullSecretName | quote }}]
+    resourceNames: [{{ . | quote }}]
     verbs: ["get"]
+  {{- end }}
   {{- with .Values.runner.extraRules }}
   {{- toYaml . | nindent 2 }}
   {{- end }}

@@ -2,12 +2,14 @@
 package runner
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 )
@@ -56,6 +58,38 @@ type Config struct {
 	Registry string
 	// Project is the registry project that holds skills.
 	Project string
+	// SandboxImage is the generic sandbox image every trial of the run starts from
+	// (SANDBOX_IMAGE). Empty leaves the runner's own default: the sandbox image of its release.
+	SandboxImage string
+	// ImagePullSecrets name the Secrets that pull the runner image and, as SANDBOX_PULL_SECRETS,
+	// the sandbox image. None by default: the images are public.
+	ImagePullSecrets []string
+}
+
+// ParsePullSecrets splits a comma separated list of Secret names, as the --image-pull-secrets
+// flag takes it, and rejects anything that is not a Kubernetes name.
+func ParsePullSecrets(list string) ([]string, error) {
+	var names []string
+	for _, name := range strings.Split(list, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if errs := validation.IsDNS1123Subdomain(name); len(errs) > 0 {
+			return nil, fmt.Errorf("image pull secret %q: %s", name, strings.Join(errs, "; "))
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+// pullSecretRefs returns the pod's imagePullSecrets, nil when there are none.
+func pullSecretRefs(names []string) []corev1.LocalObjectReference {
+	var refs []corev1.LocalObjectReference
+	for _, name := range names {
+		refs = append(refs, corev1.LocalObjectReference{Name: name})
+	}
+	return refs
 }
 
 // maxJobName is the longest Job name that still fits the job-name label of its pods.
@@ -89,6 +123,12 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 	}
 	if se.Spec.AgentVersion != "" { // without it the runner uses its default pin for the agent
 		env = append(env, corev1.EnvVar{Name: "AGENT_VERSION", Value: se.Spec.AgentVersion})
+	}
+	if cfg.SandboxImage != "" {
+		env = append(env, corev1.EnvVar{Name: "SANDBOX_IMAGE", Value: cfg.SandboxImage})
+	}
+	if len(cfg.ImagePullSecrets) > 0 {
+		env = append(env, corev1.EnvVar{Name: "SANDBOX_PULL_SECRETS", Value: strings.Join(cfg.ImagePullSecrets, ",")})
 	}
 	for _, k := range LLMKeys {
 		env = append(env, corev1.EnvVar{Name: k.Env, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
@@ -128,7 +168,7 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					ServiceAccountName: ServiceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,
-					ImagePullSecrets:   []corev1.LocalObjectReference{{Name: "docr"}},
+					ImagePullSecrets:   pullSecretRefs(cfg.ImagePullSecrets),
 					Containers: []corev1.Container{{
 						Name:         ContainerName,
 						Image:        cfg.Image,

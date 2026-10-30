@@ -10,17 +10,18 @@ Shared interfaces for every part of skill-ci. Change this file first, then the c
 | Harbor (goharbor) in-cluster URL | `http://harbor.harbor.svc.cluster.local` (plain HTTP, also its `externalURL`) |
 | Harbor project for skills | `skills` (repository = skill name) |
 | Skill artifact | `oras push <host>/skills/<name>:vX.Y.Z --artifact-type application/vnd.agentskill.v1 <name>/` (directory named exactly like the skill) |
-| Container images (runner, controller, task images) | `registry.digitalocean.com/skill-ci-dirien/<image>:<tag>`, pull secret `docr` |
-| Controller image | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:<tag>` |
-| Runner image | `registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:<tag>` |
-| BuildKit | `tcp://buildkitd.skill-ci:1234` |
+| Container images | `ghcr.io/dirien/<image>:<tag>`, built and pushed by the release workflow, one tag (the release, `0.7.0` for `v0.7.0`) for all three. Public packages, so no pull secret by default |
+| Controller image | `ghcr.io/dirien/skill-ci-controller:<tag>` (linux/amd64, linux/arm64) |
+| Runner image | `ghcr.io/dirien/skill-ci-runner:<tag>` (linux/amd64) |
+| Sandbox image | `ghcr.io/dirien/skill-ci-sandbox:<tag>` (linux/amd64): the one image every trial sandbox starts from, see "Sandbox image" |
 
 ## Secrets (namespace `skill-ci`)
+
+Nothing here is needed to pull the images while the GHCR packages are public. For private packages create a `docker-registry` Secret in the namespace and name it in the chart's `imagePullSecrets` (controller flag `--image-pull-secrets`): it is used for the controller, the runner Jobs and the sandboxes.
 
 | Secret | Keys | Used by |
 | --- | --- | --- |
 | `llm-keys` | `anthropic` (required); optional: `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter` (see "LLM keys") | runner Job |
-| `docr` | `.dockerconfigjson` | image pulls, task image pushes |
 | `harbor-credentials` | `username`, `password` (Harbor robot account or admin) | controller (Harbor REST API) |
 | `harbor-pull` | `.dockerconfigjson` for `harbor.harbor.svc.cluster.local` | runner Job (oras pull) |
 
@@ -44,7 +45,7 @@ models:
     required: false
 ```
 
-`agent` is a SkillEvaluator/Harbor agent (`claude-code`, `codex`, `opencode`), the harness. `agentVersion` is the release of its CLI (letters, digits, `.`, `_`, `-`; at most 63 characters; it ends up in `npm install -g <package>@<version>` in every trial sandbox, so anything else is refused). **The identity of an entry is agent + agentVersion + model.** A changed `agentVersion` is a different entry, so the model-change trigger evaluates every `beta` and `stable` digest on it (the "harness changed" beat), and the old entry's runs stay as they are.
+`agent` is a SkillEvaluator/Harbor agent (`claude-code`, `codex`, `opencode`), the harness. `agentVersion` is the release of its CLI (letters, digits, `.`, `_`, `-`; at most 63 characters; it ends up in `npm install -g <package>@<version>` in the trial sandbox when it is not the default pin, so anything else is refused). **The identity of an entry is agent + agentVersion + model.** A changed `agentVersion` is a different entry, so the model-change trigger evaluates every `beta` and `stable` digest on it (the "harness changed" beat), and the old entry's runs stay as they are.
 
 Without `agentVersion` the runner pins its default for the agent (see "Agent versions"), the SkillEval has no `spec.agentVersion` and the controller records the version that ran in `status.agentVersion`. An unpinned entry and a pinned one are different entries even when they end up on the same release; pin every entry to keep runs comparable.
 
@@ -104,7 +105,7 @@ Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex withou
 
 ## Runner Job contract
 
-The controller creates one `batch/v1` Job per SkillEval attempt, named like the SkillEval (a retry adds `-r1`, `-r2`, see "Retry"; cut short to fit 63 characters; the runner does not depend on the name) (owner reference to the SkillEval, `backoffLimit: 0`, `ttlSecondsAfterFinished: 3600`, ServiceAccount `skill-eval-runner`, imagePullSecrets `docr`). Container `skill-eval` runs the runner image with no args and these env vars:
+The controller creates one `batch/v1` Job per SkillEval attempt, named like the SkillEval (a retry adds `-r1`, `-r2`, see "Retry"; cut short to fit 63 characters; the runner does not depend on the name) (owner reference to the SkillEval, `backoffLimit: 0`, `ttlSecondsAfterFinished: 3600`, ServiceAccount `skill-eval-runner`, imagePullSecrets from the controller flag `--image-pull-secrets`, none by default). Container `skill-eval` runs the runner image with no args and these env vars:
 
 | Env | Example |
 | --- | --- |
@@ -114,6 +115,8 @@ The controller creates one `batch/v1` Job per SkillEval attempt, named like the 
 | `AGENT_VERSION` | `2.1.292` (optional: set from `spec.agentVersion`; without it the runner uses its default pin for `AGENT`) |
 | `MODEL` | `claude-haiku-5-5` |
 | `ATTEMPTS` | `1` |
+| `SANDBOX_IMAGE` | `ghcr.io/dirien/skill-ci-sandbox:0.7.0` (from the controller flag `--sandbox-image`, which defaults to the controller's own release; without it the runner uses the sandbox image of its own release) |
+| `SANDBOX_PULL_SECRETS` | `ghcr` (comma separated Secret names for the sandbox pods; set from `--image-pull-secrets`, absent when there are none) |
 | `ANTHROPIC_API_KEY` | from secret `llm-keys` key `anthropic` |
 | `OPENAI_API_KEY` | from secret `llm-keys` key `openai` (optional) |
 | `OPENAI_BASE_URL` | from secret `llm-keys` key `openai-base-url` (optional) |
@@ -123,7 +126,18 @@ The controller creates one `batch/v1` Job per SkillEval attempt, named like the 
 
 Pods and Jobs carry the labels `skillci.dev/skill`, `/digest`, `/agent`, `/model` and, for a pinned entry, `/agent-version`.
 
-The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien`, `TASK_IMAGE_PULL_SECRET=docr`, `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job), `TIMEOUT_MULTIPLIER=2` (scales Harbor's step timeouts; agent setup installs the CLI in every sandbox). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them.
+The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `SANDBOX_IMAGE=ghcr.io/dirien/skill-ci-sandbox:<the runner's release>` (set when the runner image is built, from the release tag), `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job), `TIMEOUT_MULTIPLIER=2` (scales Harbor's step timeouts; matters for a non-default `AGENT_VERSION`, which is installed in every sandbox). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them. No registry, no pull secret and no builder are part of the defaults: see "Sandbox image" for the one optional path that uses them (`TASK_IMAGE_REGISTRY`).
+
+### Sandbox image
+
+No image is built while an eval runs. SkillEvaluator writes a Dockerfile for every task (eval case and arm), but for a plain skill those Dockerfiles are the same list of steps: `FROM python:3.12-slim`, `apt-get install bash curl git jq ripgrep`, one `pip install` of the verifier packages and an import smoke test, `mkdir` of `/workspace` and `/logs`, and a series of evaluator-owned resets of the skill directories. What differs per task is the build context: `COPY skills/ ...` (the skill under test for the with-skill arm, an empty directory for the baseline), `COPY input/` and `COPY repo/` when the case has them, the final `WORKDIR` and the `ENV` resets. `sandbox/Dockerfile` therefore builds **one generic image** with all the generic steps, and the runner starts every trial sandbox from it:
+
+- **Contents.** Python 3.12 (Debian bookworm), the tools above plus `procps` and `coreutils`, the verifier packages (the `pip` and smoke-test steps are copied verbatim from the generated Dockerfile; a test compares them), the workspace directories, and the three agent CLIs at the default pins of "Agent versions", installed the way Harbor installs them (Claude Code: native installer into `~/.local/bin`; Codex and OpenCode: `npm` under nvm Node 22 in `~/.nvm`, with `node`, `codex` and `opencode` linked into `/usr/local/bin`). `sandbox/install-agents.sh` fails the image build when a CLI reports another release.
+- **Task-specific steps are replayed at start** by `harbor_agent_sandbox.AgentSandboxEnvironment` (env `HARBOR_SANDBOX_IMAGE`, set by the runner from `SANDBOX_IMAGE`). It parses the task Dockerfile and, once the sandbox is ready: uploads every `COPY`/`ADD` source of the build context to its destination with Harbor's `upload_dir`/`upload_file` and sets owner (root, or `--chown`) and mode (`--chmod`) as `COPY` would; takes the last `WORKDIR` as the container's `workingDir`, every `ENV` as container env and `USER` (root or a uid) as `runAsUser`. The sandbox pod's `imagePullPolicy` is `IfNotPresent` for a tag other than `latest`.
+- **A step the image lacks fails the trial, visibly.** The `FROM` must be `python:3.12-slim` and every `RUN` must be one of the steps in `harbor_agent_sandbox/dockerfile.py` (`COVERED_RUNS`, digests of the normalized commands; the test `test_covered_runs_are_exactly_the_generated_ones` ties them to a real generated Dockerfile). A skill with `requirements.txt` or `apt-packages.txt`, a custom `evals/environment/Dockerfile`, `ARG`, multi-stage builds, remote `ADD` or `USER <name>` raise an error before any pod is created: `task <name> cannot run on <image>: the task Dockerfile needs N step(s) the prebuilt sandbox image does not have: line 8: RUN python -m pip install ...`. The run ends `Failed` with that message (it is not retried). The fix is to add the step to `sandbox/Dockerfile` and its digest to `COVERED_RUNS`, or to build task images yourself (below). After a SkillEvaluator upgrade, `python -m harbor_agent_sandbox.dockerfile digests <generated Dockerfile>` prints the digests to compare.
+- **Order.** The covered `RUN`s are in the image, so they happen before every `COPY`. That is the same result as the generated Dockerfile because those steps only reset directories that are empty in a fresh container. Empty directories inside a `COPY` source are not created, like Harbor's `upload_dir`.
+- **Agent CLIs are not installed per trial.** Claude Code and Codex check `claude --version` / `codex --version` against the requested release and skip their install when it matches. Harbor's OpenCode has no such check and always reinstalls nvm, Node and the package, which is what exceeded the agent setup timeout (`AgentSetupTimeoutError`) on a busy cluster. `harbor_agent_sandbox.preinstalled` wraps `OpenCode.install` (applied when the package is imported) so it returns after one `opencode --version` when the release matches. An `AGENT_VERSION` other than the default pin (the "harness changed" beat) is installed in the sandbox as before, so it is slower and `TIMEOUT_MULTIPLIER` matters.
+- **Bring your own builder (optional).** Setting `TASK_IMAGE_REGISTRY=<registry/path>` (and `TASK_IMAGE_PULL_SECRET=<secret>` if it needs credentials) on the runner switches the environment back to Harbor's `ack` build: each task image is built and pushed to that registry (a `docker:dind` Job, or the BuildKit named by `HARBOR_BUILDKIT_ADDRESS`, which needs `buildctl` in a runner image of your own) and `SANDBOX_IMAGE` is not used. The runner then needs `get` on that Secret (Helm `runner.pullSecretName`). Mind that Harbor names a task image `<registry>/<environment_name>:latest`, where the name holds the eval case and the arm but neither the skill nor its version, and that it builds only when its existence check says the image is missing: with a registry that answers that check (public, or `crane` or `docker` available) a later version of a skill is evaluated with the skill content of the first one built. Delete the images between versions, or do not use this path. skill-ci does not run it by default.
 
 Runner pods and trial sandbox pods carry `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, so a node scale-down never kills a running eval. The container sets `terminationMessagePolicy: FallbackToLogsOnError`. On completion it writes one JSON object to `/dev/termination-log` and exits 0:
 
@@ -152,7 +166,7 @@ The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; 
 
 ### Agent versions
 
-The agent CLI is installed in every trial sandbox. Its release is always pinned, so trials do not change when a CLI ships:
+The agent CLI is part of the sandbox image at the default pin below (an `AGENT_VERSION` that differs is installed in the sandbox). Its release is always pinned, so trials do not change when a CLI ships:
 
 | Agent | Default pin (no `AGENT_VERSION`) | Source |
 | --- | --- | --- |
@@ -318,8 +332,9 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 ## Build and deploy
 
 - `controller/Dockerfile`, build context `controller/`.
-- `runner/Dockerfile`, build context repo root.
-- Images are built by the in-cluster BuildKit (`buildctl --addr tcp://127.0.0.1:1234` through `kubectl -n skill-ci port-forward svc/buildkitd 1234:1234`).
+- `runner/Dockerfile`, build context repo root. Build arg `SKILL_CI_VERSION` sets the runner's default `SANDBOX_IMAGE` tag.
+- `sandbox/Dockerfile`, build context `sandbox/`.
+- Nothing is built in the cluster. A `vX.Y.Z` tag runs `.github/workflows/release.yaml`: GoReleaser publishes the controller image and binaries, the workflow builds and Cosign-signs the runner and sandbox images (with SBOM and provenance) and the Helm chart, all as `ghcr.io/dirien/...:X.Y.Z`. The chart's default image tags are its appVersion. `make deploy` installs the working-tree chart with the tags of the newest release (`TAG=...` overrides).
 - All controller-side manifests (CRD, controller Deployment and Service, RBAC, runner ServiceAccount and Role) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/`.
 - Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`, port `8082` named `reports` (the reporting site, flag `--reports-addr`, empty disables it; Helm `reports.enabled`); pod label `app.kubernetes.io/name: skill-ci-controller`.
 

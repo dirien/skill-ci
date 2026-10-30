@@ -157,6 +157,29 @@
             "repository"
           ]
         },
+        "sandboxImage": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tag": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "digest": {
+              "type": "string",
+              "pattern": "^(sha256:[a-f0-9]{64})?$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "repository"
+          ]
+        },
         "modelsConfigMap": {
           "type": "string",
           "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
@@ -266,6 +289,7 @@
         "harborUrl",
         "harborProject",
         "runnerImage",
+        "sandboxImage",
         "modelsConfigMap"
       ]
     },
@@ -461,9 +485,8 @@
         },
         "pullSecretName": {
           "type": "string",
-          "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$",
-          "maxLength": 253,
-          "minLength": 1
+          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$",
+          "maxLength": 253
         },
         "extraRules": {
           "type": "array"

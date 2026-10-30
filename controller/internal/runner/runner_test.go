@@ -184,8 +184,8 @@ func TestNewJob(t *testing.T) {
 	if pod.ServiceAccountName != "skill-eval-runner" || pod.RestartPolicy != corev1.RestartPolicyNever {
 		t.Errorf("serviceAccount/restartPolicy = %s/%s", pod.ServiceAccountName, pod.RestartPolicy)
 	}
-	if !slices.Equal(pod.ImagePullSecrets, []corev1.LocalObjectReference{{Name: "docr"}}) {
-		t.Errorf("imagePullSecrets = %v", pod.ImagePullSecrets)
+	if len(pod.ImagePullSecrets) != 0 {
+		t.Errorf("imagePullSecrets = %v, want none by default", pod.ImagePullSecrets)
 	}
 	c := pod.Containers[0]
 	if c.Name != "skill-eval" || c.Image != "reg/runner:1" || len(c.Args) != 0 {
@@ -331,6 +331,79 @@ func jobEnv(t *testing.T, se *v1alpha1.SkillEval) (plain map[string]string, secr
 		}
 	}
 	return plain, secrets
+}
+
+func TestJobSandboxImageAndPullSecrets(t *testing.T) {
+	se := &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: "claude-code", Model: "m", Attempts: 1}}
+	tests := []struct {
+		name        string
+		cfg         Config
+		wantImage   string
+		wantSecrets string
+		wantPod     []corev1.LocalObjectReference
+	}{
+		{name: "nothing configured leaves the runner defaults", cfg: Config{Image: "r:1"}},
+		{name: "sandbox image", cfg: Config{Image: "r:1", SandboxImage: "ghcr.io/dirien/skill-ci-sandbox:0.7.0"},
+			wantImage: "ghcr.io/dirien/skill-ci-sandbox:0.7.0"},
+		{name: "pull secrets reach the pod and the sandboxes",
+			cfg:         Config{Image: "r:1", ImagePullSecrets: []string{"ghcr", "other"}},
+			wantSecrets: "ghcr,other",
+			wantPod:     []corev1.LocalObjectReference{{Name: "ghcr"}, {Name: "other"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			job := NewJob(se, tt.cfg)
+			plain := map[string]string{}
+			for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+				if e.ValueFrom == nil {
+					plain[e.Name] = e.Value
+				}
+			}
+			for name, want := range map[string]string{"SANDBOX_IMAGE": tt.wantImage, "SANDBOX_PULL_SECRETS": tt.wantSecrets} {
+				got, present := plain[name]
+				if got != want || present != (want != "") {
+					t.Errorf("%s = %q (set: %v), want %q", name, got, present, want)
+				}
+			}
+			if !slices.Equal(job.Spec.Template.Spec.ImagePullSecrets, tt.wantPod) {
+				t.Errorf("imagePullSecrets = %v, want %v", job.Spec.Template.Spec.ImagePullSecrets, tt.wantPod)
+			}
+		})
+	}
+}
+
+func TestJobHasNoRegistryOrBuilderSettings(t *testing.T) {
+	// The runner builds nothing by default: no task image registry, no pull secret, no builder.
+	plain, _ := jobEnv(t, &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: "codex", Model: "m", Attempts: 1}})
+	for name := range plain {
+		if strings.Contains(name, "REGISTRY") || strings.Contains(name, "BUILDKIT") || strings.Contains(name, "TASK_IMAGE") {
+			t.Errorf("unexpected env %s", name)
+		}
+	}
+}
+
+func TestParsePullSecrets(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    []string
+		wantErr bool
+	}{
+		{in: ""},
+		{in: " , ,"},
+		{in: "ghcr", want: []string{"ghcr"}},
+		{in: " ghcr, other.secret ,", want: []string{"ghcr", "other.secret"}},
+		{in: "Bad_Name", wantErr: true},
+		{in: "ok,-bad", wantErr: true},
+	}
+	for _, tt := range tests {
+		got, err := ParsePullSecrets(tt.in)
+		if (err != nil) != tt.wantErr {
+			t.Errorf("ParsePullSecrets(%q) error = %v, wantErr %v", tt.in, err, tt.wantErr)
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("ParsePullSecrets(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
 }
 
 func TestJobAgentVersion(t *testing.T) {

@@ -14,15 +14,17 @@ strategy:
   type: Recreate
 
 image:
-  repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-controller
+  repository: ghcr.io/dirien/skill-ci-controller
   # Defaults to the chart appVersion.
   tag: ""
   # Takes precedence over tag, for example sha256:0123...
   digest: ""
   pullPolicy: IfNotPresent
 
-imagePullSecrets:
-  - name: docr
+# Pull secrets of the controller pod. The names are also passed to the controller
+# (--image-pull-secrets) for the runner Jobs and the sandboxes they start. Empty: the images
+# are public, which is how the GHCR packages are published.
+imagePullSecrets: []
 
 serviceAccount:
   create: true
@@ -45,8 +47,17 @@ controller:
   harborProject: skills
   # --runner-image, rendered as repository:tag or repository@digest.
   runnerImage:
-    repository: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner
-    tag: "0.6.0"
+    repository: ghcr.io/dirien/skill-ci-runner
+    # Defaults to the chart appVersion, the release the chart was published with.
+    tag: ""
+    digest: ""
+  # --sandbox-image: the generic image every trial sandbox starts from (SANDBOX_IMAGE of the
+  # runner Job). Nothing is built in the cluster. Keep it on the release of the runner image:
+  # the runner replays the task Dockerfile on it and fails a trial whose steps the image lacks.
+  sandboxImage:
+    repository: ghcr.io/dirien/skill-ci-sandbox
+    # Defaults to the chart appVersion.
+    tag: ""
     digest: ""
   modelsConfigMap: skill-ci-models
   # Attempts per arm. One attempt is too noisy for the regression gate: the same
@@ -154,8 +165,10 @@ runner:
   serviceAccount:
     name: skill-eval-runner
     annotations: {}
-  # Image pull Secret the runner may read to create trial sandboxes.
-  pullSecretName: docr
+  # A Secret the runner may read. Empty (the default) adds no rule. Needed only when you let
+  # the trials build task images in a registry of your own (runner env TASK_IMAGE_REGISTRY and
+  # TASK_IMAGE_PULL_SECRET): Harbor reads that registry's credentials from the Secret.
+  pullSecretName: ""
   extraRules: []
 
 service:

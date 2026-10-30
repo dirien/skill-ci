@@ -58,13 +58,19 @@ jobs:
           uv run --no-project --with-requirements .github/requirements-ci.txt
           make chart-lint YAMLLINT=yamllint KUBECONFORM="$(go env GOPATH)/bin/kubeconform"
 
-      # The same steps the release workflow runs, so a broken release chart shows up before a tag.
+      # The same steps the release workflow runs: with the version as appVersion, the chart's
+      # default images are the controller, runner and sandbox images of that release.
       - name: Release chart packages with GHCR defaults
         run: |
-          release_chart="$RUNNER_TEMP/skill-ci-controller"
-          cp -r charts/skill-ci-controller "$release_chart"
-          .github/scripts/chart-release-values.sh "$release_chart" 0.0.0-ci
-          helm lint --strict "$release_chart"
-          helm package "$release_chart" --version 0.0.0-ci --app-version 0.0.0-ci --destination "$RUNNER_TEMP/out"
-          helm template skill-ci "$RUNNER_TEMP"/out/skill-ci-controller-0.0.0-ci.tgz --namespace skill-ci \
-            | grep -F -e 'image: "ghcr.io/dirien/skill-ci-controller:0.0.0-ci"' -e '--runner-image=ghcr.io/dirien/skill-ci-runner:0.0.0-ci'
+          helm package charts/skill-ci-controller --version 0.0.0-ci --app-version 0.0.0-ci --destination "$RUNNER_TEMP/out"
+          helm template skill-ci "$RUNNER_TEMP"/out/skill-ci-controller-0.0.0-ci.tgz --namespace skill-ci > "$RUNNER_TEMP/rendered.yaml"
+          for expected in \
+            'image: "ghcr.io/dirien/skill-ci-controller:0.0.0-ci"' \
+            '--runner-image=ghcr.io/dirien/skill-ci-runner:0.0.0-ci' \
+            '--sandbox-image=ghcr.io/dirien/skill-ci-sandbox:0.0.0-ci'; do
+            grep -F -e "$expected" "$RUNNER_TEMP/rendered.yaml"
+          done
+          if grep -E 'imagePullSecrets|digitalocean|docr' "$RUNNER_TEMP/rendered.yaml"; then
+            echo "::error::The release chart must default to public GHCR images without pull secrets."
+            exit 1
+          fi

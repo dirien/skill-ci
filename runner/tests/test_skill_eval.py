@@ -284,7 +284,16 @@ def termination(tmp_path, monkeypatch):
     """Point the termination log at a temp file and return a reader for it."""
     path = tmp_path / "termination-log"
     monkeypatch.setenv("TERMINATION_LOG", str(path))
-    for key in ("SKILL_EVAL_LLM_PROVIDER", "SKILL_EVAL_EMBEDDING_PROVIDER", "NVIDIA_API_KEY"):
+    for key in (
+        "SKILL_EVAL_LLM_PROVIDER",
+        "SKILL_EVAL_EMBEDDING_PROVIDER",
+        "NVIDIA_API_KEY",
+        "SANDBOX_IMAGE",
+        "SANDBOX_PULL_SECRETS",
+        "TASK_IMAGE_REGISTRY",
+        "TASK_IMAGE_PULL_SECRET",
+        "HARBOR_SANDBOX_IMAGE",
+    ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
     monkeypatch.setenv("OPENAI_API_KEY", "openai-test")
@@ -586,6 +595,11 @@ def test_message_stays_under_4kb(termination, monkeypatch, tmp_path):
     assert 0 < len(json.loads(text)["findings"]) < 30
 
 
+def eks_of(command: list[str]) -> list[str]:
+    """Return the values of the ``--ek`` flags of a validate command."""
+    return [command[i + 1] for i, arg in enumerate(command) if arg == "--ek"]
+
+
 def test_commands(termination, monkeypatch):
     """oras and the full validate run get the arguments the contract promises."""
     fake = FakeRun(GOOD)
@@ -611,13 +625,93 @@ def test_commands(termination, monkeypatch):
     assert not {"--override-cpus", "--override-memory-mb", "--progress"} & set(evaluator)
     env = fake.envs["validate"]
     assert (env["HARBOR_SANDBOX_CPUS"], env["HARBOR_SANDBOX_MEMORY_MB"]) == ("1", "2048")
-    eks = [evaluator[i + 1] for i, arg in enumerate(evaluator) if arg == "--ek"]
-    assert eks == [
+    # No registry, no builder, no pull secret: the sandbox runs the generic image.
+    assert eks_of(evaluator) == ["namespace=skill-ci"]
+    assert env["HARBOR_SANDBOX_IMAGE"] == skill_eval.DEFAULT_SANDBOX_IMAGE
+
+
+def run_validate(monkeypatch, **settings: str) -> tuple[list[str], dict[str, str]]:
+    """Run main() with extra Job env and return the full validate command and its env."""
+    for name, value in settings.items():
+        monkeypatch.setenv(name, value)
+    fake = FakeRun(GOOD)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0
+    return fake.validates()[-1], fake.envs["validate"]
+
+
+def test_sandbox_image_from_the_job(termination, monkeypatch):
+    """SANDBOX_IMAGE and SANDBOX_PULL_SECRETS from the Job reach the sandbox environment."""
+    command, env = run_validate(
+        monkeypatch,
+        SANDBOX_IMAGE="ghcr.io/dirien/skill-ci-sandbox:0.7.0",
+        SANDBOX_PULL_SECRETS="ghcr, other",
+    )
+    assert env["HARBOR_SANDBOX_IMAGE"] == "ghcr.io/dirien/skill-ci-sandbox:0.7.0"
+    assert eks_of(command) == ["namespace=skill-ci", "image_pull_secret=ghcr,other"]
+    # Nothing in the command or environment points at a registry or a builder.
+    assert not any("registry" in value or "skip_image_check" in value for value in eks_of(command))
+
+
+def test_sandbox_image_wins_over_a_stray_harbor_variable(termination, monkeypatch):
+    """The Job's SANDBOX_IMAGE decides, not a HARBOR_SANDBOX_IMAGE left in the environment."""
+    _, env = run_validate(
+        monkeypatch, SANDBOX_IMAGE="reg/sandbox:2", HARBOR_SANDBOX_IMAGE="reg/other:1"
+    )
+    assert env["HARBOR_SANDBOX_IMAGE"] == "reg/sandbox:2"
+
+
+def test_bring_your_own_builder(termination, monkeypatch):
+    """With TASK_IMAGE_REGISTRY the trials build task images and no sandbox image is set."""
+    command, env = run_validate(
+        monkeypatch,
+        TASK_IMAGE_REGISTRY="registry.example.com/evals",
+        TASK_IMAGE_PULL_SECRET="regcred",
+        SANDBOX_IMAGE="ghcr.io/dirien/skill-ci-sandbox:0.7.0",
+        HARBOR_SANDBOX_IMAGE="ghcr.io/dirien/skill-ci-sandbox:0.7.0",
+        HARBOR_BUILDKIT_ADDRESS="tcp://buildkitd.example:1234",
+    )
+    assert eks_of(command) == [
         "namespace=skill-ci",
-        "registry=registry.digitalocean.com/skill-ci-dirien",
-        "image_pull_secret=docr",
+        "registry=registry.example.com/evals",
+        "image_pull_secret=regcred",
         "skip_image_check=false",
     ]
+    assert "HARBOR_SANDBOX_IMAGE" not in env
+    assert env["HARBOR_BUILDKIT_ADDRESS"] == "tcp://buildkitd.example:1234"  # the builder's address
+
+
+def test_building_without_a_pull_secret(termination, monkeypatch):
+    """A registry that needs no pull secret adds none."""
+    command, _ = run_validate(monkeypatch, TASK_IMAGE_REGISTRY="registry.example.com/evals")
+    assert eks_of(command) == [
+        "namespace=skill-ci",
+        "registry=registry.example.com/evals",
+        "skip_image_check=false",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("settings", "message"),
+    [
+        ({"SANDBOX_IMAGE": "not an image"}, "SANDBOX_IMAGE must be an image reference"),
+        ({"SANDBOX_IMAGE": "x;rm"}, "SANDBOX_IMAGE must be an image reference"),
+        ({"SANDBOX_PULL_SECRETS": "Good,BAD_NAME"}, "SANDBOX_PULL_SECRETS must list Secret names"),
+    ],
+)
+def test_bad_sandbox_settings(settings, message):
+    """A sandbox image or pull secret that cannot be one fails before anything runs."""
+    with pytest.raises(skill_eval.EvalError, match=message):
+        skill_eval.load_config({**ENV, **settings})
+
+
+def test_defaults_do_not_need_a_registry_or_a_builder():
+    """The default configuration builds nothing and names no registry credentials."""
+    config = skill_eval.load_config(ENV)
+    assert not skill_eval.builds_task_images(config)
+    assert config["TASK_IMAGE_REGISTRY"] == config["TASK_IMAGE_PULL_SECRET"] == ""
+    assert config["SANDBOX_PULL_SECRETS"] == ""
+    assert config["SANDBOX_IMAGE"] == skill_eval.DEFAULT_SANDBOX_IMAGE
 
 
 def test_sandbox_size_follows_the_job_env(termination, monkeypatch):

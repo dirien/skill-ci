@@ -14,16 +14,22 @@ The chart replaces `kubectl apply -k config/`. Its defaults reproduce `config/ma
   - Secret `harbor-credentials` (`username`, `password`)
   - Secret `harbor-webhook` (`token`, optional)
   - Secret `llm-keys` (`anthropic`; optional `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter`), read by runner Jobs
-  - Secret `docr` (image pull and task image push)
   - ConfigMap `skill-ci-models` (key `models.yaml`)
 - Optional: the Prometheus Operator CRDs for `serviceMonitor.enabled`.
 
 ## Install
 
 ```sh
-helm install skill-ci charts/skill-ci-controller -n skill-ci --create-namespace
+helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version 0.7.0 -n skill-ci --create-namespace
 kubectl -n skill-ci get skillevals
 ```
+
+The default images are `ghcr.io/dirien/skill-ci-controller`, `skill-ci-runner` and `skill-ci-sandbox`, all on the
+chart's `appVersion`, so a chart of release X.Y.Z runs the images of X.Y.Z. They are public: there are no pull
+secrets and no registry or image builder to set up. From a checkout, `helm install skill-ci charts/skill-ci-controller
+--set image.tag=0.7.0 --set controller.runnerImage.tag=0.7.0 --set controller.sandboxImage.tag=0.7.0` does the same
+(`make deploy` does it with the newest release tag). For private packages create a `docker-registry` Secret and
+set `imagePullSecrets` (see below).
 
 The chart is meant to be installed once per namespace under the release name `skill-ci`: resource names
 default to the chart name (`skill-ci-controller`) and the controller hardcodes the runner ServiceAccount
@@ -88,17 +94,18 @@ keys are rejected.
 | `commonLabels` | `{}` | Extra labels on every object |
 | `replicaCount` | `1` | Use more than 1 only with `controller.leaderElect=true` |
 | `strategy` | `{type: Recreate}` | Deployment strategy |
-| `image.repository` | `registry.digitalocean.com/skill-ci-dirien/skill-ci-controller` | Controller image |
+| `image.repository` | `ghcr.io/dirien/skill-ci-controller` | Controller image |
 | `image.tag` | `""` (chart `appVersion`, `0.6.0`) | |
 | `image.digest` | `""` | `sha256:...`, wins over the tag |
 | `image.pullPolicy` | `IfNotPresent` | |
-| `imagePullSecrets` | `[{name: docr}]` | |
+| `imagePullSecrets` | `[]` | Pull Secrets of the controller pod; the names are also passed as `--image-pull-secrets` and used for the runner Jobs and the sandboxes. Set for private GHCR packages |
 | `serviceAccount.create`, `.name`, `.annotations` | `true`, `""`, `{}` | Controller ServiceAccount |
 | `rbac.create`, `rbac.extraRules` | `true`, `[]` | Controller Role and RoleBinding |
 | `controller.namespace` | `""` (release namespace) | `--namespace` |
 | `controller.harborUrl` | `http://harbor.harbor.svc.cluster.local` | `--harbor-url` |
 | `controller.harborProject` | `skills` | `--harbor-project` |
-| `controller.runnerImage.repository` / `.tag` / `.digest` | `.../skill-ci-runner` / `0.6.0` / `""` | `--runner-image` |
+| `controller.runnerImage.repository` / `.tag` / `.digest` | `ghcr.io/dirien/skill-ci-runner` / `""` (chart `appVersion`) / `""` | `--runner-image` |
+| `controller.sandboxImage.repository` / `.tag` / `.digest` | `ghcr.io/dirien/skill-ci-sandbox` / `""` (chart `appVersion`) / `""` | `--sandbox-image`: the generic image every trial sandbox starts from (`SANDBOX_IMAGE` of the runner Job). Keep it on the runner's release |
 | `controller.modelsConfigMap` | `skill-ci-models` | `--models-configmap` |
 | `controller.defaultAttempts` | `3` | `--default-attempts`: trials per arm; with 3 eval cases that gives 9 trial scores per arm for the statistics |
 | `controller.thresholds.helps` | `"0.05"` | `--helps-threshold` |
@@ -124,7 +131,7 @@ keys are rejected.
 | `secrets.<name>.create` | `false` | Create the Secret from inline values (demos only) |
 | `runner.enabled` | `true` | Runner ServiceAccount, Role, RoleBinding |
 | `runner.serviceAccount.name` | `skill-eval-runner` | Hardcoded in the controller |
-| `runner.pullSecretName` | `docr` | Secret the runner may `get` |
+| `runner.pullSecretName` | `""` | A Secret the runner may `get`; empty adds no rule. Only for trials that build task images in a registry of your own (`TASK_IMAGE_REGISTRY` on the runner, see CONTRACT.md "Sandbox image") |
 | `runner.extraRules` | `[]` | |
 | `service.type`, `.webhookPort`, `.metricsPort`, `.reportsPort` | `ClusterIP`, `8080`, `8081`, `8082` | |
 | `service.annotations`, `service.labels` | `{}` | |

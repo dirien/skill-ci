@@ -82,7 +82,7 @@ Namespace the controller watches and creates SkillEvals and Jobs in
 
 {{/*
 Render an image reference from {repository, tag, digest}. The tag falls back to
-the second argument (the chart appVersion for the controller, empty for the runner).
+the chart appVersion for the controller, the runner and the sandbox image.
 Usage: include "skill-ci-controller.image" (dict "image" .Values.image "defaultTag" .Chart.AppVersion)
 */}}
 {{- define "skill-ci-controller.image" -}}

@@ -2,7 +2,8 @@ skill-ci controller {{ .Chart.AppVersion }} installed as release "{{ .Release.Na
 
 Watching namespace:   {{ include "skill-ci-controller.watchNamespace" . }}
 Harbor:               {{ .Values.controller.harborUrl }} (project "{{ .Values.controller.harborProject }}")
-Runner image:         {{ include "skill-ci-controller.image" (dict "image" .Values.controller.runnerImage "defaultTag" "") }}
+Runner image:         {{ include "skill-ci-controller.image" (dict "image" .Values.controller.runnerImage "defaultTag" .Chart.AppVersion) }}
+Sandbox image:        {{ include "skill-ci-controller.image" (dict "image" .Values.controller.sandboxImage "defaultTag" .Chart.AppVersion) }}  (every trial starts from it; nothing is built in the cluster)
 Model list ConfigMap: {{ .Values.controller.modelsConfigMap }}
 Dry run:              {{ .Values.controller.dryRun }}
 Gate confidence:      {{ if ne (toString .Values.controller.thresholds.confidence) "" }}{{ .Values.controller.thresholds.confidence }} (promote only when the lift interval is above 0; Regressed only when the drop interval is below 0){{ else }}controller default{{ end }}

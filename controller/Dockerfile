@@ -1,4 +1,4 @@
-# Build context: controller/. Built for linux/amd64 by the in-cluster BuildKit.
+# Development image for linux/amd64 (`make -C controller image`). Build context: controller/.
 FROM --platform=linux/amd64 golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./

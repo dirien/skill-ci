@@ -1,5 +1,5 @@
 # Used by GoReleaser (see ../.goreleaser.yaml): copies the prebuilt binary, nothing is compiled here.
-# The development image, built by the in-cluster BuildKit for the demo cluster, is controller/Dockerfile.
+# The development image, built from source with docker build, is controller/Dockerfile.
 FROM gcr.io/distroless/static:nonroot
 ARG TARGETPLATFORM
 COPY $TARGETPLATFORM/skill-ci-controller /manager

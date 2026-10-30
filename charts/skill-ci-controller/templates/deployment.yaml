@@ -1,4 +1,8 @@
 {{- $ctl := .Values.controller }}
+{{- $pullSecrets := list }}
+{{- range .Values.imagePullSecrets }}
+{{- $pullSecrets = append $pullSecrets .name }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,7 +47,11 @@ spec:
             - --namespace={{ include "skill-ci-controller.watchNamespace" . }}
             - --harbor-url={{ $ctl.harborUrl }}
             - --harbor-project={{ $ctl.harborProject }}
-            - --runner-image={{ include "skill-ci-controller.image" (dict "image" $ctl.runnerImage "defaultTag" "") }}
+            - --runner-image={{ include "skill-ci-controller.image" (dict "image" $ctl.runnerImage "defaultTag" .Chart.AppVersion) }}
+            - --sandbox-image={{ include "skill-ci-controller.image" (dict "image" $ctl.sandboxImage "defaultTag" .Chart.AppVersion) }}
+            {{- with $pullSecrets }}
+            - --image-pull-secrets={{ join "," . }}
+            {{- end }}
             - --models-configmap={{ $ctl.modelsConfigMap }}
             - --default-attempts={{ $ctl.defaultAttempts }}
             - --helps-threshold={{ $ctl.thresholds.helps }}

@@ -14,11 +14,9 @@ spec:
     spec:
       serviceAccountName: skill-eval-runner
       restartPolicy: Never
-      imagePullSecrets:
-        - name: docr
       containers:
         - name: skill-eval
-          image: registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.6.0
+          image: ghcr.io/dirien/skill-ci-runner:0.6.0
           terminationMessagePolicy: FallbackToLogsOnError
           env:
             - name: SKILL_REF
@@ -34,6 +32,10 @@ spec:
               value: "2.1.292"
             - name: ATTEMPTS
               value: "1"
+            # Optional: the generic sandbox image of the trials. Without it the runner uses the
+            # one of its own release (ghcr.io/dirien/skill-ci-sandbox:<runner version>).
+            - name: SANDBOX_IMAGE
+              value: ghcr.io/dirien/skill-ci-sandbox:0.6.0
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:

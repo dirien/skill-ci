@@ -1,6 +1,6 @@
 CONTROLLER_GEN_VERSION ?= v0.23.0
 CONTROLLER_GEN ?= $(shell go env GOPATH)/bin/controller-gen
-IMG ?= registry.digitalocean.com/skill-ci-dirien/skill-ci-controller:0.6.0
+IMG ?= ghcr.io/dirien/skill-ci-controller:dev
 
 .PHONY: all
 all: generate manifests fmt lint test build
@@ -32,9 +32,7 @@ test:
 build:
 	go build -o bin/manager ./cmd/manager
 
-# Built by the in-cluster BuildKit, see ../CONTRACT.md.
+# A development image for linux/amd64. Releases are built by GoReleaser from Dockerfile.goreleaser.
 .PHONY: image
 image:
-	buildctl --addr tcp://127.0.0.1:1234 build --frontend dockerfile.v0 \
-	  --local context=. --local dockerfile=. --opt platform=linux/amd64 \
-	  --output type=image,name=$(IMG),push=true
+	docker build --platform linux/amd64 -t $(IMG) .

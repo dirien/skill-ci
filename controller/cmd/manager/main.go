@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -34,6 +35,16 @@ var (
 	commit  = "unknown"
 	date    = "unknown"
 )
+
+// defaultImage returns the GHCR image of this release, for example
+// ghcr.io/dirien/skill-ci-runner:0.7.0, or :latest for a build without a version.
+func defaultImage(name string) string {
+	tag := strings.TrimPrefix(version, "v")
+	if tag == "" || tag == "dev" {
+		tag = "latest"
+	}
+	return "ghcr.io/dirien/" + name + ":" + tag
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -66,14 +77,16 @@ func run() error {
 	th := policy.DefaultThresholds()
 	cfg := controller.Config{Thresholds: th}
 	var (
-		harborURL, runnerImage, modelsCM, webhookAddr, metricsAddr, reportsAddr string
-		trialBudget                                                             int
-		leaderElect                                                             bool
+		harborURL, runnerImage, sandboxImage, pullSecrets, modelsCM, webhookAddr, metricsAddr, reportsAddr string
+		trialBudget                                                                                        int
+		leaderElect                                                                                        bool
 	)
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
 	flag.StringVar(&cfg.Project, "harbor-project", "skills", "Harbor project that holds skills.")
-	flag.StringVar(&runnerImage, "runner-image", "registry.digitalocean.com/skill-ci-dirien/skill-ci-runner:0.6.0", "Runner image.")
+	flag.StringVar(&runnerImage, "runner-image", defaultImage("skill-ci-runner"), "Runner image.")
+	flag.StringVar(&sandboxImage, "sandbox-image", defaultImage("skill-ci-sandbox"), "Generic sandbox image the runner starts every trial from (SANDBOX_IMAGE); empty leaves the runner's own default.")
+	flag.StringVar(&pullSecrets, "image-pull-secrets", "", "Comma separated names of image pull Secrets for the runner image and the sandbox image; empty when the images are public.")
 	flag.StringVar(&modelsCM, "models-configmap", "skill-ci-models", "ConfigMap with the model list (key models.yaml).")
 	flag.IntVar(&cfg.Attempts, "default-attempts", 1, "Trials per arm for SkillEvals created by the controller.")
 	flag.Float64Var(&th.Helps, "helps-threshold", th.Helps, "Lift at or above which a verdict is Helps.")
@@ -107,7 +120,14 @@ func run() error {
 	if err != nil || u.Host == "" {
 		return fmt.Errorf("invalid --harbor-url %q", harborURL)
 	}
-	cfg.Runner = runner.Config{Image: runnerImage, Registry: u.Host, Project: cfg.Project}
+	secrets, err := runner.ParsePullSecrets(pullSecrets)
+	if err != nil {
+		return fmt.Errorf("invalid --image-pull-secrets: %w", err)
+	}
+	cfg.Runner = runner.Config{
+		Image: runnerImage, SandboxImage: sandboxImage, ImagePullSecrets: secrets,
+		Registry: u.Host, Project: cfg.Project,
+	}
 
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -163,7 +183,7 @@ func run() error {
 		}
 	}
 
-	setupLog.Info("starting manager", "namespace", cfg.Namespace, "dryRun", cfg.DryRun, "runnerImage", runnerImage)
+	setupLog.Info("starting manager", "namespace", cfg.Namespace, "dryRun", cfg.DryRun, "runnerImage", runnerImage, "sandboxImage", sandboxImage)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("running manager: %w", err)
 	}

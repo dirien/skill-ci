@@ -1,11 +1,9 @@
 # Runs one SkillEval: ORAS pulls the skill, SkillEvaluator checks it through all three tiers
-# (Tier 1 static and security, Tier 2 deduplication, Tier 3 live trials as Agent Sandboxes).
-# Build context is the repo root.
+# (Tier 1 static and security, Tier 2 deduplication, Tier 3 live trials as Agent Sandboxes that
+# run the generic sandbox image, sandbox/Dockerfile). Build context is the repo root.
 FROM python:3.12.16-slim-bookworm
 
 ARG SKILLEVALUATOR_VERSION=v0.6.0
-ARG BUILDKIT_VERSION=v0.34.1
-ARG BUILDKIT_SHA256=a59539daf547fe0958efe2d07e41c0a6944e1112a66d7e519ec1cf5b673ef15b
 ARG ORAS_VERSION=1.3.0
 ARG ORAS_SHA256=6cdc692f929100feb08aa8de584d02f7bcc30ec7d88bc2adc2054d782db57c64
 ARG KUBERNETES_VERSION=37.0.1
@@ -22,16 +20,13 @@ ARG PIP_AUDIT_VERSION=2.10.1
 # Nodes are linux/amd64.
 RUN apt-get update && apt-get install -y --no-install-recommends git curl patch ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
- && curl -sSfL -o /tmp/buildkit.tgz https://github.com/moby/buildkit/releases/download/${BUILDKIT_VERSION}/buildkit-${BUILDKIT_VERSION}.linux-amd64.tar.gz \
- && echo "${BUILDKIT_SHA256}  /tmp/buildkit.tgz" | sha256sum -c - \
- && tar xzf /tmp/buildkit.tgz -C /usr/local bin/buildctl \
  && curl -sSfL -o /tmp/oras.tgz https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz \
  && echo "${ORAS_SHA256}  /tmp/oras.tgz" | sha256sum -c - \
  && tar xzf /tmp/oras.tgz -C /usr/local/bin oras \
  && curl -sSfL -o /tmp/gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz \
  && echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c - \
  && tar xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks \
- && rm /tmp/buildkit.tgz /tmp/oras.tgz /tmp/gitleaks.tgz
+ && rm /tmp/oras.tgz /tmp/gitleaks.tgz
 
 # SkillSpector and Semgrep pin conflicting click versions, so each gets its own virtualenv.
 # SkillEvaluator finds both on PATH. SkillSpector is pinned to the v2.12.0 commit.
@@ -60,16 +55,18 @@ RUN gitleaks version | grep -qx "${GITLEAKS_VERSION}" \
 
 COPY runner/skill_eval.py /usr/local/bin/skill_eval.py
 
+# The release this image belongs to: the release workflow passes the tag, and the runner runs
+# its trials in the sandbox image of the same release.
+ARG SKILL_CI_VERSION=latest
+
 # Runner defaults (CONTRACT.md); the Job may override any of them.
 ENV PYTHONUNBUFFERED=1 \
     HOME=/work \
     REGISTRY_CONFIG=/auth/config.json \
     REGISTRY_PLAIN_HTTP=true \
     SANDBOX_NAMESPACE=skill-ci \
-    TASK_IMAGE_REGISTRY=registry.digitalocean.com/skill-ci-dirien \
-    TASK_IMAGE_PULL_SECRET=docr \
-    SKILLEVALUATOR_ACK_ENV_IMPORT_PATH=harbor_agent_sandbox:AgentSandboxEnvironment \
-    HARBOR_BUILDKIT_ADDRESS=tcp://buildkitd.skill-ci:1234
+    SANDBOX_IMAGE=ghcr.io/dirien/skill-ci-sandbox:${SKILL_CI_VERSION} \
+    SKILLEVALUATOR_ACK_ENV_IMPORT_PATH=harbor_agent_sandbox:AgentSandboxEnvironment
 
 # HOME must be writable whatever user the Job runs as.
 RUN mkdir -p /work && chmod 1777 /work

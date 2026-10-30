@@ -64,3 +64,13 @@ updates:
       day: "monday"
     labels:
       - "dependencies"
+
+  # The sandbox image's base image. The agent CLI, Node and nvm pins are ARGs in
+  # sandbox/Dockerfile, bumped by hand together with runner/skill_eval.py.
+  - package-ecosystem: "docker"
+    directory: "/sandbox"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"

@@ -35,9 +35,10 @@ def make_env(tmp_path: Path, **kwargs) -> AgentSandboxEnvironment:
 
 @pytest.fixture(autouse=True)
 def clean_size_env(monkeypatch):
-    """Keep the host's sandbox size variables out of every test."""
+    """Keep the host's sandbox size and image variables out of every test."""
     monkeypatch.delenv("HARBOR_SANDBOX_CPUS", raising=False)
     monkeypatch.delenv("HARBOR_SANDBOX_MEMORY_MB", raising=False)
+    monkeypatch.delenv("HARBOR_SANDBOX_IMAGE", raising=False)
 
 
 def pod_spec(manifest: dict) -> dict:
