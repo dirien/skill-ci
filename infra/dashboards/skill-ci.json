@@ -23,7 +23,7 @@
     {
       "id": 1,
       "type": "table",
-      "title": "Lift per skill version x model",
+      "title": "Lift per skill version and model",
       "description": "skillci_lift. Green: lift >= +0.10 (promotes). Yellow: neutral. Red: lift <= -0.10 (demotes).",
       "datasource": {
         "type": "prometheus",
@@ -41,7 +41,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "label_join(label_join(skillci_lift, \"row\", \" \", \"skill\", \"version\"), \"col\", \"/\", \"agent\", \"model\")",
+          "expr": "label_join(label_replace(skillci_lift, \"col\", \"$1\", \"model\", \"claude-(.*)\"), \"row\", \" \", \"skill\", \"version\")",
           "refId": "A",
           "legendFormat": "",
           "format": "table",
@@ -129,7 +129,7 @@
     {
       "id": 2,
       "type": "stat",
-      "title": "Stable versions",
+      "title": "On stable",
       "description": "Digests tagged stable (skillci_stable).",
       "datasource": {
         "type": "prometheus",
@@ -189,7 +189,7 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Obsolete flagged",
+      "title": "Obsolete",
       "description": "Versions flagged obsolete on all required models (skillci_obsolete).",
       "datasource": {
         "type": "prometheus",
@@ -318,9 +318,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "skillci_with_score",
+          "expr": "label_replace(skillci_with_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} {{agent}}/{{model}}",
+          "legendFormat": "{{skill}} {{version}} \u00b7 {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -371,9 +371,9 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "skillci_without_score",
+          "expr": "label_replace(skillci_without_score, \"short\", \"$1\", \"model\", \"claude-(.*)\")",
           "refId": "A",
-          "legendFormat": "{{skill}} {{version}} {{agent}}/{{model}}",
+          "legendFormat": "{{skill}} {{version}} \u00b7 {{short}}",
           "format": "time_series",
           "instant": true,
           "range": false
@@ -406,7 +406,7 @@
     {
       "id": 7,
       "type": "table",
-      "title": "Stable (skillci_stable)",
+      "title": "Versions on stable",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -465,7 +465,7 @@
     {
       "id": 8,
       "type": "table",
-      "title": "Obsolete (skillci_obsolete)",
+      "title": "Versions flagged obsolete",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

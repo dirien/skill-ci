@@ -454,12 +454,13 @@ resources:
               label: grafana_dashboard
               labelValue: "1"
               searchNamespace: ALL
+          # Grafana 13 was OOMKilled at 384Mi while serving its frontend bundle.
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 100m
+              memory: 512Mi
             limits:
-              memory: 384Mi
+              memory: 1Gi
     options:
       provider: ${k8s}
 
