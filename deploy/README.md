@@ -450,15 +450,36 @@ there is no stack in this setup. The [stage runbook](../DEMO.md) walks through t
 
 ## Network modes and sandbox profiles
 
-Trials run in pre-started sandboxes from a warm pool. A `SandboxProfile` (skill-ci CRD, short name `sbp`) describes
-them: image (default: the sandbox image of the release), CPU and memory (default 1 and 2Gi), and the warm pool size
-(default 2). The controller turns each profile into an Agent Sandbox `SandboxTemplate` and `SandboxWarmPool`. The chart
-creates the profile `default` (Helm value `sandboxProfiles.default`); a model list entry can name another one with
-`sandboxProfile: <name>`.
+Two skill-ci resources in the `skill-ci` namespace hold the platform settings. The chart creates one of each the first
+time it is installed and never overwrites them afterwards (they carry `helm.sh/resource-policy: keep`), so you change
+them with `kubectl edit`, `kubectl apply` or GitOps, not with Helm values. The controller picks up changes without a
+restart.
+
+| Resource | Holds |
+| --- | --- |
+| `SkillCIConfig` `default` (short name `scc`) | the default sandbox profile and the network policy: default mode, allowed modes, enforcement, bundles, always-allowed hosts |
+| `SandboxProfile` (short name `sbp`), `default` and any you add | the trial sandbox: image (default: the release's sandbox image), CPU and memory (default 1 and 2Gi), warm pool size (default 2), `runtimeClassName`, `nodeSelector`, `tolerations` |
 
 ```bash
-kubectl -n skill-ci get sandboxprofiles
-kubectl -n skill-ci get sandboxtemplates,sandboxwarmpools
+kubectl -n skill-ci get scc,sbp
+kubectl -n skill-ci get sandboxtemplates,sandboxwarmpools   # what the controller made from the profiles
+kubectl -n skill-ci edit scc default                         # e.g. spec.network.default: none
+```
+
+Each `SandboxProfile` becomes an Agent Sandbox `SandboxTemplate` and `SandboxWarmPool`: trials claim pre-started
+sandboxes from the pool instead of starting a pod each time. A model list entry picks a profile with
+`sandboxProfile: <name>`; without it the entry uses `spec.defaultSandboxProfile` of the `SkillCIConfig`. A bigger
+profile for one agent:
+
+```yaml
+apiVersion: skillci.dev/v1alpha1
+kind: SandboxProfile
+metadata:
+  name: large
+  namespace: skill-ci
+spec:
+  resources: {cpu: "2", memory: 4Gi}
+  warmPool: {replicas: 1}
 ```
 
 A skill declares the network its trials may use in the `metadata` of its `SKILL.md`:
@@ -476,13 +497,19 @@ metadata:
 | --- | --- |
 | `none` | DNS and the model API of the agent (for example `api.anthropic.com`) |
 | `allowlist` | the same, plus the listed domains and bundles, TCP 443 |
-| `full` (default when the skill declares nothing) | the internet, never the cluster (no Harbor, no Kubernetes API) |
+| `full` (the default when the skill declares nothing) | the internet, never the cluster (no Harbor, no Kubernetes API) |
 
-With Cilium the controller creates one `CiliumNetworkPolicy` per evaluation (`skillci-net-<run>`, the same for both
-arms) and a baseline policy that leaves unclaimed warm sandboxes without egress. The platform sets the default mode,
-the allowed modes and the bundles in the Helm values under `controller.network` (`bundles` defaults: `@python`,
-`@node`, `@github`, `@apt`). The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o
-jsonpath='{.status.network}'` and on its page of the reporting site. Details: CONTRACT.md "Network modes".
+The `SkillCIConfig` decides what a skill may ask for: `spec.network.default` (for skills that declare nothing),
+`spec.network.modes` (the allowed set), `spec.network.bundles` (`@python`, `@node`, `@github`, `@apt` by default),
+`spec.network.alwaysAllow` and `spec.network.enforcement` (`auto`: Cilium when its CRD exists). With Cilium the
+controller creates one `CiliumNetworkPolicy` per evaluation (`skillci-net-<run>`, the same for both arms) and a
+baseline policy that leaves unclaimed warm sandboxes without egress; without Cilium only `full` runs, through Agent
+Sandbox's own policy. The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o
+jsonpath='{.status.network}'` and on its page of the reporting site; the runs page shows the policy in force. Details:
+CONTRACT.md "SkillCIConfig", "SandboxProfile" and "Network modes".
+
+GitOps tools that render charts with `helm template` (Argo CD) would apply the seed objects on every sync: set
+`config.create=false` and `sandboxProfiles.default.create=false` there and keep the two objects in Git instead.
 
 ## Platform notes
 
@@ -539,7 +566,8 @@ After changing a source, run `deploy/generate.sh`. `deploy/generate.sh --check` 
 | Dashboard numbers doubled | The OTLP export pushes into the Prometheus that also scrapes the controller. Point `OTLP_ENDPOINT` elsewhere. |
 | No OTLP data at the backend | `kubectl -n skill-ci logs deployment/skill-ci-controller \| grep otlp`: export errors are logged and never stop the controller. Check `OTLP_INSECURE` and `OTLP_URL_PATH`. |
 | A run fails with `network mode "none" needs Cilium` | The cluster has no Cilium: only `full` can run. Remove the skill's `skillci.dev/network` entry or run on a Cilium cluster. |
-| A run fails with `unknown network bundle` | The skill names a bundle the platform does not define. Add it under `controller.network.bundles` or use domains. |
+| `kubectl get scc` shows `READY False` | The `SkillCIConfig` is invalid; its condition says why. The controller keeps the last valid settings (or the built-in defaults after a restart). |
+| A run fails with `unknown network bundle` | The skill names a bundle the platform does not define. Add it to `spec.network.bundles` of `SkillCIConfig` `default`, or use domains. |
 | A run fails with `sandbox profile "<name>" not found` | The model list entry names a `SandboxProfile` that does not exist: `kubectl -n skill-ci get sandboxprofiles`. |
 | A trial fails with `InvalidMetadata` | Agent Sandbox refused the claim's labels. skill-ci uses the default allowed domain `sandbox.users.io`; a custom `agent-sandbox-config` with `allowed-label-domains` must keep it. |
 | An agent cannot reach a host it needs | The skill's network mode blocks it. `hubble observe -n skill-ci --verdict DROPPED` shows the blocked lookups; add the domain or a bundle to `skillci.dev/network-allow`. |
