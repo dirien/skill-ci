@@ -10,6 +10,7 @@
 #   ANTHROPIC_API_KEY  required unless the Secret llm-keys already exists
 #   OPENAI_API_KEY, OPENAI_BASE_URL, OPENROUTER_API_KEY, OLLAMA_API_KEY, NVIDIA_API_KEY   optional LLM keys
 #   SKIP_MONITORING=1  do not install kube-prometheus-stack, the ServiceMonitor and the dashboard
+#   HARBOR_UPGRADE=1   run helm upgrade for Harbor even when its chart version and values did not change
 #   CONTROLLER_CHART   chart to install (default oci://ghcr.io/dirien/charts/skill-ci-controller),
 #                      for example ./charts/skill-ci-controller to test an unreleased chart
 #   KUBECONFIG, KUBE_CONTEXT   as for kubectl (KUBE_CONTEXT selects a context for kubectl and helm)
@@ -125,13 +126,24 @@ if [[ "${SKIP_MONITORING:-0}" != 1 ]]; then
 fi
 
 step "Harbor ${HARBOR_CHART_VERSION}"
-# The password goes through a private values file, not the command line.
-printf 'harborAdminPassword: "%s"\n' "${harbor_password}" >"${tmp}/harbor-password.yaml"
-hm upgrade --install harbor harbor \
-  --repo https://helm.goharbor.io --version "${HARBOR_CHART_VERSION}" \
-  --namespace harbor --create-namespace \
-  -f "${deploy_dir}/helm/values/harbor.yaml" -f "${tmp}/harbor-password.yaml" \
-  --wait --timeout 15m
+# The chart generates its internal secrets on every render, so each upgrade restarts core, jobservice
+# and registry. Upgrade only when the chart version or the values changed (HARBOR_UPGRADE=1 forces it).
+harbor_inputs="$(cat "${deploy_dir}/helm/values/harbor.yaml" <(printf '%s\n' "${HARBOR_CHART_VERSION}") |
+  openssl dgst -sha256 | sed 's/^.* //')"
+harbor_applied="$(kc get namespace harbor -o jsonpath='{.metadata.annotations.skillci\.dev/harbor-inputs}' 2>/dev/null || true)"
+if [[ "${harbor_applied}" == "${harbor_inputs}" && "${HARBOR_UPGRADE:-0}" != 1 ]] &&
+  hm -n harbor status harbor >/dev/null 2>&1; then
+  echo "harbor ${HARBOR_CHART_VERSION} is installed with these values, not upgraded (HARBOR_UPGRADE=1 forces it)"
+else
+  # The password goes through a private values file, not the command line.
+  printf 'harborAdminPassword: "%s"\n' "${harbor_password}" >"${tmp}/harbor-password.yaml"
+  hm upgrade --install harbor harbor \
+    --repo https://helm.goharbor.io --version "${HARBOR_CHART_VERSION}" \
+    --namespace harbor --create-namespace \
+    -f "${deploy_dir}/helm/values/harbor.yaml" -f "${tmp}/harbor-password.yaml" \
+    --wait --timeout 15m
+  kc annotate namespace harbor --overwrite "skillci.dev/harbor-inputs=${harbor_inputs}" >/dev/null
+fi
 kc -n harbor get pods
 
 if [[ "${SKIP_MONITORING:-0}" != 1 ]]; then

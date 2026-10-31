@@ -67,7 +67,11 @@ deploy/install.sh
 ```
 
 The script runs the steps below in order, prints each one, and can be run again: it keeps the generated passwords,
-upgrades what changed and never overwrites the model list. `SKIP_MONITORING=1` leaves out Prometheus and Grafana.
+upgrades what changed and never overwrites the model list. A first install takes about 20 minutes (most of it Harbor
+and kube-prometheus-stack becoming ready); a re-run with nothing to change takes about a minute. Harbor is upgraded
+only when its chart version or `deploy/helm/values/harbor.yaml` changed, because the chart generates new internal
+secrets on every render and each upgrade restarts Harbor's core, jobservice and registry pods (`HARBOR_UPGRADE=1`
+upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana.
 Then go to [Run the demo](#run-the-demo). Read on for what each step does and how to check it.
 
 ## Step 1: namespace
@@ -193,6 +197,10 @@ kubectl -n harbor get pods
 
 Harbor only reads the admin password when its database is first created. Changing it later in Helm does not change
 the login, so keep `harbor-credentials` and this value identical.
+
+Every `helm upgrade` of this chart restarts `harbor-core`, `harbor-jobservice` and `harbor-registry`, even with the
+same values: the chart generates its internal secrets on each render, and their checksums are pod annotations. Skills
+cannot be pushed or pulled during that minute, so upgrade Harbor between eval runs, not during one.
 
 Expected after a few minutes (names carry random suffixes):
 
