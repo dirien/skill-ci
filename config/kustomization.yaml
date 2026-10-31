@@ -6,15 +6,19 @@ kind: Kustomization
 namespace: skill-ci
 resources:
   - crd/skillci.dev_sandboxprofiles.yaml
+  - crd/skillci.dev_skillciconfigs.yaml
   - crd/skillci.dev_skillevals.yaml
   - rbac/controller.yaml
   - rbac/runner.yaml
   - manager/deployment.yaml
   - manager/service.yaml
-  # Needs the SandboxProfile CRD above to be established: on a new cluster a first
-  # `kubectl apply -k config/` may report it; apply again. Until the profile exists,
-  # runs start a bare Sandbox per trial.
+  # Need the SandboxProfile and SkillCIConfig CRDs above to be established: on a new cluster a
+  # first `kubectl apply -k config/` may report it; apply again. Until the profile exists, runs
+  # start a bare Sandbox per trial; until the config exists, the built-in defaults apply. With
+  # kustomize these files are the source of truth: `kubectl apply -k` resets edits made with
+  # kubectl edit, so change the files (or drop them from this list and own the objects yourself).
   - manager/sandboxprofile.yaml
+  - manager/skillciconfig.yaml
 images:
   - name: ghcr.io/dirien/skill-ci-controller
     newTag: 0.9.0

@@ -1,0 +1,22 @@
+# The platform settings of the controller (CONTRACT.md "SkillCIConfig"): the default SandboxProfile and
+# the network policy of the trial sandboxes. The controller reads only the object named default in its
+# namespace, whenever it resolves a run, so a change applies without a restart. These are the built-in
+# defaults; fields left out get the same values from the CRD.
+apiVersion: skillci.dev/v1alpha1
+kind: SkillCIConfig
+metadata:
+  name: default
+  namespace: skill-ci
+spec:
+  defaultSandboxProfile: default
+  network:
+    default: full
+    modes: [none, allowlist, full]
+    enforcement: auto
+    alwaysAllow: []
+    bundles:
+      apt: [deb.debian.org, security.debian.org]
+      github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
+      node: [registry.npmjs.org]
+      python: [pypi.org, files.pythonhosted.org]
+    agentInstallHosts: [registry.npmjs.org]

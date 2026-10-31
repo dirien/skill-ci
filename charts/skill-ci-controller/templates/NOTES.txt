@@ -15,8 +15,17 @@ Secret. These must exist:
   Secret {{ .Values.secrets.llmKeys.existingSecret }}  keys anthropic; optional openai, openai-base-url, nvidia, ollama, openrouter   (runner Jobs; the controller hardcodes this name)
   ConfigMap {{ .Values.controller.modelsConfigMap }}  key models.yaml
 
-The SkillEval CRD gained status fields (liftCI, samples). Helm does not upgrade crds/, so after
-upgrading from a chart before 0.5.0 run: kubectl apply --server-side -f charts/skill-ci-controller/crds/
+Platform settings (network modes, default SandboxProfile) live in the SkillCIConfig "default" and
+sandbox sizes in SandboxProfiles, both in namespace {{ include "skill-ci-controller.watchNamespace" . }}. The chart
+creates them only when they do not exist yet; after that they are yours to edit, and upgrades never
+overwrite them:
+  kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} get scc default
+  kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} edit scc default
+  kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} get sbp
+
+Helm installs crds/ only on the first install and never upgrades them. When upgrading from an older
+chart, apply them first (0.10.0 adds the SkillCIConfig CRD, 0.9.0 the SandboxProfile CRD, 0.5.0 SkillEval
+status fields): kubectl apply --server-side -f charts/skill-ci-controller/crds/
 
 Try it:
   kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "skill-ci-controller.fullname" . }}
@@ -34,6 +43,12 @@ Reporting site (runs, release channels, policy decisions, stored reports):
 {{ end }}
 Metrics: http://{{ include "skill-ci-controller.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.metricsPort }}/metrics{{ if not .Values.serviceMonitor.enabled }}
 (set serviceMonitor.enabled=true to scrape them with the Prometheus Operator){{ end }}
+{{- if or (hasKey .Values.controller "network") (hasKey .Values.controller "defaultSandboxProfile") }}
+
+WARNING: controller.network and controller.defaultSandboxProfile are ignored since chart 0.10.0. The
+settings live in the SkillCIConfig default: kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} edit scc default
+(config.* seeds it on the first install only).
+{{- end }}
 {{- if .Values.controller.dryRun }}
 
 WARNING: controller.dryRun=true. SkillEvals are created in phase Planned and no Jobs run.

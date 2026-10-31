@@ -1,6 +1,8 @@
 {{define "content"}}
 <h1>Runs</h1>
 <p class="lede">Every SkillEval in <code>{{.Namespace}}</code>, newest first. Scores are on a 0 to 1 scale.</p>
+<p class="muted" id="network-policy">Network policy ({{.Network.Source}}): skills without a declaration get <code>{{.Network.Default}}</code>; allowed modes {{.Network.Modes}}; bundles {{.Network.Bundles}}; enforcement {{.Network.Enforcement}}.</p>
+{{with .Network.Problem}}<p class="notice failed">{{.}}</p>{{end}}
 
 <dl class="stats" aria-label="Summary">
   <div><dt>Runs</dt><dd>{{.Stats.Runs}}</dd></div>

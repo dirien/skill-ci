@@ -106,3 +106,43 @@ OTEL_RESOURCE_ATTRIBUTES: the pod and namespace (from the downward API env), the
 {{- end -}}
 {{- join "," $attrs -}}
 {{- end }}
+
+{{/*
+Create-once object in the watch namespace: a SkillCIConfig or SandboxProfile the chart seeds from
+values and then leaves to kubectl or GitOps. Rendered (with helm.sh/resource-policy: keep, so a later
+upgrade that stops rendering it never deletes it) only when lookup finds no such object. helm template
+and helm lint have no cluster, lookup returns nothing, and the object always renders.
+An object this release created before the annotation existed (chart 0.9.0 SandboxProfiles) is rendered
+once more from its live spec with the annotation added, so the upgrade adopts it instead of deleting it.
+Usage: include "skill-ci-controller.createOnce" (dict "root" $ "kind" "SandboxProfile" "name" "default" "spec" $spec)
+*/}}
+{{- define "skill-ci-controller.createOnce" -}}
+{{- $root := .root -}}
+{{- $ns := include "skill-ci-controller.watchNamespace" $root -}}
+{{- $spec := .spec | default dict -}}
+{{- $render := true -}}
+{{- $live := lookup "skillci.dev/v1alpha1" .kind $ns .name -}}
+{{- if $live -}}
+{{- $ann := $live.metadata.annotations | default dict -}}
+{{- if and (eq (get $ann "meta.helm.sh/release-name") $root.Release.Name) (eq (get $ann "meta.helm.sh/release-namespace") $root.Release.Namespace) (ne (get $ann "helm.sh/resource-policy") "keep") -}}
+{{- $spec = $live.spec | default dict -}}
+{{- else -}}
+{{- $render = false -}}
+{{- end -}}
+{{- end -}}
+{{- if $render }}
+---
+apiVersion: skillci.dev/v1alpha1
+kind: {{ .kind }}
+metadata:
+  name: {{ .name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "skill-ci-controller.labels" $root | nindent 4 }}
+  annotations:
+    # Created once from the chart values; edit the object (kubectl or GitOps), upgrades never overwrite it.
+    helm.sh/resource-policy: keep
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}
+{{- end }}

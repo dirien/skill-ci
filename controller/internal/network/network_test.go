@@ -338,63 +338,6 @@ func TestPolicyValidate(t *testing.T) {
 	}
 }
 
-func TestParseModes(t *testing.T) {
-	tests := []struct {
-		in      string
-		want    []string
-		wantErr bool
-	}{
-		{in: "none,allowlist,full", want: []string{"none", "allowlist", "full"}},
-		{in: " none , full ", want: []string{"none", "full"}},
-		{in: "", wantErr: true},
-		{in: "none,open", wantErr: true},
-	}
-	for _, tt := range tests {
-		got, err := ParseModes(tt.in)
-		if (err != nil) != tt.wantErr || (!tt.wantErr && !reflect.DeepEqual(got, tt.want)) {
-			t.Errorf("%q: got %v, %v", tt.in, got, err)
-		}
-	}
-}
-
-func TestParseBundles(t *testing.T) {
-	tests := []struct {
-		in      string
-		want    map[string][]string
-		wantErr string
-	}{
-		{in: "", want: map[string][]string{}},
-		{in: FormatBundles(DefaultBundles), want: DefaultBundles},
-		{in: "@py = pypi.org, files.pythonhosted.org ; node=registry.npmjs.org;", want: map[string][]string{
-			"py": {"pypi.org", "files.pythonhosted.org"}, "node": {"registry.npmjs.org"},
-		}},
-		{in: "python", wantErr: `network bundle "python" must look like name=host,host`},
-		{in: "a=x.org;a=y.org", wantErr: "network bundle @a is defined twice"},
-	}
-	for _, tt := range tests {
-		got, err := ParseBundles(tt.in)
-		if tt.wantErr != "" {
-			if err == nil || err.Error() != tt.wantErr {
-				t.Errorf("%q: got %v, want %q", tt.in, err, tt.wantErr)
-			}
-			continue
-		}
-		if err != nil || !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("%q: got %v, %v; want %v", tt.in, got, err, tt.want)
-		}
-	}
-}
-
-func TestFormatBundles(t *testing.T) {
-	got := FormatBundles(DefaultBundles)
-	want := "apt=deb.debian.org,security.debian.org;" +
-		"github=github.com,api.github.com,codeload.github.com,objects.githubusercontent.com;" +
-		"node=registry.npmjs.org;python=pypi.org,files.pythonhosted.org"
-	if got != want {
-		t.Fatalf("got %q, want %q", got, want)
-	}
-}
-
 func TestPolicyCilium(t *testing.T) {
 	tests := []struct {
 		enforcement Enforcement

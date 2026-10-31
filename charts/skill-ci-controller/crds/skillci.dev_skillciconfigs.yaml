@@ -1,0 +1,323 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.23.0
+  name: skillciconfigs.skillci.dev
+spec:
+  group: skillci.dev
+  names:
+    kind: SkillCIConfig
+    listKind: SkillCIConfigList
+    plural: skillciconfigs
+    shortNames:
+    - scc
+    singular: skillciconfig
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.effective.network.default
+      name: Default-Network
+      type: string
+    - jsonPath: .status.effective.network.enforcedBy
+      name: Enforcement
+      type: string
+    - jsonPath: .status.effective.defaultSandboxProfile
+      name: Default-Profile
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          SkillCIConfig holds the platform settings of a skill-ci install: the
+          default SandboxProfile and the network policy of the trial sandboxes. The
+          controller reads only the object named default in its own namespace and
+          applies a change to the runs it resolves afterwards, without a restart.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            default: {}
+            description: SkillCIConfigSpec holds the platform settings of a skill-ci
+              install.
+            properties:
+              defaultSandboxProfile:
+                default: default
+                description: |-
+                  DefaultSandboxProfile is the SandboxProfile of a model list entry that
+                  names none. When it does not exist, runs start a bare Sandbox per trial.
+                maxLength: 253
+                minLength: 1
+                pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                type: string
+              network:
+                default: {}
+                description: Network is the network policy of the trial sandboxes.
+                properties:
+                  agentInstallHosts:
+                    default:
+                    - registry.npmjs.org
+                    description: |-
+                      AgentInstallHosts are added to none and allowlist when a model list
+                      entry's agent version is not preinstalled in the sandbox image (Harbor
+                      installs the CLI with npm then).
+                    items:
+                      description: |-
+                        Host is a host trial sandboxes may reach on TCP 443: a lowercase RFC 1123
+                        hostname with at least two labels, optionally starting with "*.".
+                      maxLength: 255
+                      pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)+$
+                      type: string
+                    maxItems: 20
+                    type: array
+                    x-kubernetes-list-type: set
+                  alwaysAllow:
+                    description: AlwaysAllow are hosts added to the none and allowlist
+                      modes, for example a proxy.
+                    items:
+                      description: |-
+                        Host is a host trial sandboxes may reach on TCP 443: a lowercase RFC 1123
+                        hostname with at least two labels, optionally starting with "*.".
+                      maxLength: 255
+                      pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)+$
+                      type: string
+                    maxItems: 20
+                    type: array
+                    x-kubernetes-list-type: set
+                  bundles:
+                    additionalProperties:
+                      description: BundleHosts are the hosts of one network bundle.
+                      items:
+                        description: |-
+                          Host is a host trial sandboxes may reach on TCP 443: a lowercase RFC 1123
+                          hostname with at least two labels, optionally starting with "*.".
+                        maxLength: 255
+                        pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)+$
+                        type: string
+                      maxItems: 20
+                      minItems: 1
+                      type: array
+                    default:
+                      apt:
+                      - deb.debian.org
+                      - security.debian.org
+                      github:
+                      - github.com
+                      - api.github.com
+                      - codeload.github.com
+                      - objects.githubusercontent.com
+                      node:
+                      - registry.npmjs.org
+                      python:
+                      - pypi.org
+                      - files.pythonhosted.org
+                    description: |-
+                      Bundles are the host bundles a skill names as @<name> in
+                      skillci.dev/network-allow. Setting the field replaces the defaults.
+                    maxProperties: 32
+                    type: object
+                    x-kubernetes-validations:
+                    - message: bundle names must be at most 63 lowercase letters,
+                        digits and dashes
+                      rule: self.all(k, size(k) <= 63 && k.matches('^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'))
+                  default:
+                    default: full
+                    description: |-
+                      Default is the mode of a skill that declares none: none, allowlist or
+                      full (the internet, never the cluster).
+                    enum:
+                    - none
+                    - allowlist
+                    - full
+                    type: string
+                  enforcement:
+                    default: auto
+                    description: |-
+                      Enforcement says how modes are enforced. auto: CiliumNetworkPolicies
+                      when the ciliumnetworkpolicies.cilium.io CRD exists; cilium: require
+                      Cilium; off: no policies, every mode runs unenforced.
+                    enum:
+                    - auto
+                    - cilium
+                    - "off"
+                    type: string
+                  modes:
+                    default:
+                    - none
+                    - allowlist
+                    - full
+                    description: Modes are the modes a skill may declare; a run with
+                      another mode fails.
+                    items:
+                      enum:
+                      - none
+                      - allowlist
+                      - full
+                      type: string
+                    maxItems: 3
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
+                x-kubernetes-validations:
+                - message: network.default must be one of network.modes
+                  rule: '!has(self.modes) || !has(self.default) || self.default in
+                    self.modes'
+            type: object
+          status:
+            description: SkillCIConfigStatus is the observed state of a SkillCIConfig.
+            properties:
+              conditions:
+                description: 'Conditions holds Ready: True when the spec is valid
+                  and in force.'
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              effective:
+                description: Effective is the configuration in force. Empty on an
+                  ignored object.
+                properties:
+                  defaultSandboxProfile:
+                    description: DefaultSandboxProfile is the SandboxProfile of an
+                      entry that names none.
+                    type: string
+                  generation:
+                    description: Generation is the generation of the spec in force;
+                      zero for BuiltIn.
+                    format: int64
+                    type: integer
+                  network:
+                    description: Network is the network policy in force.
+                    properties:
+                      agentInstallHosts:
+                        description: AgentInstallHosts are the hosts added for an
+                          agent version that is not preinstalled.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      alwaysAllow:
+                        description: AlwaysAllow are the hosts added to none and allowlist.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      bundles:
+                        description: Bundles are the names of the defined bundles,
+                          sorted.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      default:
+                        description: Default is the mode of a skill that declares
+                          none.
+                        type: string
+                      enforcedBy:
+                        description: 'EnforcedBy is what enforcement resolves to on
+                          this cluster: cilium or none.'
+                        type: string
+                      enforcement:
+                        description: 'Enforcement is the configured setting: auto,
+                          cilium or off.'
+                        type: string
+                      modes:
+                        description: Modes are the modes a skill may declare.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                    type: object
+                  source:
+                    description: |-
+                      Source is SkillCIConfig (this spec), LastValid (this spec is invalid,
+                      the last valid one is kept) or BuiltIn (the built-in defaults).
+                    type: string
+                type: object
+              observedGeneration:
+                description: ObservedGeneration is the generation the status describes.
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

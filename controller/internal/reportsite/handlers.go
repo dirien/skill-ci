@@ -23,6 +23,11 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := buildIndex(s.page("Runs", Crumb{Label: "Runs"}), runs, s.channels.get(r.Context()), filterFrom(r.URL.Query()), s.cfg.Thresholds)
+	st, err := s.cfg.Platform.Lookup(r.Context())
+	if err != nil {
+		s.cfg.Log.Error(err, "reading the platform settings")
+	}
+	v.Network = networkPolicyView(st, err)
 	s.render(w, r, http.StatusOK, "index", v)
 }
 

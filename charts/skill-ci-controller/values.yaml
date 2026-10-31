@@ -91,35 +91,13 @@ controller:
   maxRetries: 1
   # Create SkillEvals in phase Planned and no Jobs.
   dryRun: false
-  # --default-sandbox-profile: the SandboxProfile of a model list entry without sandboxProfile.
-  # When it does not exist, runs start a bare Sandbox per trial. Needs controller image 0.9.0
-  # or newer, as do all values under network.
-  defaultSandboxProfile: default
-  # Network modes of the trial sandboxes (CONTRACT.md "Network modes"). A skill declares
-  # skillci.dev/network (none, allowlist, full) and skillci.dev/network-allow in its SKILL.md
-  # metadata, which become OCI manifest annotations of the pushed digest.
-  network:
-    # --network-default: the mode of a skill that declares none.
-    default: full
-    # --network-modes: the modes a skill may declare; another mode fails the run.
-    modes: [none, allowlist, full]
-    # --network-enforcement: auto (CiliumNetworkPolicies when the ciliumnetworkpolicies.cilium.io
-    # CRD exists), cilium (require it) or off (no policies, every mode unenforced).
-    enforcement: auto
-    # --network-always-allow: hosts added to none and allowlist, for example a proxy.
-    alwaysAllow: []
-    # --network-bundles: host bundles a skill names as @<name>. A map, so values merge with
-    # these defaults; set a bundle to null to drop it.
-    bundles:
-      apt: [deb.debian.org, security.debian.org]
-      github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
-      node: [registry.npmjs.org]
-      python: [pypi.org, files.pythonhosted.org]
-    # --preinstalled-agents: agent@version pins in the sandbox image. An entry on another
-    # agentVersion installs the CLI with npm, so --agent-install-hosts are added to none and allowlist.
-    preinstalledAgents: [claude-code@2.1.292, codex@0.161.0, opencode@1.19.1]
-    # --agent-install-hosts.
-    agentInstallHosts: [registry.npmjs.org]
+  # --preinstalled-agents: agent@version pins in the sandbox image of this release (a fact of the
+  # image, not a policy). An entry on another agentVersion installs the CLI with npm, so the
+  # SkillCIConfig network.agentInstallHosts are added to none and allowlist. Keep it in step with
+  # controller.sandboxImage. Needs controller image 0.9.0 or newer.
+  preinstalledAgents: [claude-code@2.1.292, codex@0.161.0, opencode@1.19.1]
+  # Removed in 0.10.0 and ignored: controller.defaultSandboxProfile and controller.network moved to the
+  # SkillCIConfig `default` (config.* below seeds it). NOTES.txt warns when they are still set.
   leaderElect: false
   # controller-runtime zap logging flags. Empty means the controller default.
   logging:
@@ -127,12 +105,50 @@ controller:
     encoder: ""
     development: false
 
-# SandboxProfiles the chart creates in the controller namespace, name -> spec (CONTRACT.md
+# Platform settings: the SkillCIConfig `default` in the controller namespace (CONTRACT.md "SkillCIConfig").
+# The controller reads it whenever it resolves a run, so edits apply without a restart. The chart creates
+# it only when it does not exist yet (helm lookup), with helm.sh/resource-policy: keep; after that the
+# object belongs to you: kubectl -n <namespace> edit scc default, or manage it with GitOps. Changing the
+# values below after the first install has no effect on an existing object. Without the object the
+# controller uses the same built-in defaults. Needs controller image 0.10.0 or newer.
+config:
+  # Seed the SkillCIConfig default. false: create it yourself (or run on the built-in defaults).
+  create: true
+  # SandboxProfile of a model list entry without sandboxProfile. When it does not exist, runs start a
+  # bare Sandbox per trial.
+  defaultSandboxProfile: default
+  # Network modes of the trial sandboxes (CONTRACT.md "Network modes"). A skill declares
+  # skillci.dev/network (none, allowlist, full) and skillci.dev/network-allow in its SKILL.md metadata,
+  # which become OCI manifest annotations of the pushed digest.
+  network:
+    # Mode of a skill that declares none. full: the internet, never the cluster.
+    default: full
+    # Modes a skill may declare; another mode fails the run. Must contain default.
+    modes: [none, allowlist, full]
+    # auto (CiliumNetworkPolicies when the ciliumnetworkpolicies.cilium.io CRD exists), cilium
+    # (require it) or off (no policies, every mode unenforced).
+    enforcement: auto
+    # Hosts added to none and allowlist, for example a proxy.
+    alwaysAllow: []
+    # Host bundles a skill names as @<name>. A map, so values merge with these defaults; set a bundle
+    # to null to drop it. The object holds exactly the resulting bundles.
+    bundles:
+      apt: [deb.debian.org, security.debian.org]
+      github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
+      node: [registry.npmjs.org]
+      python: [pypi.org, files.pythonhosted.org]
+    # Hosts added to none and allowlist when an entry's agent version is not preinstalled.
+    agentInstallHosts: [registry.npmjs.org]
+
+# SandboxProfiles the chart seeds in the controller namespace, name -> spec (CONTRACT.md
 # "SandboxProfile"). The controller keeps a SandboxTemplate and a SandboxWarmPool (Agent Sandbox
-# extensions) for each. Rendered only with a chart that ships the SandboxProfile CRD. Set a
-# profile to null to drop it; more profiles can be added here or with kubectl.
+# extensions) for each. Rendered only with a chart that ships the SandboxProfile CRD. Like the
+# SkillCIConfig, each profile is created only when it does not exist yet and then belongs to you
+# (kubectl -n <namespace> edit sbp default); later value changes do not touch it. create: false (or
+# null) skips a profile; more profiles can be added here or with kubectl.
 sandboxProfiles:
   default:
+    create: true
     # Empty: the controller's --sandbox-image (controller.sandboxImage).
     image: ""
     # Memory is request and limit, CPU a request only.

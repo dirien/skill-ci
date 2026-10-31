@@ -1,5 +1,5 @@
 # The default SandboxProfile: model list entries without sandboxProfile run here
-# (--default-sandbox-profile). The image is empty, so the controller's --sandbox-image is used.
+# (SkillCIConfig spec.defaultSandboxProfile). The image is empty, so the controller's --sandbox-image is used.
 apiVersion: skillci.dev/v1alpha1
 kind: SandboxProfile
 metadata:

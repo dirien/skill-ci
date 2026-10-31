@@ -11,12 +11,14 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 )
 
 const (
@@ -85,7 +87,7 @@ func newHandler(t *testing.T, token string, existing ...client.Object) (*Handler
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(append(existing, cm)...).Build()
 	return &Handler{Client: c, Namespace: "skill-ci", Project: "skills", ModelsConfigMap: "skill-ci-models",
-		Token: token, Attempts: 1, DefaultSandboxProfile: "default", Log: logr.Discard()}, c
+		Token: token, Attempts: 1, Log: logr.Discard()}, c
 }
 
 func post(h *Handler, auth string, p Payload) *httptest.ResponseRecorder {
@@ -180,5 +182,43 @@ func TestHandlerMethodAndPayload(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/webhook/harbor", strings.NewReader("{")))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("bad json status = %d", rec.Code)
+	}
+}
+
+func TestHandlerDefaultProfileFromConfig(t *testing.T) {
+	tests := []struct {
+		name   string
+		config *v1alpha1.SkillCIConfig
+		want   string
+	}{
+		{"no SkillCIConfig: built-in default", nil, "default"},
+		{"SkillCIConfig default", &v1alpha1.SkillCIConfig{
+			ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "skill-ci"},
+			Spec:       v1alpha1.SkillCIConfigSpec{DefaultSandboxProfile: "small"},
+		}, "small"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var objs []client.Object
+			if tt.config != nil {
+				objs = append(objs, tt.config)
+			}
+			h, c := newHandler(t, "", objs...)
+			h.Platform = &platform.Source{Reader: c, Namespace: "skill-ci"}
+			if rec := post(h, "", payload("PUSH_ARTIFACT", "skills/acme", "v1.0.0")); rec.Code != http.StatusOK {
+				t.Fatalf("status %d", rec.Code)
+			}
+			var list v1alpha1.SkillEvalList
+			if err := c.List(context.Background(), &list, client.InNamespace("skill-ci")); err != nil {
+				t.Fatal(err)
+			}
+			got := map[string]string{}
+			for _, se := range list.Items {
+				got[se.Spec.Model] = se.Spec.SandboxProfile
+			}
+			if got["claude-haiku-5-5"] != tt.want || got["claude-sonnet-5-5"] != "big" {
+				t.Errorf("profiles %v, want haiku on %q and sonnet on its own big", got, tt.want)
+			}
+		})
 	}
 }

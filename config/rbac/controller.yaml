@@ -34,6 +34,13 @@ rules:
   - apiGroups: ["skillci.dev"]
     resources: ["sandboxprofiles/finalizers"]
     verbs: ["update"]
+  # SkillCIConfigs: the controller reads the platform settings and writes their status.
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillciconfigs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["skillci.dev"]
+    resources: ["skillciconfigs/status"]
+    verbs: ["get", "update", "patch"]
   # The SandboxTemplate and SandboxWarmPool of every SandboxProfile (Agent Sandbox extensions).
   - apiGroups: ["extensions.agents.x-k8s.io"]
     resources: ["sandboxtemplates", "sandboxwarmpools"]

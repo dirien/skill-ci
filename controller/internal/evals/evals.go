@@ -119,7 +119,7 @@ type Request struct {
 	// Trigger records why the eval is created.
 	Trigger v1alpha1.Trigger
 	// DefaultSandboxProfile is the profile of an entry that names none
-	// (--default-sandbox-profile).
+	// (SkillCIConfig spec.defaultSandboxProfile).
 	DefaultSandboxProfile string
 }
 

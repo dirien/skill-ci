@@ -1,12 +1,14 @@
 package reportsite
 
 import (
+	"fmt"
 	"net/url"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 )
 
@@ -104,6 +106,48 @@ type indexView struct {
 	Options     FilterOptions
 	Runs        []Run
 	Thresholds  policy.Thresholds
+	Network     NetworkPolicyView
+}
+
+// NetworkPolicyView is the platform network policy in force, from the
+// SkillCIConfig default or the built-in defaults.
+type NetworkPolicyView struct {
+	// Default is the mode of a skill that declares none.
+	Default string
+	// Modes are the modes a skill may declare.
+	Modes string
+	// Bundles are the bundle names, "@apt, @github", or "none".
+	Bundles string
+	// Enforcement is the configured enforcement setting.
+	Enforcement string
+	// Source says where the policy comes from, in words.
+	Source string
+	// Problem is set when the SkillCIConfig is invalid or unreadable.
+	Problem string
+}
+
+func networkPolicyView(st platform.State, err error) NetworkPolicyView {
+	p := st.Settings.Network
+	v := NetworkPolicyView{Default: p.DefaultMode(), Modes: strings.Join(p.AllowedModes(), ", "), Bundles: "none",
+		Enforcement: string(p.EnforcementMode())}
+	if names := platform.BundleNames(p.Bundles); len(names) > 0 {
+		v.Bundles = "@" + strings.Join(names, ", @")
+	}
+	switch st.Source {
+	case v1alpha1.ConfigSourceSkillCIConfig:
+		v.Source = "SkillCIConfig " + v1alpha1.SkillCIConfigName
+	case v1alpha1.ConfigSourceLastValid:
+		v.Source = fmt.Sprintf("the last valid spec of SkillCIConfig %s (generation %d)", v1alpha1.SkillCIConfigName, st.Generation)
+	default:
+		v.Source = "built-in defaults"
+	}
+	switch {
+	case err != nil:
+		v.Problem = "The SkillCIConfig could not be read: " + err.Error()
+	case st.Invalid != nil:
+		v.Problem = "SkillCIConfig " + v1alpha1.SkillCIConfigName + " is invalid: " + st.Invalid.Error()
+	}
+	return v
 }
 
 func buildIndex(page Page, runs []Run, ch *Channels, f Filter, th policy.Thresholds) indexView {

@@ -135,6 +135,10 @@ func (r *ModelsReconciler) syncRequired(ctx context.Context, changed []models.Mo
 // tagged beta or stable. It returns how many it created.
 func (r *ModelsReconciler) evaluateTagged(ctx context.Context, added []models.Model) (int, error) {
 	log := logf.FromContext(ctx)
+	settings, err := r.Config.Platform.Current(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("reading the platform settings: %w", err)
+	}
 	skills, err := r.Harbor.ListRepositories(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("listing skills: %w", err)
@@ -158,7 +162,7 @@ func (r *ModelsReconciler) evaluateTagged(ctx context.Context, added []models.Mo
 				ok, err := evals.Ensure(ctx, r.Client, r.Config.Namespace, evals.Request{
 					Skill: skill, Version: version, Digest: art.Digest, Model: m,
 					Attempts: r.Config.Attempts, Trigger: v1alpha1.TriggerModelChange,
-					DefaultSandboxProfile: r.Config.DefaultSandboxProfile,
+					DefaultSandboxProfile: settings.DefaultSandboxProfile,
 				})
 				if err != nil {
 					return created, fmt.Errorf("evaluating %s %s: %w", skill, version, err)

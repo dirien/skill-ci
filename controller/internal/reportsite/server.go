@@ -19,6 +19,7 @@ import (
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 )
 
@@ -52,6 +53,9 @@ type Config struct {
 	Reports ReportStore
 	// Thresholds are the controller policy bands, shown and used for decisions.
 	Thresholds policy.Thresholds
+	// Platform supplies the network policy in force, shown on the runs page;
+	// nil shows the built-in defaults.
+	Platform *platform.Source
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 	// Log receives server and request errors.

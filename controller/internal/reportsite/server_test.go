@@ -13,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/evals"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
+	"github.com/dirien/skill-ci/controller/internal/network"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/reportstore"
 )
 
@@ -357,5 +360,43 @@ func TestStartServesAndShutsDown(t *testing.T) {
 	}
 	if h.srv.NeedLeaderElection() {
 		t.Error("every replica should serve the site")
+	}
+}
+
+func TestIndexShowsNetworkPolicy(t *testing.T) {
+	tests := []struct {
+		name     string
+		platform *platform.Source
+		want     []string
+	}{
+		{"built-in defaults", nil, []string{
+			"Network policy (built-in defaults): skills without a declaration get <code>full</code>; allowed modes none, allowlist, full; bundles @apt, @github, @node, @python; enforcement auto.",
+		}},
+		{"configured", platform.Static(platform.Settings{Network: network.Policy{
+			Default: "none", Allowed: []string{"none"}, Enforcement: network.EnforcementCilium,
+		}}), []string{"get <code>none</code>; allowed modes none; bundles none; enforcement cilium."}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t, nil)
+			h.srv.cfg.Platform = tt.platform
+			body := h.get("/").Body.String()
+			for _, w := range tt.want {
+				if !strings.Contains(body, w) {
+					t.Errorf("runs page lacks %q", w)
+				}
+			}
+		})
+	}
+}
+
+func TestNetworkPolicyViewProblems(t *testing.T) {
+	st := platform.State{Settings: platform.Defaults(nil), Source: v1alpha1.ConfigSourceLastValid, Generation: 3, Invalid: errors.New("bad default")}
+	v := networkPolicyView(st, nil)
+	if v.Source != "the last valid spec of SkillCIConfig default (generation 3)" || v.Problem != "SkillCIConfig default is invalid: bad default" {
+		t.Errorf("view %+v", v)
+	}
+	if v := networkPolicyView(platform.State{}, errors.New("forbidden")); v.Problem != "The SkillCIConfig could not be read: forbidden" || v.Source != "built-in defaults" {
+		t.Errorf("view %+v", v)
 	}
 }

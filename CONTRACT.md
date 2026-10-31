@@ -35,7 +35,7 @@ models:
     agentVersion: "2.1.292"         # optional: the release of the agent CLI
     model: claude-opus-5-5
     required: true                  # gates promotion
-    sandboxProfile: default         # optional: the SandboxProfile of the trials (default --default-sandbox-profile)
+    sandboxProfile: default         # optional: the SandboxProfile of the trials (default: SkillCIConfig spec.defaultSandboxProfile)
   - agent: codex
     agentVersion: "0.161.0"
     model: openai/gpt-6.1-sol
@@ -50,7 +50,7 @@ models:
 
 Without `agentVersion` the runner pins its default for the agent (see "Agent versions"), the SkillEval has no `spec.agentVersion` and the controller records the version that ran in `status.agentVersion`. An unpinned entry and a pinned one are different entries even when they end up on the same release; pin every entry to keep runs comparable.
 
-`sandboxProfile` names the SandboxProfile (see "SandboxProfile") whose warm pool the entry's trials run in. It is not part of the identity: the controller copies it (or `--default-sandbox-profile`, default `default`) into `spec.sandboxProfile` of every new SkillEval, and a change applies to new runs only.
+`sandboxProfile` names the SandboxProfile (see "SandboxProfile") whose warm pool the entry's trials run in. It is not part of the identity: the controller copies it (or the SkillCIConfig `spec.defaultSandboxProfile` in force when the SkillEval is created, default `default`) into `spec.sandboxProfile` of every new SkillEval, and a change applies to new runs only.
 
 `required` is the gating knob, per entry. Changing it on an existing entry (not a new one) updates `spec.required` of that entry's existing SkillEvals, which re-runs the tag policy for them: make an entry required and its results gate promotion of the versions already evaluated; make it optional and they stop gating. The runs of removed entries stay and keep gating while they are `required`, so delete them (or `make reset`) when you retire a required entry.
 
@@ -83,7 +83,7 @@ spec:
   network:                          # filled in by the controller before the run starts (see "Network modes")
     mode: allowlist                 # none | allowlist | full
     allow: ["@python", dl.k8s.io]   # optional: as declared, used only with allowlist
-    source: skill                   # skill (declared) | default (--network-default)
+    source: skill                   # skill (declared) | default (SkillCIConfig spec.network.default)
 status:
   phase: Pending                    # Pending | Running | Succeeded | Failed | Planned (dry run)
   jobName: ...                      # <skilleval name>, or <name>-r1, <name>-r2 for a retry
@@ -203,6 +203,57 @@ Only `anthropic` is required: it is the judge (`SKILL_EVAL_LLM_PROVIDER=anthropi
 - **OpenCode** with an Anthropic judge accepts only `anthropic/<model>` in stock SkillEvaluator 0.6.0. For `ollama-cloud/...`, `openrouter/...`, `nvidia/...` and `openai/...` models the runner uses the OpenAI-compatible gateway route that `skillevaluator-patch/` hunks 6 and 8 to 12 open: it presents the provider's key as `OPENAI_API_KEY` and its endpoint (`https://ollama.com/v1`, `https://openrouter.ai/api/v1`, `https://integrate.api.nvidia.com/v1`, `OPENAI_BASE_URL` or `https://api.openai.com/v1`) as `OPENAI_BASE_URL` to the agent only, runs the model as `openai/<id>` with SkillEvaluator's `SkillEvaluatorGatewayOpenCode` (Chat Completions through `@ai-sdk/openai-compatible`; hunk 6 allows that wrapper on the `ack` backend and hunk 12 forwards the key into the sandbox, which Harbor does not do for the wrapper's `skillevaluator-gateway/` model namespace), and keeps the real OpenAI or NVIDIA key for Tier 2 embeddings through `SKILL_EVAL_EMBEDDING_PROVIDER=openai-compatible` (or `nv_build`). A missing key for the provider fails the run before any work with `opencode model ... needs <KEY>`.
 - A termination message and a log never contain a key: the runner redacts the values of all of the keys above.
 
+## SkillCIConfig (`skillci.dev/v1alpha1`, plural `skillciconfigs`, short name `scc`)
+
+The platform settings of one skill-ci install: the default SandboxProfile and the network policy of the trial sandboxes. Namespaced; the controller reads only the object named `default` in its own namespace (one install per namespace). An object with another name gets `Ready` `False`, reason `Ignored`, and a Warning event, and changes nothing. Printer columns: Default-Network, Enforcement (resolved: `cilium` or `none`), Default-Profile, Ready, Age (from `status.effective`, the settings in force).
+
+```yaml
+apiVersion: skillci.dev/v1alpha1
+kind: SkillCIConfig
+metadata:
+  name: default
+  namespace: skill-ci
+spec:
+  defaultSandboxProfile: default    # SandboxProfile of a model list entry without sandboxProfile (default "default")
+  network:
+    default: full                   # none | allowlist | full (default full: the internet, never the cluster)
+    modes: [none, allowlist, full]  # allowed modes, a set of 1 to 3 (default all three); must contain default
+    enforcement: auto               # auto | cilium | off (default auto)
+    alwaysAllow: []                 # hosts added to none and allowlist, at most 20
+    bundles:                        # name -> hosts, named @<name> in skillci.dev/network-allow; at most 32, 1 to 20 hosts each
+      apt: [deb.debian.org, security.debian.org]
+      github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
+      node: [registry.npmjs.org]
+      python: [pypi.org, files.pythonhosted.org]
+    agentInstallHosts: [registry.npmjs.org]   # added for an agent version not in --preinstalled-agents, at most 20
+status:
+  observedGeneration: 3
+  conditions:                       # Ready: Applied | Invalid | Ignored
+    - type: Ready
+      status: "True"
+      reason: Applied
+      message: "applied: default network full, allowed modes none, allowlist, full, enforcement auto (cilium), bundles @apt, @github, @node, @python, default sandbox profile default"
+  effective:                        # what is in force
+    source: SkillCIConfig           # SkillCIConfig | LastValid | BuiltIn
+    generation: 3                   # generation of the spec in force (0 for BuiltIn)
+    defaultSandboxProfile: default
+    network:
+      default: full
+      modes: [none, allowlist, full]
+      enforcement: auto
+      enforcedBy: cilium            # cilium | none: what enforcement resolves to on this cluster
+      bundles: [apt, github, node, python]
+      agentInstallHosts: [registry.npmjs.org]
+```
+
+**Validation.** The CRD checks the enums, the host pattern (lowercase RFC 1123 hostname with at least two labels, optional leading `*.`, at most 255 characters), the bundle name pattern (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, at most 63 characters), the list and map sizes, and that `network.default` is one of `network.modes` (CEL). The API server fills in the defaults above for fields left out; the controller applies the same defaults to fields it reads as absent. The controller validates again (the same rules, for objects stored before a CRD upgrade added a check or applied without validation) and reports a spec it cannot use with `Ready` `False`, reason `Invalid`, the message `invalid spec: <what is wrong>; the controller keeps the last valid spec (generation <n>)` and a Warning event. Without a valid spec of the same object seen since the controller started (after a restart, or a new object) the message ends `the controller uses the built-in defaults (...)`. With `enforcement: cilium` and no Cilium CRD, `Ready` stays `True` and the message adds that every run fails until Cilium is installed.
+
+**Precedence.** A valid SkillCIConfig `default` > the last valid spec of that object (while the current one is invalid; kept in memory, not across a restart) > the built-in defaults (the values above). A cluster without the SkillCIConfig CRD (an upgrade that did not apply `crds/`), or without the object, runs on the built-in defaults; the controller logs it at start. Deleting the object brings back the built-in defaults.
+
+**Live updates.** No restart: the controller reads the object through the API server whenever it resolves a `Pending` run (see "Network modes", "When a change applies"), when the webhook or a model list change creates SkillEvals (`defaultSandboxProfile` is copied into `spec.sandboxProfile` then), and when it reconciles a SandboxProfile. It watches SkillCIConfigs to keep the status current (and every 5 minutes, since Cilium may be installed later) and to reconcile every SandboxProfile again when the config changes, because `enforcement` decides the template's `networkPolicyManagement` and the baseline policy.
+
+**Ownership.** The Helm chart creates `default` from `config.*` (`config.create: true`) only when it does not exist yet (`lookup`; rendered with `helm.sh/resource-policy: keep`) and never renders or deletes it afterwards, so edits made with `kubectl -n skill-ci edit scc default` or GitOps are never overwritten by an upgrade. `helm template` has no cluster and always renders it. `config/manager/skillciconfig.yaml` is the kustomize copy (there, the file is the source of truth). RBAC: `get`, `list`, `watch` on `skillciconfigs`, `get`, `update`, `patch` on `skillciconfigs/status`.
+
 ## SandboxProfile (`skillci.dev/v1alpha1`, plural `sandboxprofiles`, short name `sbp`)
 
 The kind of trial sandbox a model list entry runs in. Namespaced, in the controller namespace. Printer columns: Image, CPU, Memory, Warm (`spec.warmPool.replicas`), Ready (`status.readyReplicas`), Age.
@@ -237,34 +288,38 @@ The controller reconciles every profile into two objects of the same name, owned
 
 `status.readyReplicas` comes from the warm pool's status; Ready is `True` when every warm pod is ready. The controller watches the owned objects when their CRDs exist at start and re-checks every profile every 5 minutes (every 30 s when not watching). Without the Agent Sandbox extensions CRDs the profile reports Ready `False`, reason `AgentSandboxExtensionsMissing`, and runs start a bare `Sandbox` per trial (no `SANDBOX_WARM_POOL`).
 
-The chart creates `default` from Helm `sandboxProfiles.default` (`warmPool.replicas: 2`, `resources: {cpu: "1", memory: 2Gi}`, empty image); more profiles via `sandboxProfiles: {<name>: <spec>}` or kubectl. A SkillEval that names a profile (`spec.sandboxProfile`, copied from the model list) that does not exist ends `Failed` with `sandbox profile "<name>" not found` and no Job. A SkillEval without `spec.sandboxProfile`, or one on `--default-sandbox-profile` while that profile does not exist (an install without it), runs a bare `Sandbox` per trial.
+**Where the settings live.** Profiles are objects: edit them with `kubectl -n skill-ci edit sbp <name>` or GitOps. The chart seeds `default` from Helm `sandboxProfiles.default` (`warmPool.replicas: 2`, `resources: {cpu: "1", memory: 2Gi}`, empty image) **only when it does not exist yet** (Helm `lookup`; rendered with `helm.sh/resource-policy: keep`), and never renders or deletes it again, so later value changes do not overwrite edits; more profiles via `sandboxProfiles: {<name>: <spec>}` (same create-once rule, `create: false` skips one) or kubectl. A profile chart 0.9.0 created without the annotation is rendered once more from its live spec with the annotation, so the 0.10.0 upgrade adopts it. `config/` (kustomize) ships `manager/sandboxprofile.yaml`, which `kubectl apply -k` keeps in line with the file. Which profile an entry without `sandboxProfile` uses is the SkillCIConfig `spec.defaultSandboxProfile` (see "SkillCIConfig"); the sandbox image of an empty `image` is the controller flag `--sandbox-image`.
+
+A SkillEval that names a profile (`spec.sandboxProfile`, copied from the model list) that does not exist ends `Failed` with `sandbox profile "<name>" not found` and no Job. A SkillEval without `spec.sandboxProfile`, or one on the SkillCIConfig `defaultSandboxProfile` while that profile does not exist (an install without it), runs a bare `Sandbox` per trial.
 
 ## Network modes
 
 | Mode | Trials may reach |
 | --- | --- |
 | `full` | the internet, not the cluster |
-| `allowlist` | the model API host(s), the hosts the skill declares and the `--network-always-allow` hosts, TCP 443 |
-| `none` | the model API host(s) and the `--network-always-allow` hosts, TCP 443 |
+| `allowlist` | the model API host(s), the hosts the skill declares and the SkillCIConfig `network.alwaysAllow` hosts, TCP 443 |
+| `none` | the model API host(s) and the SkillCIConfig `network.alwaysAllow` hosts, TCP 443 |
 
-**Declaration.** In `SKILL.md` frontmatter `metadata`: `skillci.dev/network: none | allowlist | full` and, for `allowlist`, `skillci.dev/network-allow: "@python,@github,dl.k8s.io"`. A host is a lowercase RFC 1123 hostname with an optional leading `*.`; entries are comma separated; `@<name>` is a bundle; at most 20 hosts after bundle expansion. `demo/push-skill.sh` copies both keys into OCI manifest annotations with the same names; without it, push with `oras push --annotation skillci.dev/network=allowlist --annotation skillci.dev/network-allow=@python ...`. Before a SkillEval's first Job the controller reads the annotations of its digest from the Harbor REST API (`GET /api/v2.0/projects/<project>/repositories/<skill>/artifacts/<digest>`, field `annotations`) into `spec.network`; a spec that already has `network` is not looked up. **A digest without a `skillci.dev/network` annotation gets mode `full` (`source: default`), because `--network-default` defaults to `full`.** `network-allow` next to `none` or `full` is ignored, and the NetworkPolicy condition message says so.
+**Declaration.** In `SKILL.md` frontmatter `metadata`: `skillci.dev/network: none | allowlist | full` and, for `allowlist`, `skillci.dev/network-allow: "@python,@github,dl.k8s.io"`. A host is a lowercase RFC 1123 hostname with an optional leading `*.`; entries are comma separated; `@<name>` is a bundle; at most 20 hosts after bundle expansion. `demo/push-skill.sh` copies both keys into OCI manifest annotations with the same names; without it, push with `oras push --annotation skillci.dev/network=allowlist --annotation skillci.dev/network-allow=@python ...`. Before a SkillEval's first Job the controller reads the annotations of its digest from the Harbor REST API (`GET /api/v2.0/projects/<project>/repositories/<skill>/artifacts/<digest>`, field `annotations`) into `spec.network`; a spec that already has `network` is not looked up. **A digest without a `skillci.dev/network` annotation gets mode `full` (`source: default`), because the SkillCIConfig `network.default` defaults to `full`.** `network-allow` next to `none` or `full` is ignored, and the NetworkPolicy condition message says so.
 
-**Bundles** (`--network-bundles`, Helm `controller.network.bundles`): `python: pypi.org, files.pythonhosted.org`; `node: registry.npmjs.org`; `github: github.com, api.github.com, codeload.github.com, objects.githubusercontent.com`; `apt: deb.debian.org, security.debian.org`. Flag format `name=host,host;name=host`.
+**Bundles** (SkillCIConfig `network.bundles`, defaults): `python: pypi.org, files.pythonhosted.org`; `node: registry.npmjs.org`; `github: github.com, api.github.com, codeload.github.com, objects.githubusercontent.com`; `apt: deb.debian.org, security.debian.org`. Setting `bundles` replaces the defaults.
 
-**Model API hosts** (always allowed with `none` and `allowlist`, the table of `runner/skill_eval.py` `GATEWAY_PROVIDERS`): `claude-code`, and `opencode` `anthropic/...`: `api.anthropic.com`; `codex`, and `opencode` `openai/...`: the host of `llm-keys` `openai-base-url` when set, else `api.openai.com`; `opencode` `openrouter/...`: `openrouter.ai`, `ollama-cloud/...`: `ollama.com`, `nvidia/...`: `integrate.api.nvidia.com`. An entry whose agent version is not in `--preinstalled-agents` also gets `--agent-install-hosts` (Harbor installs the CLI with npm). An entry without `agentVersion` runs the preinstalled default pin.
+**Model API hosts** (always allowed with `none` and `allowlist`, the table of `runner/skill_eval.py` `GATEWAY_PROVIDERS`): `claude-code`, and `opencode` `anthropic/...`: `api.anthropic.com`; `codex`, and `opencode` `openai/...`: the host of `llm-keys` `openai-base-url` when set, else `api.openai.com`; `opencode` `openrouter/...`: `openrouter.ai`, `ollama-cloud/...`: `ollama.com`, `nvidia/...`: `integrate.api.nvidia.com`. An entry whose agent version is not in `--preinstalled-agents` also gets the SkillCIConfig `network.agentInstallHosts` (Harbor installs the CLI with npm). An entry without `agentVersion` runs the preinstalled default pin.
 
-**Flags** (Helm `controller.network.*`):
+**Where the settings live.** Platform policy is the SkillCIConfig `default` (see "SkillCIConfig"):
 
-| Flag | Default | Meaning |
+| Field | Default | Meaning |
 | --- | --- | --- |
-| `--network-default` | `full` | Mode of a skill that declares none |
-| `--network-modes` | `none,allowlist,full` | Modes a skill may declare |
-| `--network-enforcement` | `auto` | `auto`: CiliumNetworkPolicies when the CRD `ciliumnetworkpolicies.cilium.io` exists (looked up through the API, cached for a minute); `cilium`: require it; `off`: no policies, every mode runs unenforced |
-| `--network-always-allow` | empty | Hosts added to `none` and `allowlist` |
-| `--network-bundles` | the bundles above | Bundles a skill names as `@<name>` |
-| `--preinstalled-agents` | `claude-code@2.1.292,codex@0.161.0,opencode@1.19.1` | Agent pins in the sandbox image |
-| `--agent-install-hosts` | `registry.npmjs.org` | Hosts an agent install needs |
-| `--default-sandbox-profile` | `default` | SandboxProfile of an entry without `sandboxProfile` |
+| `spec.network.default` | `full` | Mode of a skill that declares none |
+| `spec.network.modes` | `[none, allowlist, full]` | Modes a skill may declare |
+| `spec.network.enforcement` | `auto` | `auto`: CiliumNetworkPolicies when the CRD `ciliumnetworkpolicies.cilium.io` exists (looked up through the API, cached for a minute); `cilium`: require it; `off`: no policies, every mode runs unenforced |
+| `spec.network.alwaysAllow` | empty | Hosts added to `none` and `allowlist` |
+| `spec.network.bundles` | the bundles above | Bundles a skill names as `@<name>` |
+| `spec.network.agentInstallHosts` | `[registry.npmjs.org]` | Hosts an agent install needs |
+
+One controller flag stays, because it is a fact of the release image rather than a policy: `--preinstalled-agents` (default `claude-code@2.1.292,codex@0.161.0,opencode@1.19.1`, Helm `controller.preinstalledAgents`), the agent pins in the sandbox image. The flags `--network-default`, `--network-modes`, `--network-enforcement`, `--network-always-allow`, `--network-bundles`, `--agent-install-hosts` and `--default-sandbox-profile` of 0.9.0 are gone (an old argument list makes the controller exit with `flag provided but not defined`).
+
+**When a change applies.** The controller reads the SkillCIConfig when it resolves a `Pending` run, right before its first Job. A run resolved after an edit uses the new settings; a run that is already `Running` or finished keeps its `spec.network` and its policy. The mode in `spec.network` is recorded once (`source: default` takes the `network.default` in force then) and is not changed by a later edit of `network.default`, but the allowed modes, bundles, hosts and enforcement are those in force when the run is resolved, so a recorded mode the platform no longer allows fails with `NotAllowed`.
 
 **Runs that cannot start** end `Failed` before any Job, with condition `NetworkPolicy` `False` and the reason:
 
@@ -276,7 +331,7 @@ The chart creates `default` from Helm `sandboxProfiles.default` (`warmPool.repli
 | `InvalidAllowlist` | `invalid network host "<h>": must be a lowercase RFC 1123 hostname, optionally starting with "*."`, or `network allowlist has <n> hosts after bundle expansion, at most 20 are allowed` |
 | `UnknownModelHost` | `no model API host is known for agent "<a>" with model "<m>", so it cannot run with network none or allowlist` |
 
-A run that starts gets `NetworkPolicy` `True`, reason `Enforced` (a policy enforces the mode), or `False`, reason `NotEnforced` (no Cilium with `auto` and mode `full`, or `--network-enforcement=off`), and `status.network`. With `auto` and no Cilium only `full` runs (a warm pool template is `Managed`: Agent Sandbox's internet-not-cluster default). SkillEvals made before network modes have no `spec.network` once they are past `Pending`; they ran with `full` and no policy, and the reporting site says so.
+A run that starts gets `NetworkPolicy` `True`, reason `Enforced` (a policy enforces the mode), or `False`, reason `NotEnforced` (no Cilium with `auto` and mode `full`, or SkillCIConfig `network.enforcement: off`), and `status.network`. With `auto` and no Cilium only `full` runs (a warm pool template is `Managed`: Agent Sandbox's internet-not-cluster default). SkillEvals made before network modes have no `spec.network` once they are past `Pending`; they ran with `full` and no policy, and the reporting site says so.
 
 **Policies** (`cilium.io/v2` `CiliumNetworkPolicy`, only when Cilium enforces):
 
@@ -415,7 +470,7 @@ Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEva
 
 | Route | Content |
 | --- | --- |
-| `/` | Counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Agent (`agent@version`), Model, Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `agent` (`agent@version`), `model`, `verdict`, `phase`, `publication` |
+| `/` | The network policy in force (default mode, allowed modes, bundles, enforcement, and whether it comes from the SkillCIConfig `default`, its last valid spec or the built-in defaults; a notice when the SkillCIConfig is invalid), counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Agent (`agent@version`), Model, Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `agent` (`agent@version`), `model`, `verdict`, `phase`, `publication` |
 | `/skills/{skill}` | Versions x entries (one column per `agent@version` and model: with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
 | `/runs/{name}` | One SkillEval (title with model and `agent@version`, an Agent version row that says when the trials ran another release than the spec pins): scores, the SkillEvaluator tiers with findings (also for a `Failed` run whose error came after the gate), the sandbox (profile and warm pool, or a bare Sandbox), the network (mode and its source, what the trials could reach, the declared entries, the allowed hosts, the enforcing CiliumNetworkPolicy or why none, the `NetworkPolicy` message), conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
 | `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
@@ -451,7 +506,7 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 - `runner/Dockerfile`, build context repo root. Build arg `SKILL_CI_VERSION` sets the runner's default `SANDBOX_IMAGE` tag.
 - `sandbox/Dockerfile`, build context `sandbox/`.
 - Nothing is built in the cluster. A `vX.Y.Z` tag runs `.github/workflows/release.yaml`: GoReleaser publishes the controller image and binaries, the workflow builds and Cosign-signs the runner and sandbox images (with SBOM and provenance) and the Helm chart, all as `ghcr.io/dirien/...:X.Y.Z`. The chart's default image tags are its appVersion. `make deploy` installs the working-tree chart with the tags of the newest release (`TAG=...` overrides).
-- All controller-side manifests (CRDs `SkillEval` and `SandboxProfile`, controller Deployment and Service, RBAC, runner ServiceAccount and Role, the `default` SandboxProfile) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/` (on a new cluster apply twice: the SandboxProfile needs its CRD established first). The controller Role covers SkillEvals, SandboxProfiles (and status), Jobs, pods, the model list ConfigMap, events, leases, `extensions.agents.x-k8s.io` SandboxTemplates and SandboxWarmPools (and warm pool status), `cilium.io` CiliumNetworkPolicies and `get` on the Secret `llm-keys` (for `openai-base-url`); a ClusterRole `skill-ci-controller-crds-<namespace>` reads CustomResourceDefinitions to detect Cilium and the Agent Sandbox extensions. The runner Role covers `agents.x-k8s.io` Sandboxes, `extensions.agents.x-k8s.io` SandboxClaims, pods and `pods/exec`.
+- All controller-side manifests (CRDs `SkillEval`, `SandboxProfile` and `SkillCIConfig`, controller Deployment and Service, RBAC, runner ServiceAccount and Role, the `default` SandboxProfile and the `default` SkillCIConfig) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/` (on a new cluster apply twice: the SandboxProfile and SkillCIConfig need their CRDs established first). The controller Role covers SkillEvals, SandboxProfiles (and status), SkillCIConfigs (read, and status), Jobs, pods, the model list ConfigMap, events, leases, `extensions.agents.x-k8s.io` SandboxTemplates and SandboxWarmPools (and warm pool status), `cilium.io` CiliumNetworkPolicies and `get` on the Secret `llm-keys` (for `openai-base-url`); a ClusterRole `skill-ci-controller-crds-<namespace>` reads CustomResourceDefinitions to detect Cilium and the Agent Sandbox extensions. The runner Role covers `agents.x-k8s.io` Sandboxes, `extensions.agents.x-k8s.io` SandboxClaims, pods and `pods/exec`.
 - Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`, port `8082` named `reports` (the reporting site, flag `--reports-addr`, empty disables it; Helm `reports.enabled`); pod label `app.kubernetes.io/name: skill-ci-controller`.
 
 ## Cost guard

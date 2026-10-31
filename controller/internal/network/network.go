@@ -27,7 +27,7 @@ const (
 // Enforcement says how network modes are enforced.
 type Enforcement string
 
-// Enforcement settings (--network-enforcement).
+// Enforcement settings (SkillCIConfig spec.network.enforcement).
 const (
 	// EnforcementAuto uses Cilium when the CiliumNetworkPolicy CRD exists.
 	EnforcementAuto Enforcement = "auto"
@@ -75,7 +75,8 @@ var DefaultPreinstalledAgents = []string{"claude-code@2.1.292", "codex@0.161.0",
 // DefaultAgentInstallHosts are the hosts an agent install needs (Harbor installs with npm).
 var DefaultAgentInstallHosts = []string{"registry.npmjs.org"}
 
-// Policy is the platform's network policy, from the controller flags.
+// Policy is the platform's network policy, from the SkillCIConfig default
+// (package platform) and --preinstalled-agents.
 type Policy struct {
 	// Default is the mode of a skill that declares none; empty means full.
 	Default string
@@ -131,7 +132,7 @@ func (p Policy) Cilium(crdPresent bool) bool {
 	}
 }
 
-// Validate checks the policy flags.
+// Validate checks the policy.
 func (p Policy) Validate() error {
 	if !slices.Contains(Modes, p.DefaultMode()) {
 		return fmt.Errorf("network default %q is not a mode (%s)", p.Default, strings.Join(Modes, ", "))
@@ -412,53 +413,4 @@ func sortedUnique(in []string) []string {
 	out := slices.Clone(in)
 	slices.Sort(out)
 	return slices.Compact(out)
-}
-
-// ParseModes reads --network-modes, a comma separated list of modes.
-func ParseModes(s string) ([]string, error) {
-	modes := SplitList(s)
-	if len(modes) == 0 {
-		return nil, fmt.Errorf("no network modes in %q", s)
-	}
-	for _, m := range modes {
-		if !slices.Contains(Modes, m) {
-			return nil, fmt.Errorf("network mode %q is not a mode (%s)", m, strings.Join(Modes, ", "))
-		}
-	}
-	return modes, nil
-}
-
-// ParseBundles reads --network-bundles: bundles separated by semicolons, each
-// name=host,host. An empty string defines no bundles.
-func ParseBundles(s string) (map[string][]string, error) {
-	out := map[string][]string{}
-	for item := range strings.SplitSeq(s, ";") {
-		if item = strings.TrimSpace(item); item == "" {
-			continue
-		}
-		name, hosts, ok := strings.Cut(item, "=")
-		name = strings.TrimPrefix(strings.TrimSpace(name), "@")
-		if !ok || name == "" {
-			return nil, fmt.Errorf("network bundle %q must look like name=host,host", item)
-		}
-		if _, dup := out[name]; dup {
-			return nil, fmt.Errorf("network bundle @%s is defined twice", name)
-		}
-		out[name] = SplitList(hosts)
-	}
-	return out, nil
-}
-
-// FormatBundles renders bundles the way ParseBundles reads them, sorted by name.
-func FormatBundles(b map[string][]string) string {
-	names := make([]string, 0, len(b))
-	for n := range b {
-		names = append(names, n)
-	}
-	sort.Strings(names)
-	parts := make([]string, 0, len(names))
-	for _, n := range names {
-		parts = append(parts, n+"="+strings.Join(b[n], ","))
-	}
-	return strings.Join(parts, ";")
 }

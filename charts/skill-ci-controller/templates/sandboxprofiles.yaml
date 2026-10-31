@@ -1,17 +1,9 @@
 {{- /* Only with a chart that ships the SandboxProfile CRD (crds/ is copied from config/crd). */}}
+{{- /* Each profile is created once and then belongs to kubectl or GitOps (see createOnce in _helpers.tpl). */}}
 {{- if .Files.Get "crds/skillci.dev_sandboxprofiles.yaml" }}
-{{- range $name, $spec := .Values.sandboxProfiles }}
-{{- if $spec }}
----
-apiVersion: skillci.dev/v1alpha1
-kind: SandboxProfile
-metadata:
-  name: {{ $name }}
-  namespace: {{ include "skill-ci-controller.watchNamespace" $ }}
-  labels:
-    {{- include "skill-ci-controller.labels" $ | nindent 4 }}
-spec:
-  {{- toYaml $spec | nindent 2 }}
+{{- range $name, $profile := .Values.sandboxProfiles }}
+{{- if and $profile (ne (toString (dig "create" true $profile)) "false") }}
+{{- include "skill-ci-controller.createOnce" (dict "root" $ "kind" "SandboxProfile" "name" $name "spec" (omit $profile "create")) }}
 {{- end }}
 {{- end }}
 {{- end }}

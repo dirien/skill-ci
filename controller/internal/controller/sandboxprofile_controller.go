@@ -15,8 +15,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/crds"
@@ -53,8 +55,13 @@ type SandboxProfileReconciler struct {
 	// CRDs detects the Agent Sandbox extensions and Cilium.
 	CRDs crds.Checker
 	// Config holds the shared settings: namespace, sandbox image, pull
-	// secrets and the network policy.
+	// secrets and the platform settings (network policy).
 	Config Config
+	// WatchConfig re-reconciles every profile when the SkillCIConfig
+	// changes, since its network enforcement decides the template's
+	// networkPolicyManagement and the baseline policy. Set it only when the
+	// SkillCIConfig CRD exists.
+	WatchConfig bool
 
 	// watching is set when the manager watches the owned Agent Sandbox objects.
 	watching bool
@@ -79,10 +86,31 @@ func (r *SandboxProfileReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		}
 		r.watching = true
 	}
+	if r.WatchConfig {
+		b = b.Watches(&v1alpha1.SkillCIConfig{}, handler.EnqueueRequestsFromMapFunc(r.allProfiles),
+			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+	}
 	if err := b.Complete(r); err != nil {
 		return fmt.Errorf("setting up sandboxprofile controller: %w", err)
 	}
 	return nil
+}
+
+// allProfiles enqueues every SandboxProfile of the SkillCIConfig's namespace.
+func (r *SandboxProfileReconciler) allProfiles(ctx context.Context, obj client.Object) []reconcile.Request {
+	if obj.GetName() != v1alpha1.SkillCIConfigName {
+		return nil
+	}
+	var list v1alpha1.SandboxProfileList
+	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
+		logf.FromContext(ctx).Error(err, "listing sandbox profiles after a SkillCIConfig change")
+		return nil
+	}
+	reqs := make([]reconcile.Request, 0, len(list.Items))
+	for i := range list.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
+	}
+	return reqs
 }
 
 // Reconcile applies the profile's SandboxTemplate and SandboxWarmPool and the
@@ -92,12 +120,16 @@ func (r *SandboxProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err := r.Get(ctx, req.NamespacedName, &p); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	settings, err := r.Config.Platform.Current(ctx)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("reading the platform settings for sandbox profile %s: %w", p.Name, err)
+	}
 	cilium, err := crdPresent(ctx, r.CRDs, network.CiliumPolicyCRD)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	cilium = r.Config.Network.Cilium(cilium)
-	if _, err := ensureBaseline(ctx, r.Client, r.CRDs, p.Namespace, r.Config.Network); err != nil {
+	cilium = settings.Network.Cilium(cilium)
+	if _, err := ensureBaseline(ctx, r.Client, r.CRDs, p.Namespace, settings.Network); err != nil {
 		return ctrl.Result{}, err
 	}
 	before := p.Status.DeepCopy()

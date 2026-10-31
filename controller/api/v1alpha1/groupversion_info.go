@@ -1,4 +1,4 @@
-// Package v1alpha1 contains the SkillEval and SandboxProfile APIs of skillci.dev.
+// Package v1alpha1 contains the SkillEval, SandboxProfile and SkillCIConfig APIs of skillci.dev.
 // +kubebuilder:object:generate=true
 // +groupName=skillci.dev
 package v1alpha1
@@ -21,7 +21,8 @@ var (
 )
 
 func addKnownTypes(s *runtime.Scheme) error {
-	s.AddKnownTypes(GroupVersion, &SkillEval{}, &SkillEvalList{}, &SandboxProfile{}, &SandboxProfileList{})
+	s.AddKnownTypes(GroupVersion, &SkillEval{}, &SkillEvalList{}, &SandboxProfile{}, &SandboxProfileList{},
+		&SkillCIConfig{}, &SkillCIConfigList{})
 	metav1.AddToGroupVersion(s, GroupVersion)
 	return nil
 }

@@ -56,7 +56,7 @@ func newEnv(t *testing.T, cfg Config, budget int, repos map[string][]harbor.Arti
 		t.Fatal(err)
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithRESTMapper(testMapper(s)).
-		WithStatusSubresource(&v1alpha1.SkillEval{}, &batchv1.Job{}, &v1alpha1.SandboxProfile{}).WithObjects(objs...).Build()
+		WithStatusSubresource(&v1alpha1.SkillEval{}, &batchv1.Job{}, &v1alpha1.SandboxProfile{}, &v1alpha1.SkillCIConfig{}).WithObjects(objs...).Build()
 	cfg.Namespace, cfg.Project, cfg.Attempts = ns, "skills", 1
 	cfg.Runner = runner.Config{Image: "runner:1", Registry: "harbor.local", Project: "skills"}
 	h := harbor.NewFake(repos)

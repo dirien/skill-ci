@@ -25,6 +25,7 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/models"
 	"github.com/dirien/skill-ci/controller/internal/network"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 	"github.com/dirien/skill-ci/controller/internal/profiles"
 )
@@ -247,7 +248,8 @@ func TestPendingNetworkAndProfile(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p := tt.network
 			p.Bundles, p.Preinstalled, p.InstallHosts = network.DefaultBundles, network.DefaultPreinstalledAgents, network.DefaultAgentInstallHosts
-			cfg := Config{MaxConcurrentJobs: 4, Thresholds: policy.DefaultThresholds(), Network: p, DefaultSandboxProfile: "default"}
+			cfg := Config{MaxConcurrentJobs: 4, Thresholds: policy.DefaultThresholds(),
+				Platform: platform.Static(platform.Settings{Network: p, DefaultSandboxProfile: "default"})}
 			e := newEnv(t, cfg, 200, map[string][]harbor.Artifact{"acme": {{Digest: digestA, Tags: []string{"v1.0.0"}, Annotations: tt.annotations}}}, tt.objs...)
 			e.r.CRDs = tt.crds
 			for _, o := range tt.objs { // the fake client drops status on create
@@ -405,7 +407,7 @@ func TestBaselinePolicyRunnable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := newEnv(t, Config{}, 0, nil)
-			b := &BaselinePolicy{Client: e.client, CRDs: tt.crds, Namespace: ns, Network: tt.network}
+			b := &BaselinePolicy{Client: e.client, CRDs: tt.crds, Namespace: ns, Platform: platform.Static(platform.Settings{Network: tt.network})}
 			if !b.NeedLeaderElection() {
 				t.Fatal("only the leader writes the baseline")
 			}

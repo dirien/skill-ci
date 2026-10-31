@@ -14,6 +14,7 @@ import (
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/crds"
 	"github.com/dirien/skill-ci/controller/internal/network"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/profiles"
 	"github.com/dirien/skill-ci/controller/internal/runner"
 )
@@ -67,7 +68,7 @@ func TestSandboxProfileReconciler(t *testing.T) {
 				objs = append(objs, pool)
 			}
 			e := newEnv(t, Config{}, 0, nil, objs...)
-			cfg := Config{Namespace: ns, Network: tt.network,
+			cfg := Config{Namespace: ns, Platform: platform.Static(platform.Settings{Network: tt.network}),
 				Runner: runner.Config{SandboxImage: "ghcr.io/dirien/skill-ci-sandbox:0.9.0", ImagePullSecrets: []string{"ghcr"}}}
 			r := &SandboxProfileReconciler{Client: e.client, CRDs: tt.crds, Config: cfg, watching: tt.watching}
 

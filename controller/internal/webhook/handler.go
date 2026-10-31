@@ -17,6 +17,7 @@ import (
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/evals"
 	"github.com/dirien/skill-ci/controller/internal/models"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 )
 
 const maxBody = 1 << 20
@@ -35,8 +36,10 @@ type Handler struct {
 	Token string
 	// Attempts is the trials per arm for new SkillEvals.
 	Attempts int
-	// DefaultSandboxProfile is the SandboxProfile of an entry that names none.
-	DefaultSandboxProfile string
+	// Platform supplies the SandboxProfile of an entry that names none, from
+	// the SkillCIConfig in force when the webhook arrives; nil means the
+	// built-in default.
+	Platform *platform.Source
 	// Log receives one line per request.
 	Log logr.Logger
 }
@@ -80,13 +83,17 @@ func (h *Handler) handle(ctx context.Context, p Payload) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("parsing model list: %w", err)
 	}
+	settings, err := h.Platform.Current(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("reading the platform settings: %w", err)
+	}
 	created := 0
 	for _, push := range pushes {
 		for _, m := range list {
 			ok, err := evals.Ensure(ctx, h.Client, h.Namespace, evals.Request{
 				Skill: push.Skill, Version: push.Version, Digest: push.Digest,
 				Model: m, Attempts: h.Attempts, Trigger: v1alpha1.TriggerPush,
-				DefaultSandboxProfile: h.DefaultSandboxProfile,
+				DefaultSandboxProfile: settings.DefaultSandboxProfile,
 			})
 			if err != nil {
 				return created, fmt.Errorf("ensuring skilleval: %w", err)

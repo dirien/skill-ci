@@ -27,7 +27,7 @@ type Model struct {
 	// Required marks models whose result gates promotion.
 	Required bool `json:"required,omitempty"`
 	// SandboxProfile names the SandboxProfile the trials run in; empty means
-	// the controller's --default-sandbox-profile. It is not part of the
+	// the SkillCIConfig spec.defaultSandboxProfile. It is not part of the
 	// identity: changing it affects new runs only.
 	SandboxProfile string `json:"sandboxProfile,omitempty"`
 }

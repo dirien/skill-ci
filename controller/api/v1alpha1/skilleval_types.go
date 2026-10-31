@@ -128,8 +128,8 @@ type SkillEvalSpec struct {
 	// +kubebuilder:default=manual
 	Trigger Trigger `json:"trigger,omitempty"`
 	// SandboxProfile names the SandboxProfile whose warm pool the trials run
-	// in, copied from the model list entry (default: the controller's
-	// --default-sandbox-profile). Empty means the default profile, and a bare
+	// in, copied from the model list entry (default: the SkillCIConfig
+	// spec.defaultSandboxProfile). Empty means the default profile, and a bare
 	// Sandbox per trial when that profile does not exist.
 	// +optional
 	// +kubebuilder:validation:MaxLength=253

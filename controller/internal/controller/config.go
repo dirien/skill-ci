@@ -4,7 +4,7 @@ package controller
 import (
 	"sync"
 
-	"github.com/dirien/skill-ci/controller/internal/network"
+	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 	"github.com/dirien/skill-ci/controller/internal/runner"
 )
@@ -28,11 +28,10 @@ type Config struct {
 	DryRun bool
 	// Thresholds are the verdict and tag policy bands.
 	Thresholds policy.Thresholds
-	// DefaultSandboxProfile is the SandboxProfile of a model list entry that
-	// names none (--default-sandbox-profile).
-	DefaultSandboxProfile string
-	// Network is the platform's network policy (the --network-* flags).
-	Network network.Policy
+	// Platform supplies the platform settings in force (the default
+	// SandboxProfile and the network policy) from the SkillCIConfig default;
+	// nil means the built-in defaults.
+	Platform *platform.Source
 }
 
 // Budget caps the trials the controller starts during its lifetime.

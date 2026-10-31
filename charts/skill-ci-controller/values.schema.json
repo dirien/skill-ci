@@ -283,10 +283,43 @@
           },
           "additionalProperties": false
         },
+        "preinstalledAgents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+@[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$"
+          }
+        },
+        "defaultSandboxProfile": {
+          "description": "Removed in 0.10.0 and ignored: set config.defaultSandboxProfile, or edit the SkillCIConfig default.",
+          "deprecated": true
+        },
+        "network": {
+          "description": "Removed in 0.10.0 and ignored: set config.network, or edit the SkillCIConfig default.",
+          "deprecated": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "harborUrl",
+        "harborProject",
+        "runnerImage",
+        "sandboxImage",
+        "modelsConfigMap"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "description": "Seed of the SkillCIConfig default, created only when it does not exist.",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
         "defaultSandboxProfile": {
           "type": "string",
-          "pattern": "^([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?$",
-          "maxLength": 253
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
         },
         "network": {
           "type": "object",
@@ -308,7 +341,8 @@
                 ]
               },
               "minItems": 1,
-              "uniqueItems": true
+              "uniqueItems": true,
+              "maxItems": 3
             },
             "enforcement": {
               "enum": [
@@ -324,7 +358,8 @@
                 "pattern": "^(\\*\\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
                 "maxLength": 253
               },
-              "uniqueItems": true
+              "uniqueItems": true,
+              "maxItems": 20
             },
             "bundles": {
               "type": "object",
@@ -340,15 +375,10 @@
                   "type": "string",
                   "pattern": "^(\\*\\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
                   "maxLength": 253
-                }
-              }
-            },
-            "preinstalledAgents": {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "pattern": "^[a-z0-9-]+@[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$"
-              }
+                },
+                "minItems": 1
+              },
+              "maxProperties": 32
             },
             "agentInstallHosts": {
               "type": "array",
@@ -356,24 +386,17 @@
                 "type": "string",
                 "pattern": "^(\\*\\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$",
                 "maxLength": 253
-              }
+              },
+              "maxItems": 20,
+              "uniqueItems": true
             }
           },
-          "additionalProperties": false,
-          "required": [
-            "default",
-            "modes",
-            "enforcement"
-          ]
+          "additionalProperties": false
         }
       },
       "additionalProperties": false,
       "required": [
-        "harborUrl",
-        "harborProject",
-        "runnerImage",
-        "sandboxImage",
-        "modelsConfigMap"
+        "create"
       ]
     },
     "sandboxProfiles": {
@@ -388,6 +411,10 @@
           "null"
         ],
         "properties": {
+          "create": {
+            "type": "boolean",
+            "description": "false skips the profile."
+          },
           "image": {
             "type": "string"
           },

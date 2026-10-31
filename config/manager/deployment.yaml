@@ -47,10 +47,9 @@ spec:
             - --metrics-addr=:8081
             - --reports-addr=:8082
             - --leader-elect=false
-            - --default-sandbox-profile=default
-            - --network-default=full
-            - --network-modes=none,allowlist,full
-            - --network-enforcement=auto
+            # Platform settings (network modes, default SandboxProfile) live in the SkillCIConfig default
+            # (manager/skillciconfig.yaml); this flag only names what the sandbox image ships.
+            - --preinstalled-agents=claude-code@2.1.292,codex@0.161.0,opencode@1.19.1
           env:
             - name: HARBOR_USERNAME
               valueFrom:

@@ -1,0 +1,5 @@
+{{- /* The SkillCIConfig default: platform settings of the controller (CONTRACT.md "SkillCIConfig"). */}}
+{{- /* Created once from config.* and then owned by kubectl or GitOps (see createOnce in _helpers.tpl). */}}
+{{- if and .Values.config.create (.Files.Get "crds/skillci.dev_skillciconfigs.yaml") }}
+{{- include "skill-ci-controller.createOnce" (dict "root" $ "kind" "SkillCIConfig" "name" "default" "spec" (omit .Values.config "create")) }}
+{{- end }}
