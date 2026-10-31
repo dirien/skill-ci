@@ -12,4 +12,4 @@ resources:
   - manager/service.yaml
 images:
   - name: ghcr.io/dirien/skill-ci-controller
-    newTag: 0.7.3
+    newTag: 0.8.0

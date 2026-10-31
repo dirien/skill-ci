@@ -11,9 +11,9 @@ Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), bu
 | [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) | One `Sandbox` per trial | v1.0.9 |
 | DOKS | The cluster. The images come from GHCR, no registry of its own | Kubernetes 1.36.5 |
 | [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
-| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.7.3 (Helm chart `charts/skill-ci-controller`) |
-| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.7.3 |
-| skill-ci sandbox image | The one image every trial sandbox starts from: Python, the verifier packages and the Claude Code, Codex and OpenCode CLIs at their pins. Built once per release, never in the cluster | 0.7.3 |
+| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.8.0 (Helm chart `charts/skill-ci-controller`) |
+| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.8.0 |
+| skill-ci sandbox image | The one image every trial sandbox starts from: Python, the verifier packages and the Claude Code, Codex and OpenCode CLIs at their pins. Built once per release, never in the cluster | 0.8.0 |
 
 The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
 
