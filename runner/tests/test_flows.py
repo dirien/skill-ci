@@ -763,3 +763,27 @@ def _wait_for(check, timeout: float = 10.0) -> None:
         if time.monotonic() > deadline:
             raise AssertionError("condition not reached")
         time.sleep(0.05)
+
+
+def test_search_path_expansions_and_link_local_noise_are_left_out(tmp_path):
+    lines = [
+        dns(TRIAL_A, "15:01:00.", "pypi.org.skill-ci.svc.cluster.local"),
+        dns(TRIAL_A, "15:01:00.", "pypi.org.skill-ci.svc.cluster.local", response=True, rcode=3),
+        dns(TRIAL_A, "15:01:00.", "pypi.org.cluster.local"),
+        dns(TRIAL_A, "15:01:00.", "pypi.org.cluster.local", response=True, rcode=3),
+        dns(TRIAL_A, "15:01:00.", "pypi.org"),
+        dns(TRIAL_A, "15:01:00.", "pypi.org", response=True),
+        dns(TRIAL_A, "15:01:01.", "orphan.svc.cluster.local"),
+        dns(TRIAL_A, "15:01:01.", "orphan.svc.cluster.local", response=True, rcode=3),
+        tcp(TRIAL_A, "15:01:02.", dst_ip="ff02::2", port=0, verdict="DROPPED", drop="DENIED"),
+        tcp(TRIAL_A, "15:01:02.", dst_ip="fe80::1", verdict="DROPPED", drop="POLICY_DENIED"),
+        tcp(TRIAL_A, "15:01:03.", dst_ip="198.51.100.23", names=["pypi.org"]),
+    ]
+    _, sections = flows.summarize(collected(tmp_path, lines), WINDOWS, max_rows=200)
+    a = sections[TRIAL_A]
+    validate(a)
+    assert [(r["name"], r["rcode"]) for r in a["dns"]] == [
+        ("pypi.org", "NOERROR"),
+        ("orphan.svc.cluster.local", "NXDOMAIN"),
+    ]
+    assert [(f["verdict"], f["destination"]) for f in a["flows"]] == [("FORWARDED", "pypi.org")]

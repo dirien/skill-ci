@@ -30,6 +30,7 @@ caps give ``partial``.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -420,6 +421,8 @@ class _Trial:
     def dns_rows(self) -> list[dict[str, Any]]:
         rows = []
         for name, entry in self.dns.items():
+            if _search_expansion(name, entry, self.dns):
+                continue
             out: dict[str, Any] = {
                 "name": name,
                 "count": max(1, entry.requests or entry.responses),
@@ -463,6 +466,8 @@ def _add_flow(flow: dict[str, Any], by_label: Mapping[str, str], acc: dict[str, 
         return  # the DNS rows show these
     ip_block = flow.get("IP") if isinstance(flow.get("IP"), dict) else {}
     dst_ip = str(ip_block.get("destination") or "") or "unknown"
+    if _local_noise(dst_ip):
+        return  # multicast or link-local traffic of the pod's own stack (IPv6 neighbor discovery)
     names = flow.get("destination_names")
     name = (
         next((str(n).rstrip(".") for n in names or [] if n), "") if isinstance(names, list) else ""
@@ -476,6 +481,30 @@ def _add_flow(flow: dict[str, Any], by_label: Mapping[str, str], acc: dict[str, 
     if row is None:
         row = acc[trial].flows[key] = _Row(at, at, dst_ip)
     row.see(at, connection)
+
+
+def _local_noise(ip: str) -> bool:
+    """Report whether ``ip`` is a multicast, link-local or unspecified address.
+
+    The pod's network stack sends to these on its own (IPv6 router solicitations to ``ff02::2``,
+    for example). Cilium drops them, but they say nothing about what the agent tried to reach.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return address.is_multicast or address.is_link_local or address.is_unspecified
+
+
+def _search_expansion(name: str, entry: _Dns, dns: Mapping[str, _Dns]) -> bool:
+    """Report whether ``name`` is a resolver search-path expansion of another name in ``dns``.
+
+    The pod's resolver tries ``pypi.org.<ns>.svc.cluster.local`` and the other search domains
+    before ``pypi.org``. Such a query that failed is left out when the bare name was asked too.
+    """
+    if entry.rcode not in (None, "NXDOMAIN"):
+        return False
+    return any(other != name and name.startswith(other + ".") for other in dns)
 
 
 def _add_dns(trial: _Trial, dns: dict[str, Any], at: datetime, response: bool) -> None:
