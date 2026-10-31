@@ -7,7 +7,7 @@ PULUMI_ENV ?= $(HOME)/.pulumi-local/skill-ci-env.sh
 PULUMI ?= pulumi
 
 # Release that `make deploy` installs. Default: the newest vX.Y.Z tag of this checkout, whose images
-# and chart the release workflow published to GHCR. Override: TAG=0.7.0, or CONTROLLER_TAG,
+# and chart the release workflow published to GHCR. Override: TAG=0.8.0, or CONTROLLER_TAG,
 # RUNNER_TAG and SANDBOX_TAG one by one (demo/deploy.sh).
 
 # Demo beats.
@@ -44,7 +44,7 @@ preview: ## Show what pulumi up would change
 	@cd infra && { [ ! -f "$(PULUMI_ENV)" ] || . "$(PULUMI_ENV)"; } && $(PULUMI) preview
 
 .PHONY: deploy
-deploy: ## Install a release with the Helm chart and its GHCR images (TAG=0.7.0, default the newest vX.Y.Z tag)
+deploy: ## Install a release with the Helm chart and its GHCR images (TAG=0.8.0, default the newest vX.Y.Z tag)
 	@demo/deploy.sh
 
 .PHONY: seed
@@ -92,6 +92,10 @@ down: ## Tear everything down. Not automated: it deletes the cluster.
 .PHONY: check-skills
 check-skills: ## Dataset-only check of the sample skills (no LLM calls)
 	@demo/check-skills.sh
+
+.PHONY: draft-evals
+draft-evals: ## Draft evals/evals.json with SkillEvaluator for review, never the gate (SKILL=... [DIR=skills/<skill>] [FORCE=1]; one LLM call)
+	@FORCE="$(FORCE)" demo/draft-evals.sh "$(if $(filter file,$(origin SKILL)),,$(SKILL))" "$(DIR)"
 
 .PHONY: sandbox-image
 sandbox-image: ## Build the generic sandbox image locally (needs docker; the release workflow publishes it)
