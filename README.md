@@ -45,7 +45,7 @@ make status                              # SkillEvals and the tags per skill in 
 If Harbor, Agent Sandbox, the Secrets and the model list are already in place, install only the controller from the OCI chart:
 
 ```bash
-helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version 0.10.1 -n skill-ci --create-namespace
+helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version 0.11.0 -n skill-ci --create-namespace
 kubectl -n skill-ci get skillevals
 ```
 
@@ -55,9 +55,9 @@ kubectl -n skill-ci get skillevals
 
 | Part | Role | Version |
 | --- | --- | --- |
-| skill-ci controller | Receives pushes, watches the model list, runs SkillEvals as Jobs, moves `beta` and `stable` | 0.10.1 (chart `charts/skill-ci-controller`) |
-| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.10.1 |
-| skill-ci sandbox image | The image every trial sandbox starts from: Python, the verifier packages, and the Claude Code, Codex and OpenCode CLIs at their pins | 0.10.1 |
+| skill-ci controller | Receives pushes, watches the model list, runs SkillEvals as Jobs, moves `beta` and `stable` | 0.11.0 (chart `charts/skill-ci-controller`) |
+| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.11.0 |
+| skill-ci sandbox image | The image every trial sandbox starts from: Python, the verifier packages, and the Claude Code, Codex and OpenCode CLIs at their pins | 0.11.0 |
 | [goharbor](https://goharbor.io) | Stores skills as OCI artifacts, sends `PUSH_ARTIFACT` webhooks | 2.15.4 (chart 1.19.4) |
 | [ORAS](https://oras.land) | Pushes, pulls and tags skills | 1.3.0 |
 | [NVIDIA SkillEvaluator](https://github.com/NVIDIA/SkillEvaluator) | Live with/without-skill runs, lift scoring | 0.6.0 + [patch](skillevaluator-patch/) |

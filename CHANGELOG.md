@@ -2,8 +2,13 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
-## Unreleased
+## [0.11.0](https://github.com/dirien/skill-ci/releases/tag/v0.11.0) (2026-10-31)
 
+- New reporting UI: a React app embedded in the controller with overview, runs, skills, models and run pages, a trial session viewer (log with filters, tool calls, findings and eval criteria linked to steps, files, judge and network tabs) and a with/without compare view. The controller serves it with a read-only JSON API under `/api/v1/`; the server-rendered pages are gone.
+- The runner stores every trial as a redacted trial bundle next to the report in Harbor, also for runs that fail after Tier 3 started. A trial in which a secret survives redaction is withheld.
+- Network flows per trial from Hubble Relay (`spec.observability.hubbleRelay` in the SkillCIConfig).
+- The LLM judge is configurable in the SkillCIConfig (`spec.judge`: anthropic, openai, openai-compatible or nv_build). Anthropic stays the default.
+- Retries keep earlier attempts in `status.attempts`, failed runs keep their report, and pushes record the Harbor user as `skillci.dev/pushed-by`.
 - The controller retries a run that failed only because an LLM provider rate-limited it.
 - The README stands on its own, and the topic guides moved to `docs/`. skill-ci is documented as running on any conformant Kubernetes cluster, with the DOKS stack as one reference setup.
 - The project is licensed under the Apache License 2.0 (`LICENSE`, `NOTICE`) and has community files: Code of Conduct, contributing guide, governance, maintainers, security policy, roadmap, adopters, issue and pull request templates, and a list of dependency licenses.
