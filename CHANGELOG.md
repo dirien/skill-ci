@@ -2,6 +2,15 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
+## [0.11.1](https://github.com/dirien/skill-ci/releases/tag/v0.11.1) (2026-10-31)
+
+- A trial that a provider rate-limited is retried inside Harbor (`TRIAL_RETRIES`, default 2, with a backoff of 20 s doubling to 300 s), before the run-level retry.
+- The network section leaves out resolver search-path lookups and multicast or link-local traffic of the pod's own network stack.
+- Reporting UI: Pending runs get their own tile and pill, runs without trial sessions say why, the phase tiles link to their lists, and a review pass fixed layout and copy on every page.
+- Fix: a cancelled request no longer caches a Harbor tag error for every viewer of the overview.
+- Fix: the runs list no longer writes to its trial state map from several goroutines without a lock.
+- `make deploy` sets the Hubble Relay on an existing SkillCIConfig.
+
 ## [0.11.0](https://github.com/dirien/skill-ci/releases/tag/v0.11.0) (2026-10-31)
 
 - New reporting UI: a React app embedded in the controller with overview, runs, skills, models and run pages, a trial session viewer (log with filters, tool calls, findings and eval criteria linked to steps, files, judge and network tabs) and a with/without compare view. The controller serves it with a read-only JSON API under `/api/v1/`; the server-rendered pages are gone.

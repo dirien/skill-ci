@@ -6,7 +6,7 @@
 
 - A DOKS cluster on the newest 1.36 patch release, with an autoscaled node pool of 2 to 5 `s-4vcpu-8gb` nodes (region `fra1` by default).
 - Agent Sandbox v1.0.9, goharbor (chart 1.19.4), the Secrets, the Harbor setup Job, the toolbox, the model list, and Prometheus and Grafana (kube-prometheus-stack chart 92.10.1).
-- The skill-ci controller from the published OCI chart of the stack's `skillCiVersion` (default 0.11.0), with the CRDs applied separately because Helm never upgrades `crds/`.
+- The skill-ci controller from the published OCI chart of the stack's `skillCiVersion` (default 0.11.1), with the CRDs applied separately because Helm never upgrades `crds/`.
 
 The versions are stack config with the same defaults as [deploy/versions.env](../deploy/versions.env); `deploy/check-versions.sh` compares the two files.
 
