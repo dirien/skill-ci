@@ -139,41 +139,78 @@ a folder.
 
 # A skill is a package
 
-<div class="grid grid-cols-2 gap-10 mt-4 items-center zm">
-  <div class="gpu-card gpu-card--primary" v-click>
-    <div class="gpu-caption gpu-caption--accent">The folder</div>
+<div class="grid grid-cols-[1.25fr_1fr] gap-8 mt-2 items-stretch zm">
+  <div class="gpu-card gpu-card--primary tree" v-click>
+    <div class="gpu-caption gpu-caption--accent">The folder (agentskills.io)</div>
 
 ```text
-acme-release-notes/
-├── SKILL.md
+my-skill/
+├── SKILL.md       name, description, metadata
+├── scripts/       code the agent runs
+├── references/    docs, read on demand
+├── assets/        templates, schemas, data
 └── evals/
-    └── evals.json
+    ├── evals.json the test cases
+    └── files/     their input files
 ```
 
   </div>
   <div class="gpu-card gpu-card--muted" v-click>
     <div class="gpu-caption gpu-caption--muted">It already has</div>
-    <ul class="!mt-4 !text-[1.45rem] !leading-relaxed space-y-2">
-      <li>A name and a description</li>
-      <li>A version and a license</li>
-      <li>An author</li>
-      <li>Tests, in <code>evals/</code></li>
+    <ul class="anatomy">
+      <li><strong>A name, a description</strong>: when to load it</li>
+      <li><strong>A license, an author, a version</strong> in <code>metadata</code></li>
+      <li><strong>Code and data</strong> next to the instructions</li>
+      <li><strong>Tests</strong>: <code>evals/evals.json</code></li>
     </ul>
   </div>
 </div>
 
+<div class="loads mt-5" v-click>
+  <div class="loads__step"><span class="loads__n">1</span><div><strong>Always</strong>: name and description, ~100 tokens</div></div>
+  <div class="loads__step"><span class="loads__n">2</span><div><strong>When triggered</strong>: the <code>SKILL.md</code> body, under 5k tokens</div></div>
+  <div class="loads__step"><span class="loads__n">3</span><div><strong>When read</strong>: scripts, references, assets</div></div>
+</div>
+
+<style scoped>
+.tree :deep(pre), .tree :deep(code) { font-size: 0.86rem !important; line-height: 1.55 !important; }
+.anatomy { list-style: none; padding: 0; margin: 1rem 0 0 !important; display: flex; flex-direction: column; gap: 0.9rem; }
+.anatomy li { margin: 0 !important; font-size: 1.25rem !important; line-height: 1.3 !important; }
+.anatomy strong { color: var(--p-fg); }
+.loads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.loads__step { display: flex; align-items: center; gap: 0.8rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.3; }
+.loads__n { flex-shrink: 0; width: 2.1rem; height: 2.1rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+</style>
+
 <!--
-[2:20 to 2:50]
+[2:20 to 3:00]
 
-Here is a real one from the demo: acme-release-notes. A folder with a
-SKILL.md and its evals. Frontmatter carries name, description, license, an
-author and a version. That is a package manifest in everything but name.
+A skill is a folder. [click] SKILL.md is the only required file: YAML
+frontmatter with a name and a description, then the instructions. Next to it
+the spec allows scripts the agent runs, references it reads when it needs
+them, and assets like templates or schemas. And an evals folder: evals.json
+holds test cases, a prompt, a description of the expected output, and
+assertions, with input files under evals/files.
 
-[click] The folder. [click] And the metadata. Name, version, license, author,
-tests. It already looks like a package.
+[click] So it already has what a package has: a name, a license, an author
+and a version in the metadata, code and data, and tests.
 
-Fact check: skills/acme-release-notes/SKILL.md and evals/evals.json in the
-repo; the metadata fields are the frontmatter of that file.
+[click] And it loads like a package with lazy imports. The agent keeps only
+name and description in context, about 100 tokens per skill. It reads the
+SKILL.md body when the skill triggers, and the other files only when it needs
+them. A script runs through bash and only its output enters the context.
+
+The demo skills are small on purpose: SKILL.md and evals/. Version 1.1.0 of
+k8s-resource-naming adds a scripts/ folder, which is exactly what the Tier 1
+security scan reads in Demo 2.
+
+Sources: agentskills.io/specification (layout, frontmatter: name and
+description required; license, compatibility, metadata, allowed-tools
+optional); agentskills.io/skill-creation/evaluating-skills (evals/evals.json:
+skill_name, evals[] with id, prompt, expected_output, files, assertions);
+platform.claude.com/docs/en/agents-and-tools/agent-skills/overview (the three
+loading levels and their token budgets); docs.port.io/agent-management/skills
+(the same layout with references/ and assets/).
 -->
 
 ---
@@ -190,10 +227,10 @@ And packages declare their dependencies. That's the part skills skip.
 
 ---
 
-# A skill has two dependencies nobody declares
+# A skill has two dependencies nobody checks
 
 <div class="diagram-slide">
-  <Diagram name="dependencies" alt="A skill depends on the model and on the agent harness, and neither is declared" />
+  <Diagram name="dependencies" alt="A skill depends on the model and on the agent harness, and nothing checks either" />
 </div>
 
 <style scoped>
@@ -205,13 +242,23 @@ And packages declare their dependencies. That's the part skills skip.
 
 A skill is written against a model. That is the first dependency. It is also
 run by an agent harness, Claude Code, Codex, OpenCode, each with its own
-release train. That is the second. Neither shows up in the SKILL.md.
+release train. That is the second. Nothing checks that the skill still works
+when either one changes.
+
+If someone asks about the model field: Claude Code's skill frontmatter has
+one, but it is a Claude Code extension that switches the model for the rest
+of the turn ("isn't saved to settings"), not a statement of what the skill
+was tested with. The open agentskills.io spec has no model field, and harnesses
+ignore fields they don't know. There is no field for the harness version;
+compatibility is free text that Claude Code "accepts but doesn't act on".
 
 In the demo the harness is pinned: Claude Code 2.1.292, Codex 0.161.0,
 OpenCode 1.19.1. A new release of any of them can change how a skill is found
 and followed. Same folder, different result.
 
-Source: README.md "Agents and their versions", CONTRACT.md "Agent versions".
+Sources: README.md "Agents and their versions", CONTRACT.md "Agent versions";
+code.claude.com/docs/en/skills (frontmatter reference: model, compatibility);
+agentskills.io/specification (no model field).
 Drawn in Excalidraw: slides/diagrams/dependencies.excalidraw.
 -->
 
@@ -444,8 +491,8 @@ excalidraw.com, then run npm run diagrams).
   <div class="gpu-card gpu-card--muted part" v-click><ph-magnifying-glass class="part__icon" /><div class="part__name">SkillEvaluator</div><div class="part__job">Three tiers, with and without lift</div><div class="part__ver">NVIDIA, 0.6.0 + patch</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-flask class="part__icon" /><div class="part__name">Harbor framework</div><div class="part__job">Runs the agent trials</div><div class="part__ver">0.24.0</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-cube class="part__icon" /><div class="part__name">Agent Sandbox</div><div class="part__job">One Sandbox per trial</div><div class="part__ver">kubernetes-sigs, v1.0.9</div></div>
-  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">SkillEval CRD, Jobs, policy, tags</div><div class="part__ver">Go, 0.6.0</div></div>
-  <div class="gpu-card gpu-card--muted part" v-click><ph-chart-line-up class="part__icon" /><div class="part__name">Prometheus + Grafana</div><div class="part__job">Lift per skill version</div><div class="part__ver">kube-prometheus-stack</div></div>
+  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">SkillEval CRD, Jobs, policy, tags</div><div class="part__ver">Go, 0.8.0</div></div>
+  <div class="gpu-card gpu-card--muted part" v-click><ph-chart-line-up class="part__icon" /><div class="part__name">Prometheus + Grafana</div><div class="part__job">Lift per skill version, or OTLP to any backend</div><div class="part__ver">kube-prometheus-stack</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-browsers class="part__icon" /><div class="part__name">Reporting site</div><div class="part__job">Every run, in plain words</div><div class="part__ver">served by the controller</div></div>
 </div>
 
@@ -472,7 +519,8 @@ live with and without the skill runs. I run 0.6.0 with a small patch.
 Sandbox.
 [click] The controller is the part I wrote: the SkillEval CRD, the Jobs, the
 policy, the tag moves.
-[click] Prometheus and Grafana for the numbers over time.
+[click] Prometheus and Grafana for the numbers over time. The same metrics
+can also go out over OpenTelemetry, to whatever backend you already run.
 [click] And a small reporting site served by the controller.
 
 Versions are from README.md in the repo. The Helm chart of the controller and
@@ -1083,11 +1131,73 @@ v1.2.0 is held back and v1.1.0 is on stable.
 make report pulls the SkillEvaluator report that is attached to the skill
 digest as an OCI referrer. It survives the pod and travels with the artifact.
 
-Source: DEMO.md beat 9. Only v1.1.0 has reports stored in Harbor for the
-pre-baked state; do not run make report on v1.0.0 or v1.2.0.
+Source: DEMO.md beat 9. Every run of the pre-baked state has a stored report
+(checked 2026-10-31), Rejected runs included.
 
 Fallbacks: the backup slides after the closing slide (Grafana, the
 acme-release-notes skill page), recorded 2026-10-31.
+-->
+
+---
+
+# Scraped or pushed: the same numbers
+
+<div class="otel-flow" v-click>
+
+```mermaid {scale: 1.55}
+flowchart LR
+  C["skill-ci controller<br/>skillci_* metrics"] -->|"scrape /metrics"| P["Prometheus"]
+  P --> G["Grafana"]
+  C -->|"push, OTLP<br/>http/protobuf or gRPC"| O["OpenTelemetry Collector<br/>or Grafana Alloy"]
+  O --> B["any OTLP backend"]
+```
+
+</div>
+
+<div class="grid grid-cols-[1.1fr_1fr] gap-8 mt-4 items-center" v-click>
+  <div class="otel-values">
+
+```yaml
+otlp:
+  endpoint: otel-collector.monitoring:4318
+  insecure: true
+  headersSecret:
+    name: otlp-headers   # ingest key
+```
+
+  </div>
+  <p class="otel-note">Same names, labels and values on both paths. Off until you set an endpoint.</p>
+</div>
+
+<style scoped>
+.otel-flow { display: flex; justify-content: center; }
+.otel-values :deep(pre), .otel-values :deep(code) { font-size: 1.05rem !important; line-height: 1.55 !important; }
+.otel-note { margin: 0 !important; font-size: 1.55rem !important; line-height: 1.35 !important; }
+</style>
+
+<!--
+[22:00 to 22:20, cut if short on time]
+
+[click] The dashboard you just saw scrapes the controller. Many teams already
+run an OpenTelemetry pipeline instead, so the controller can push the same
+metrics over OTLP, the way the pulumi-exporter does: an endpoint, http/protobuf
+or gRPC, TLS on or off, and headers for an ingest key.
+
+[click] In the Helm chart that is a few lines of values. The ingest key comes from a
+Secret, not from the values. Same metric names, labels and values on both
+paths, because the export reads the same Prometheus collectors. Only the
+skillci_ metrics go out, not the Go runtime noise.
+
+Do not point it at the same Prometheus that scrapes it, or every series is
+stored twice.
+
+Source: CONTRACT.md "OpenTelemetry export", charts/skill-ci-controller
+README "OpenTelemetry (OTLP)", controller release 0.8.0. Tested on the DOKS
+cluster on 2026-10-31 against an OpenTelemetry Collector 0.162.0 (debug
+exporter), over http/protobuf and gRPC: 13 skillci_ families, the same values
+as /metrics (skillci_lift of v1.2.0 on Claude Code 0.33), service.version
+0.8.0, pod and namespace attributes, and the final flush of the old pod on a
+rollout. Also covered by the controller tests against local OTLP receivers.
 -->
 
 ---
@@ -1140,9 +1250,10 @@ created from inside the cluster are now owned by the runner pod, so Kubernetes
 garbage-collects them, and the reset target deletes leftovers.
 
 [click] The autoscaler. It drained the node BuildKit ran on in the middle of
-an image build. BuildKit, the toolbox and every Harbor component are now
-safe-to-evict false, and so are the runner and trial sandbox pods, so a node
-scale-down never kills a running eval. If a pod is lost anyway, the run is
+an image build. The in-cluster build is gone since (one prebuilt sandbox image
+from CI), and the toolbox, every Harbor component, the runner and the trial
+sandbox pods are safe-to-evict false, so a node scale-down never kills a
+running eval. If a pod is lost anyway, the run is
 retried once, because that says nothing about the skill.
 
 [click] One attempt is noise. A single attempt per arm flipped verdicts. The
@@ -1193,8 +1304,9 @@ re-checks sibling versions when a result arrives.
 [click] Harbor's generic Kubernetes backend is thin. In DinD mode it ships
 only the Dockerfile to the build Job, so every COPY fails; its context archive
 drops empty directories, which breaks the no-skill baseline; it has no
-network or resource policy. I wrote harbor-agent-sandbox to fix the build
-context and swap the privileged pod for an unprivileged Sandbox.
+network or resource policy. I wrote harbor-agent-sandbox to swap the
+privileged pod for an unprivileged Sandbox, and a prebuilt sandbox image
+replaced the per-trial build altogether.
 
 [click] Publication is incomplete until all tiers ran. Tier 1 is only
 trustworthy with its scanners installed, so the runner image pins them. Tier 2
@@ -1266,7 +1378,7 @@ swap the evaluator, keep the loop.
   <div class="gpu-card gpu-card--primary way" v-click>
     <ph-sailboat class="way__icon" />
     <div class="way__title">With plain Helm</div>
-    <p>The controller is a Helm chart, <code>charts/skill-ci-controller</code>, on any cluster that has Harbor</p>
+    <p><code>deploy/install.sh</code> installs the same stack on any cluster, with Helm charts and kubectl</p>
   </div>
   <div class="qrcard" v-click>
     <QRCode data="https://github.com/dirien/skill-ci" dark="#000000" />
@@ -1294,11 +1406,13 @@ production skills.
 
 [click] With Pulumi: make up builds the cluster, Harbor, secrets, Agent
 Sandbox, and Prometheus with Grafana; make deploy installs a release from
-GHCR. [click] With plain Helm you only
-need the chart, and a Harbor you already run. [click] QR code for the repo.
+GHCR. [click] With plain Helm: deploy/install.sh does the same with Helm
+charts and kubectl, every step documented in deploy/README.md, and the
+controller chart alone works with a Harbor you already run. [click] QR code
+for the repo.
 
 Source: README.md "Layout", "Helm chart", "Run the demo".
-Releases are tagged (v0.7.3 on 2026-10-31) and the GHCR images and chart are
+Releases are tagged (v0.8.0 on 2026-10-31) and the GHCR images and chart are
 public. TODO: make the GitHub repo public before the talk.
 -->
 
