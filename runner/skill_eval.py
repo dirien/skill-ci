@@ -6,7 +6,9 @@ CONTRACT.md, "Runner Job contract" and "All tiers and publication"). A first
 against the other skills in Harbor) is the cheap gate. Only when neither tier
 failed does a second ``skillevaluator validate`` run all three tiers, including
 the live Tier 3 evaluation, in one invocation: its report then carries
-SkillEvaluator's own publication assessment. On completion the runner writes one
+SkillEvaluator's own publication assessment. A skill without a Tier 3 source (no
+eval dataset, no native Harbor tasks) gets the gate only and then ends with an
+error that says how to draft the dataset. On completion the runner writes one
 JSON object to the container termination log and exits 0, or ``{"error": ...}``
 and exits 1.
 """
@@ -76,6 +78,24 @@ MAX_CATALOG_SKILLS = 200  # other skills compared against in Tier 2
 MAX_SAMPLES = 50  # per-trial scores kept per arm; 3 cases x 3 attempts give 9
 SEMVER_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+# The eval dataset files SkillEvaluator 0.6.0 reads from <skill>/evals/, in its order
+# (tier3/harbor/adapter.py: find_evals_file). Native Harbor tasks under evals/harbor/ are the
+# other Tier 3 source. The runner passes --no-autopilot, so SkillEvaluator never drafts one.
+EVAL_DATASET_FILES = (
+    "evals.json",
+    "evals.jsonl",
+    "evals.yaml",
+    "evals.yml",
+    "dataset.json",
+    "dataset.jsonl",
+)
+NATIVE_TASKS_DIR = "harbor"
+# The error of a skill without a Tier 3 source; tests and docs quote it, keep it stable.
+NO_DATASET_ERROR = (
+    "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. "
+    "Draft them with `make draft-evals SKILL={skill}` (skillevaluator create-eval-dataset), "
+    "review them, and push again"
+)
 
 # The generic sandbox image of the release the runner belongs to. runner/Dockerfile sets
 # SANDBOX_IMAGE to its own release tag; this is the fallback outside the image.
@@ -284,6 +304,20 @@ def pull_skill(config: Mapping[str, str], dest: Path) -> Path:
     if not skill_dir.is_dir():
         raise EvalError(f"artifact has no directory named {config['SKILL_NAME']!r}")
     return skill_dir
+
+
+def has_tier3_source(skill_dir: Path) -> bool:
+    """Return True when the skill has something Tier 3 can evaluate.
+
+    That is an eval dataset in ``evals/`` (any of ``EVAL_DATASET_FILES``) or native Harbor
+    tasks in ``evals/harbor/``, the same test SkillEvaluator's autopilot makes before it
+    reuses an existing source. Whether the source is valid is SkillEvaluator's call.
+    """
+    evals = skill_dir / "evals"
+    return (
+        any((evals / name).exists() for name in EVAL_DATASET_FILES)
+        or (evals / NATIVE_TASKS_DIR).exists()
+    )
 
 
 @dataclass
@@ -892,6 +926,11 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         findings = report.findings
         if "failed" in (report.tiers["tier1"], report.tiers["tier2"]):
             print("skill-eval: Tier 1 or Tier 2 failed, skipping Tier 3", flush=True)
+        elif not has_tier3_source(skill_dir):
+            # Nothing for Tier 3 to run: no sandboxes, no tokens. The error message has room
+            # for the reason only, so the gate's outcome goes to the container log.
+            print(f"skill-eval: gate {report.tiers}, findings {report.findings}", flush=True)
+            raise EvalError(NO_DATASET_ERROR.format(skill=config["SKILL_NAME"]))
         else:
             # One validate run over every tier: its report carries SkillEvaluator's own
             # publication assessment. Output streams straight to the container log. A non-zero

@@ -152,6 +152,8 @@ class FakeRun:
     ``gate`` is the report of ``validate --tiers 1,2``, ``full`` the report of the run with
     Tier 3. Like SkillEvaluator, a report holds only the tiers that were selected, and its
     publication is ``incomplete`` unless all three ran (``None`` writes no report at all).
+    ``evals`` is the Tier 3 source file the pulled skill carries, relative to the skill
+    directory (``None``: the skill has no ``evals/`` at all).
     """
 
     def __init__(
@@ -168,7 +170,9 @@ class FakeRun:
         catalog_exit: int = 0,
         attach_failures: int = 0,
         trial_versions: list[str] | None = None,
+        evals: str | None = "evals/evals.json",
     ):
+        self.evals = evals
         self.trial_versions = trial_versions  # agent_info.version of the kept Harbor trials
         self.attach_failures = attach_failures  # attach calls that fail before one succeeds
         self.result = result
@@ -221,6 +225,10 @@ class FakeRun:
         if cmd[2] == ENV["SKILL_REF"]:
             if self.skill_dir and self.pull_exit == 0:
                 (dest / ENV["SKILL_NAME"]).mkdir(parents=True)
+                if self.evals is not None:
+                    source = dest / ENV["SKILL_NAME"] / self.evals
+                    source.parent.mkdir(parents=True)
+                    source.write_text("[]")
             stderr = "denied" if self.pull_exit else ""
             return subprocess.CompletedProcess(cmd, self.pull_exit, "", stderr)
         name = cmd[2].rsplit("/", 1)[1].split(":")[0]  # a catalog skill
@@ -464,6 +472,75 @@ def test_rejected_run_spends_no_tier3_trials(termination, monkeypatch):
     (gate,) = fake.validates()
     assert gate[gate.index("--tiers") + 1] == "1,2"
     assert "--results-dir" not in gate
+
+
+NO_DATASET = (
+    "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. "
+    "Draft them with `make draft-evals SKILL=acme` (skillevaluator create-eval-dataset), "
+    "review them, and push again"
+)
+
+
+def test_no_eval_dataset_runs_the_gate_only(termination, monkeypatch):
+    """A skill without evals/ gets Tier 1 and 2, no Tier 3 run, and an actionable error."""
+    fake = FakeRun(GOOD, evals=None)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 1
+    assert termination() == {"error": NO_DATASET}
+    (gate,) = fake.validates()
+    assert gate[gate.index("--tiers") + 1] == "1,2"
+    assert not fake.tier3_ran()
+    assert "oras attach --artifact-type" not in fake.names()
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        *(f"evals/{name}" for name in skill_eval.EVAL_DATASET_FILES),
+        "evals/harbor/case-1/task.toml",
+    ],
+)
+def test_tier3_sources(source, termination, monkeypatch):
+    """Every dataset file SkillEvaluator reads, and native Harbor tasks, start Tier 3."""
+    fake = FakeRun(GOOD, evals=source)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0, source
+    assert fake.tier3_ran()
+    assert termination() == GOOD_PAYLOAD
+
+
+@pytest.mark.parametrize(
+    ("name", "source", "expected"),
+    [
+        ("no evals directory", None, False),
+        ("evals without a dataset", "evals/config.yml", False),
+        ("dataset outside evals", "evals.json", False),
+        ("evals.json", "evals/evals.json", True),
+        ("dataset.jsonl", "evals/dataset.jsonl", True),
+        ("native harbor tasks", "evals/harbor/case-1/task.toml", True),
+    ],
+)
+def test_has_tier3_source(name, source, expected, tmp_path):
+    """has_tier3_source finds the dataset files and evals/harbor/ only."""
+    if source is not None:
+        (tmp_path / source).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / source).write_text("[]")
+    assert skill_eval.has_tier3_source(tmp_path) is expected, name
+
+
+@pytest.mark.parametrize(("name", "gate"), [("tier 1", CURL_BASH), ("tier 2", TIER2_FAILED)])
+def test_rejected_without_eval_dataset(name, gate, termination, monkeypatch):
+    """A Tier 1 or 2 failure is Rejected as before, whether or not the skill has evals."""
+    fake = FakeRun(GOOD, gate=gate, evals=None)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 0, name
+    written = termination()
+    assert "error" not in written
+    assert written["publication"] == "failed"
+    assert written["tiers"]["tier3"] == "skipped"
+    assert "failed" in (written["tiers"]["tier1"], written["tiers"]["tier2"])
+    assert written["report"] == REPORT
+    assert not fake.tier3_ran()
 
 
 def test_rejected_run_attaches_the_failing_report(termination, monkeypatch):
