@@ -676,6 +676,72 @@ scanners in the runner".
 
 ---
 
+# Who writes the test cases
+
+<div class="grid grid-cols-[1.15fr_1fr] gap-8 mt-8 items-start zm">
+  <div class="cases" v-click>
+    <div class="gpu-caption gpu-caption--accent">evals/evals.json (abridged)</div>
+
+```json
+{
+  "skill_name": "acme-release-notes",
+  "evals": [{
+    "id": "rn-basic",
+    "prompt": "Write the release notes for 1.4.0 into RELEASE_NOTES.md ...",
+    "expected_output": "'ACME-RN/2 1.4.0', then ## Added and ## Fixed",
+    "assertions": [
+      "RELEASE_NOTES.md exists",
+      "The first line is exactly 'ACME-RN/2 1.4.0'"
+    ]
+  }]
+}
+```
+
+  </div>
+  <div class="steps">
+    <div class="step" v-click><span class="step__n">1</span><div><strong>Draft</strong>: <code>make draft-evals</code> (SkillEvaluator), or Anthropic's skill-creator</div></div>
+    <div class="step" v-click><span class="step__n">2</span><div><strong>Review</strong>: a person replaces wording copied from <code>SKILL.md</code> and adds checks on files</div></div>
+    <div class="step" v-click><span class="step__n">3</span><div><strong>Push</strong>: skill-ci runs the cases on every push and every harness release</div></div>
+    <div class="nocases" v-click>No test cases: Tier 1 and 2 still run, then the run fails and says what is missing.</div>
+  </div>
+</div>
+
+<style scoped>
+.cases :deep(pre), .cases :deep(code) { font-size: 0.82rem !important; line-height: 1.5 !important; }
+.steps { display: flex; flex-direction: column; gap: 0.9rem; }
+.step { display: flex; align-items: flex-start; gap: 0.9rem; padding: 0.85rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.05rem; line-height: 1.35; }
+.step__n { flex-shrink: 0; width: 2.1rem; height: 2.1rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+.nocases { padding: 0.6rem 1rem; border-left: 4px solid var(--p-primary); font-size: 1rem; line-height: 1.35; color: var(--p-fg-muted); }
+</style>
+
+<!--
+[cut if short on time, about 40 seconds]
+
+[click] Tier 3 runs test cases, and they come from the skill: evals/evals.json,
+the format from agentskills.io. Each case has a prompt, a description of the
+expected output, and assertions the judge checks. This one is from the demo
+skill: the first line must be exactly ACME-RN/2 and the version.
+
+[click] Nobody writes these from nothing. make draft-evals runs SkillEvaluator's
+create-eval-dataset in a short pod with the cluster's key: one request, about
+20 seconds, four cases. Anthropic's skill-creator does the same in Claude Code.
+[click] But a person reviews them. The generator reads SKILL.md, so its
+assertions repeat the skill's own wording and cannot catch a rule the skill
+forgot. Add checks on files the agent has to write.
+[click] Then push. skill-ci never writes or regenerates the tests: the gate
+runs the cases the author committed, on every push and every harness release.
+
+[click] A skill without test cases still gets the static and security checks;
+then the run fails with "no eval dataset" and the make draft-evals command.
+
+Sources: agentskills.io/skill-creation/evaluating-skills; SkillEvaluator 0.6.0
+create-eval-dataset (tested on the DOKS cluster 2026-10-31: claude-opus-5-5,
+about 20 s, 4 cases); anthropics/skills skill-creator (Apache-2.0);
+skills/acme-release-notes/evals/evals.json.
+-->
+
+---
+
 # The lift: with the skill, and without
 
 <div class="lift mt-6">
