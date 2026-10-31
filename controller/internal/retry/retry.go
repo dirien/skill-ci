@@ -3,11 +3,11 @@
 //
 // The rule mirrors Harbor's error classification: errors in the environment
 // (it did not start, the connection dropped, the agent could not be installed)
-// are retried, errors of the agent itself (it timed out, its own task command
-// failed) are not. A run that produced scores, or that Tier 1 or Tier 2
-// rejected, is a real result and never reaches this package: retrying bad
-// answers until they pass would bias the score. Callers must not ask about
-// such runs.
+// and a model provider that rate-limited the agent are retried, errors of the
+// agent itself (it timed out, its own task command failed) are not. A run
+// that produced scores, or that Tier 1 or Tier 2 rejected, is a real result
+// and never reaches this package: retrying bad answers until they pass would
+// bias the score. Callers must not ask about such runs.
 //
 // Anything not recognised is not transient. The list is short on purpose; a
 // missed infrastructure failure costs one rerun by hand, a wrongly retried
@@ -37,11 +37,14 @@ const (
 	// scheduled, image pull failure, deadline exceeded, or it failed without
 	// leaving a termination message.
 	ReasonJobLost Reason = "job_lost"
+	// ReasonRateLimit means the model provider rate-limited the agent's
+	// requests (Harbor's ApiRateLimitError).
+	ReasonRateLimit Reason = "rate_limit"
 )
 
 // Reasons lists every Reason, so metrics can publish them at zero.
 func Reasons() []Reason {
-	return []Reason{ReasonEnvStartTimeout, ReasonConnectionLost, ReasonAgentInstall, ReasonAgentSetup, ReasonJobLost}
+	return []Reason{ReasonEnvStartTimeout, ReasonConnectionLost, ReasonAgentInstall, ReasonAgentSetup, ReasonJobLost, ReasonRateLimit}
 }
 
 // Transient reports whether a failed run failed for an infrastructure reason.
@@ -60,7 +63,11 @@ func Transient(message string, jobFailedWithoutMessage bool) bool {
 // The runner joins the SkillEvaluator execution errors of all trials into one
 // message ("no scores in result.json: AErr: text; BErr: text"). The message is
 // split at every "<Name>Error:" token and every part must be transient: one
-// agent error in the mix makes the whole run a real result.
+// agent error in the mix makes the whole run a real result. The message must
+// also show every trial failure: a message the runner cut, a SkillEvaluator
+// note that it left failures out, or a trial failure that does not start with
+// an error token (so it would be read as part of the previous part) makes it
+// not transient.
 func Classify(message string, jobFailedWithoutMessage bool) (reason Reason, ok bool) {
 	if jobFailedWithoutMessage {
 		return ReasonJobLost, true
@@ -70,6 +77,9 @@ func Classify(message string, jobFailedWithoutMessage bool) (reason Reason, ok b
 		if jobLevel.MatchString(message) {
 			return ReasonJobLost, true
 		}
+		return "", false
+	}
+	if !complete(message) {
 		return "", false
 	}
 	for _, p := range parts {
@@ -112,6 +122,63 @@ var agentSetupCommand = regexp.MustCompile(`^mkdir -p \$CLAUDE_CONFIG_DIR`)
 // failedCommand extracts the command from a NonZeroAgentExitCodeError text.
 var failedCommand = regexp.MustCompile(`Command failed \(exit \d+\):\s*(.*)`)
 
+// rateLimitDetail matches the start of Harbor's ApiRateLimitError text, the
+// failed command, and captures the rest.
+var rateLimitDetail = regexp.MustCompile(`^\s*Command failed \(exit \d+\): (.*)`)
+
+// rateLimitWords are the needles Harbor uses to raise ApiRateLimitError. It
+// searches them case-insensitively over the whole output of the failed
+// command, and that output includes the agent's transcript.
+var rateLimitWords = regexp.MustCompile(`(?i)rate.?limit|too many requests`)
+
+// stdoutMarker ends the command in Harbor's error text ("\nstdout: ...", with
+// the newline turned into a space by SkillEvaluator).
+const stdoutMarker = " stdout: "
+
+// trialFailure matches the start of one per-trial entry of SkillEvaluator's
+// execution errors. Its reason follows and must start with an error token.
+var trialFailure = regexp.MustCompile(`(?:Agent runtime failed|Unscoreable reward) in \S+: `)
+
+// leadingErrorToken matches an error token at the very start of a text.
+var leadingErrorToken = regexp.MustCompile(`^[A-Z][A-Za-z]*Error:`)
+
+// complete reports whether message shows every trial failure, so that every
+// part can be checked. The runner halves a message that is too long for the
+// termination log and ends it with "..."; SkillEvaluator notes when it left
+// failure details out; and a trial failure without an error token would be
+// read as part of the error before it.
+func complete(message string) bool {
+	if strings.HasSuffix(message, "...") || strings.Contains(message, "details were truncated") {
+		return false
+	}
+	for _, loc := range trialFailure.FindAllStringIndex(message, -1) {
+		if !leadingErrorToken.MatchString(message[loc[1]:]) {
+			return false
+		}
+	}
+	return true
+}
+
+// rateLimited reports whether an ApiRateLimitError part can be trusted.
+// Harbor raises it when the output of the failed command mentions a rate
+// limit, and the agent's transcript is part of that output: a task about rate
+// limits, which the agent may repeat, turns any failure of the agent command
+// into an ApiRateLimitError. So the failed command, which carries the task
+// text, must be visible up to its end and must not mention a rate limit
+// itself. Model output that mentions one for a task that does not is not
+// visible here: SkillEvaluator keeps only the start of the output.
+func rateLimited(text string) bool {
+	m := rateLimitDetail.FindStringSubmatch(text)
+	if m == nil {
+		return false
+	}
+	end := strings.LastIndex(m[1], stdoutMarker)
+	if end < 0 {
+		return false // the command was cut before its end
+	}
+	return !rateLimitWords.MatchString(m[1][:end])
+}
+
 // part is one "<Name>Error: text" piece of a message.
 type part struct{ name, text string }
 
@@ -139,6 +206,11 @@ func classifyPart(p part) (Reason, bool) {
 		return ReasonEnvStartTimeout, true
 	case p.name == "AgentSetupTimeoutError":
 		return ReasonAgentSetup, true // installing the agent CLI in the sandbox took too long
+	case p.name == "ApiRateLimitError":
+		if rateLimited(p.text) {
+			return ReasonRateLimit, true
+		}
+		return "", false
 	case strings.Contains(p.text, connectionLost):
 		return ReasonConnectionLost, true
 	case p.name == "NonZeroAgentExitCodeError":
