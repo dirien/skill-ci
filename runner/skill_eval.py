@@ -21,8 +21,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -206,6 +208,41 @@ def agent_route(agent: str, model: str, environ: Mapping[str, str]) -> AgentRout
         },
         gateway=True,
     )
+
+
+def check_gateway_key(
+    model: str,
+    environ: Mapping[str, str],
+    fetch: Callable[[urllib.request.Request], bytes] | None = None,
+) -> None:
+    """Fail before any work when an OpenRouter key cannot run models.
+
+    OpenRouter provisioning (management) keys pass the key lookup but every chat call answers
+    401 "User not found.", so each OpenCode trial would fail the same way. ``GET /key`` says which
+    kind a key is. Only a confirmed provisioning key fails the run: a network error or an
+    unexpected answer leaves the decision to the trials.
+    """
+    if not model.startswith("openrouter/"):
+        return
+    key_env, base_url = GATEWAY_PROVIDERS["openrouter"]
+    headers = {"Authorization": f"Bearer {environ.get(key_env, '')}"}
+    request = urllib.request.Request(f"{base_url}/key", headers=headers)  # noqa: S310 (fixed https URL)
+    if fetch is None:
+
+        def fetch(req: urllib.request.Request) -> bytes:
+            with urllib.request.urlopen(req, timeout=15) as response:  # noqa: S310 (fixed https URL)
+                return response.read()
+
+    try:
+        data = json.loads(fetch(request)).get("data") or {}
+    except (urllib.error.URLError, TimeoutError, ValueError, AttributeError) as err:
+        print(f"skill-eval: could not check the OpenRouter key type: {err}", flush=True)
+        return
+    if data.get("is_provisioning_key") is True:
+        raise EvalError(
+            f"{key_env} (llm-keys key openrouter) is an OpenRouter provisioning key, which cannot "
+            "run models; create an API key at https://openrouter.ai/settings/keys"
+        )
 
 
 def registry_flags(config: Mapping[str, str]) -> list[str]:
@@ -833,6 +870,8 @@ def final_publication(report: ValidateReport, tiers: Mapping[str, str]) -> str:
 def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
     """Pull the skill, run Tiers 1 to 3 and return the termination payload."""
     config = load_config(environ)
+    if config["AGENT"] == "opencode":
+        check_gateway_key(config["MODEL"], environ)
     with tempfile.TemporaryDirectory(prefix="skill-eval-") as tmp:
         work = Path(tmp)
         # skills/<name> is the layout SkillEvaluator expects for a skill.

@@ -1100,6 +1100,78 @@ def test_bad_opencode_route(agent, model, environ, message):
         skill_eval.agent_route(agent, model, environ)
 
 
+OPENROUTER = {"OPENROUTER_API_KEY": "or-key"}
+
+
+def key_lookup(answer: Any) -> tuple[list, Any]:
+    """Return the requests seen and a fake ``fetch`` that answers OpenRouter's GET /key."""
+    seen: list = []
+
+    def fetch(request):
+        seen.append(request)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer if isinstance(answer, bytes) else json.dumps(answer).encode()
+
+    return seen, fetch
+
+
+@pytest.mark.parametrize(
+    ("answer", "fails"),
+    [
+        ({"data": {"is_provisioning_key": True}}, True),
+        ({"data": {"is_provisioning_key": False}}, False),
+        ({"data": {}}, False),
+        ({"error": {"code": 401}}, False),
+        (b"not json", False),
+        (skill_eval.urllib.error.URLError("offline"), False),
+        (TimeoutError("slow"), False),
+    ],
+)
+def test_check_gateway_key(answer, fails):
+    """Only a confirmed provisioning key stops the run; anything unclear goes on to the trials."""
+    seen, fetch = key_lookup(answer)
+    if fails:
+        with pytest.raises(skill_eval.EvalError, match="provisioning key"):
+            skill_eval.check_gateway_key("openrouter/qwen/qwen3.8-flash", OPENROUTER, fetch)
+    else:
+        skill_eval.check_gateway_key("openrouter/qwen/qwen3.8-flash", OPENROUTER, fetch)
+    assert seen[0].full_url == "https://openrouter.ai/api/v1/key"
+    assert seen[0].get_header("Authorization") == "Bearer or-key"
+
+
+@pytest.mark.parametrize("model", ["ollama-cloud/gpt-oss:120b", "anthropic/claude-haiku-5-5"])
+def test_check_gateway_key_only_for_openrouter(model):
+    """Other providers have no key types to tell apart, so nothing is fetched."""
+    seen, fetch = key_lookup({"data": {"is_provisioning_key": True}})
+    skill_eval.check_gateway_key(model, OPENROUTER, fetch)
+    assert seen == []
+
+
+def test_provisioning_key_fails_before_any_work(termination, monkeypatch):
+    """A provisioning key ends the run with a clear error, before the pull and every tier."""
+    monkeypatch.setenv("AGENT", "opencode")
+    monkeypatch.setenv("MODEL", "openrouter/qwen/qwen3.8-flash")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b'{"data": {"is_provisioning_key": true}}'
+
+    monkeypatch.setattr(skill_eval.urllib.request, "urlopen", lambda req, timeout: Response())
+    fake = FakeRun({})
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == 1
+    assert "provisioning key" in termination()["error"]
+    assert fake.calls == []
+
+
 def test_opencode_gateway_run(termination, monkeypatch):
     """A gateway run passes the OpenAI-form model to SkillEvaluator and reports the real one."""
     for key, value in OLLAMA.items():
