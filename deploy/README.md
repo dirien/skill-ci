@@ -37,6 +37,10 @@ All images come from GHCR and need no pull secret, and nothing builds images in 
 - An Anthropic API key. It is the judge of every run. Keys for OpenAI, OpenRouter, Ollama Cloud and NVIDIA are optional
   (they add Codex and OpenCode models).
 - Outbound internet access from the nodes: GHCR, `github.com`, `helm.goharbor.io`, `prometheus-community.github.io`, the LLM APIs.
+- For the network modes `none` and `allowlist`: Cilium as the CNI (DOKS has it; check with
+  `kubectl get crd ciliumnetworkpolicies.cilium.io`). Without Cilium every skill runs as `full` (the internet, never the
+  cluster, through Agent Sandbox's own policy), and a skill that asks for `none` or `allowlist` fails with a message
+  that says so. See [Network modes](#network-modes-and-sandbox-profiles).
 
 Clone the repository (the demo scripts and the sample skills live there) and read the versions once:
 
@@ -444,6 +448,42 @@ kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-passwor
 `make dashboard` prints the same `kubectl` command and a `pulumi stack output` alternative. Ignore the Pulumi line,
 there is no stack in this setup. The [stage runbook](../DEMO.md) walks through the beats.
 
+## Network modes and sandbox profiles
+
+Trials run in pre-started sandboxes from a warm pool. A `SandboxProfile` (skill-ci CRD, short name `sbp`) describes
+them: image (default: the sandbox image of the release), CPU and memory (default 1 and 2Gi), and the warm pool size
+(default 2). The controller turns each profile into an Agent Sandbox `SandboxTemplate` and `SandboxWarmPool`. The chart
+creates the profile `default` (Helm value `sandboxProfiles.default`); a model list entry can name another one with
+`sandboxProfile: <name>`.
+
+```bash
+kubectl -n skill-ci get sandboxprofiles
+kubectl -n skill-ci get sandboxtemplates,sandboxwarmpools
+```
+
+A skill declares the network its trials may use in the `metadata` of its `SKILL.md`:
+
+```yaml
+metadata:
+  skillci.dev/network: allowlist                       # none | allowlist | full
+  skillci.dev/network-allow: "@python,dl.k8s.io"       # domains and bundles, for allowlist
+```
+
+`demo/push-skill.sh` copies both entries into OCI annotations of the artifact; with plain `oras push` add
+`--annotation "skillci.dev/network=allowlist" --annotation "skillci.dev/network-allow=@python,dl.k8s.io"`.
+
+| Mode | Trials can reach |
+| --- | --- |
+| `none` | DNS and the model API of the agent (for example `api.anthropic.com`) |
+| `allowlist` | the same, plus the listed domains and bundles, TCP 443 |
+| `full` (default when the skill declares nothing) | the internet, never the cluster (no Harbor, no Kubernetes API) |
+
+With Cilium the controller creates one `CiliumNetworkPolicy` per evaluation (`skillci-net-<run>`, the same for both
+arms) and a baseline policy that leaves unclaimed warm sandboxes without egress. The platform sets the default mode,
+the allowed modes and the bundles in the Helm values under `controller.network` (`bundles` defaults: `@python`,
+`@node`, `@github`, `@apt`). The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o
+jsonpath='{.status.network}'` and on its page of the reporting site. Details: CONTRACT.md "Network modes".
+
 ## Platform notes
 
 | Platform | What to know |
@@ -498,6 +538,11 @@ After changing a source, run `deploy/generate.sh`. `deploy/generate.sh --check` 
 | Controller pod in `CreateContainerConfigError` | `otlp.headersSecret.name` names a Secret or key that does not exist in `skill-ci`. |
 | Dashboard numbers doubled | The OTLP export pushes into the Prometheus that also scrapes the controller. Point `OTLP_ENDPOINT` elsewhere. |
 | No OTLP data at the backend | `kubectl -n skill-ci logs deployment/skill-ci-controller \| grep otlp`: export errors are logged and never stop the controller. Check `OTLP_INSECURE` and `OTLP_URL_PATH`. |
+| A run fails with `network mode "none" needs Cilium` | The cluster has no Cilium: only `full` can run. Remove the skill's `skillci.dev/network` entry or run on a Cilium cluster. |
+| A run fails with `unknown network bundle` | The skill names a bundle the platform does not define. Add it under `controller.network.bundles` or use domains. |
+| A run fails with `sandbox profile "<name>" not found` | The model list entry names a `SandboxProfile` that does not exist: `kubectl -n skill-ci get sandboxprofiles`. |
+| A trial fails with `InvalidMetadata` | Agent Sandbox refused the claim's labels. skill-ci uses the default allowed domain `sandbox.users.io`; a custom `agent-sandbox-config` with `allowed-label-domains` must keep it. |
+| An agent cannot reach a host it needs | The skill's network mode blocks it. `hubble observe -n skill-ci --verdict DROPPED` shows the blocked lookups; add the domain or a bundle to `skillci.dev/network-allow`. |
 | `ImagePullBackOff` on ghcr.io | The release exists but its GHCR packages are still private. Make them public in the package settings. |
 
 ## Teardown
