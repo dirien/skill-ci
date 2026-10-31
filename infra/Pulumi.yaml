@@ -25,7 +25,7 @@ config:
   # runner and sandbox images of the same tag. Same value as SKILL_CI_VERSION in deploy/versions.env.
   skillCiVersion:
     type: string
-    default: 0.10.0
+    default: 0.10.1
   # Optional OTLP push of the controller's skillci_* metrics (chart values otlp.*, CONTRACT.md
   # "OpenTelemetry export"). Off while otlpEndpoint is empty. The ServiceMonitor below already scrapes
   # the controller into this stack's Prometheus: do not push into that Prometheus as well.
