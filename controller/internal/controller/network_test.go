@@ -156,7 +156,7 @@ func TestPendingNetworkAndProfile(t *testing.T) {
 			wantReason: network.ReasonEnforced,
 			wantSpec:   v1alpha1.NetworkSpec{Mode: "none", Source: "skill"},
 			wantStatus: &v1alpha1.NetworkStatus{Mode: "none", Enforced: true, Policy: "skillci-net-acme-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
-				Hosts: []string{"gateway.example.com"}},
+				Hosts: []string{"api.anthropic.com", "gateway.example.com"}},
 			wantPolicy: "gateway.example.com",
 		},
 		{

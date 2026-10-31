@@ -64,7 +64,7 @@ func TestRunPageNetwork(t *testing.T) {
 	}{
 		{name: "enforced allowlist", path: runPath(netSkill, "v1.0.0", haiku), want: []string{
 			"<h2 id=\"network-h\">Network</h2>", "<code>allowlist</code>", "(declared by the skill)",
-			"The model API hosts and the hosts the skill declares.", "@python, dl.k8s.io",
+			"The model API hosts, the judge and the hosts the skill declares.", "@python, dl.k8s.io",
 			"api.anthropic.com, dl.k8s.io, files.pythonhosted.org, pypi.org", "(TCP 443)",
 			"CiliumNetworkPolicy <code>skillci-net-x</code>", "SandboxProfile default, trial pods claimed from warm pool default",
 		}},

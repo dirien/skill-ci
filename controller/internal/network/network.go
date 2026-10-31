@@ -291,6 +291,8 @@ func Resolve(p Policy, in Input) (Effective, error) {
 	if err != nil {
 		return Effective{}, err
 	}
+	// The Tier 3 verifier runs in the trial pod and calls the judge from there.
+	hosts = append(hosts, JudgeHost)
 	hosts = append(hosts, p.AlwaysAllow...)
 	if !p.preinstalled(in.Entry) {
 		hosts = append(hosts, p.InstallHosts...)
@@ -364,6 +366,12 @@ const (
 	hostOllama     = "ollama.com"
 	hostNvidia     = "integrate.api.nvidia.com"
 )
+
+// JudgeHost is the API host of the LLM judge, allowed in none and allowlist
+// whatever the agent. The runner keeps the judge on Anthropic (llm-keys
+// anthropic is required), and SkillEvaluator stages the judge's credentials
+// into the Harbor verifier, which runs inside the trial pod.
+const JudgeHost = hostAnthropic
 
 // ModelHosts returns the model API host the entry's agent talks to.
 // openAIBaseURL replaces api.openai.com when it is set.

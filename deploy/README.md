@@ -495,7 +495,7 @@ metadata:
 
 | Mode | Trials can reach |
 | --- | --- |
-| `none` | DNS and the model API of the agent (for example `api.anthropic.com`) |
+| `none` | DNS, the model API of the agent and the judge (`api.anthropic.com`; the Tier 3 verifier calls it from the trial pod) |
 | `allowlist` | the same, plus the listed domains and bundles, TCP 443 |
 | `full` (the default when the skill declares nothing) | the internet, never the cluster (no Harbor, no Kubernetes API) |
 

@@ -87,13 +87,18 @@ func TestResolve(t *testing.T) {
 		{
 			name: "an unpinned entry runs the preinstalled default",
 			in:   Input{Spec: spec("none"), Entry: Entry{Agent: "codex", Model: "openai/gpt-6.1-sol"}, CiliumCRD: true},
-			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.openai.com"}},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "api.openai.com"}},
+		},
+		{
+			name: "opencode on openrouter also reaches the judge",
+			in:   Input{Spec: spec("none"), Entry: Entry{Agent: "opencode", Model: "openrouter/qwen/qwen3.8-flash"}, CiliumCRD: true},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "openrouter.ai"}},
 		},
 		{
 			name: "codex uses the host of openai-base-url",
 			in: Input{Spec: spec("none"), Entry: Entry{Agent: "codex", AgentVersion: "0.161.0", Model: "openai/gpt-6.1-sol"},
 				OpenAIBaseURL: "https://Gateway.Example.com/v1", CiliumCRD: true},
-			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"gateway.example.com"}},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "gateway.example.com"}},
 		},
 		{
 			name:   "enforcement off runs none unenforced and still reports the hosts",

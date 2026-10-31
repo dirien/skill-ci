@@ -159,9 +159,9 @@ func (n NetworkView) Reach() string {
 	case "", v1alpha1.NetworkFull:
 		return "The internet, not the cluster."
 	case v1alpha1.NetworkNone:
-		return "Only the model API hosts."
+		return "Only the model API hosts and the judge."
 	default:
-		return "The model API hosts and the hosts the skill declares."
+		return "The model API hosts, the judge and the hosts the skill declares."
 	}
 }
 

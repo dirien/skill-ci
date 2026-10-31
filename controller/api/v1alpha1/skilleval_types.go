@@ -143,9 +143,9 @@ type SkillEvalSpec struct {
 
 // Network modes of a trial sandbox.
 const (
-	// NetworkNone allows only the model API hosts.
+	// NetworkNone allows only the model API hosts and the judge host.
 	NetworkNone = "none"
-	// NetworkAllowlist allows the model API hosts and the hosts the skill declares.
+	// NetworkAllowlist allows the model API hosts, the judge host and the hosts the skill declares.
 	NetworkAllowlist = "allowlist"
 	// NetworkFull allows the internet, but not the cluster.
 	NetworkFull = "full"
