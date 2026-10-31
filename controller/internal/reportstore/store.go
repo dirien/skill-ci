@@ -1,7 +1,10 @@
-// Package reportstore reads SkillEvaluator reports from the registry. The
-// runner attaches report.html and result.json to the evaluated skill digest as
-// an OCI referrer; this package fetches the referrer manifest and its files and
-// keeps them in a bounded in-memory cache.
+// Package reportstore reads SkillEvaluator reports and trial bundles from the
+// registry. The runner attaches report.html and result.json, and a bundle of
+// gzip trial documents, to the evaluated skill digest as OCI referrers; this
+// package fetches the referrer manifests and their files, shares concurrent
+// fetches of the same blob, and keeps the results in two bounded in-memory
+// caches: one for manifests and report files, one for decompressed trial
+// documents, so trial traffic never evicts reports.
 package reportstore
 
 import (
@@ -14,6 +17,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"golang.org/x/sync/singleflight"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/errdef"
 	"oras.land/oras-go/v2/registry/remote"
@@ -32,11 +36,15 @@ const (
 )
 
 const (
-	// DefaultCacheBytes bounds the in-memory cache when Options.CacheBytes is zero.
+	// DefaultCacheBytes bounds the manifest and report file cache when
+	// Options.CacheBytes is zero.
 	DefaultCacheBytes = 32 << 20
-	maxManifestBytes  = 1 << 20
-	maxFileBytes      = 16 << 20
-	requestTimeout    = 30 * time.Second
+	// DefaultTrialCacheBytes bounds the decompressed trial document cache when
+	// Options.TrialCacheBytes is zero.
+	DefaultTrialCacheBytes = 64 << 20
+	maxManifestBytes       = 1 << 20
+	maxFileBytes           = 16 << 20
+	requestTimeout         = 30 * time.Second
 )
 
 // ErrNotFound means the report, or the file inside it, is not in the registry.
@@ -51,8 +59,13 @@ type Options struct {
 	Project string
 	// Username and Password are static credentials; both empty means anonymous.
 	Username, Password string
-	// CacheBytes bounds the in-memory cache; zero means DefaultCacheBytes.
+	// CacheBytes bounds the cache of manifests and report files; zero means
+	// DefaultCacheBytes.
 	CacheBytes int64
+	// TrialCacheBytes bounds the cache of decompressed trial documents (Gunzip);
+	// zero means DefaultTrialCacheBytes. It is separate from CacheBytes, so
+	// reading trials never evicts reports.
+	TrialCacheBytes int64
 }
 
 // OCI reads reports from an OCI registry with oras-go.
@@ -61,7 +74,9 @@ type OCI struct {
 	project   string
 	plainHTTP bool
 	client    *auth.Client
-	cache     *cache
+	cache     *cache // manifests and report files, keyed by digest
+	trials    *cache // decompressed gzip layers, keyed by layer digest
+	flight    singleflight.Group
 }
 
 // New returns a store for one registry project.
@@ -76,84 +91,144 @@ func New(opts Options) (*OCI, error) {
 	if opts.Username != "" {
 		client.Credential = auth.StaticCredential(u.Host, auth.Credential{Username: opts.Username, Password: opts.Password})
 	}
-	limit := opts.CacheBytes
-	if limit <= 0 {
-		limit = DefaultCacheBytes
-	}
 	return &OCI{
 		host: u.Host, project: opts.Project, plainHTTP: u.Scheme == "http",
-		client: client, cache: newCache(limit),
+		client: client,
+		cache:  newCache(orDefault(opts.CacheBytes, DefaultCacheBytes)),
+		trials: newCache(orDefault(opts.TrialCacheBytes, DefaultTrialCacheBytes)),
 	}, nil
+}
+
+func orDefault(n, def int64) int64 {
+	if n <= 0 {
+		return def
+	}
+	return n
 }
 
 // File returns one file of the report whose referrer manifest has the given
 // digest, for example FileResult. The result is shared with the cache and must
 // not be modified. It returns ErrNotFound when the manifest or the file is missing.
 func (s *OCI) File(ctx context.Context, skill, reportDigest, name string) ([]byte, error) {
-	if err := digest.Digest(reportDigest).Validate(); err != nil {
-		return nil, fmt.Errorf("report digest %q: %w", reportDigest, err)
-	}
-	repo, err := remote.NewRepository(s.host + "/" + s.project + "/" + skill)
-	if err != nil {
-		return nil, fmt.Errorf("opening repository %s: %w", skill, err)
-	}
-	repo.PlainHTTP = s.plainHTTP
-	repo.Client = s.client
-
-	manifest, err := s.manifest(ctx, repo, reportDigest)
+	repo, manifest, err := s.open(ctx, skill, reportDigest)
 	if err != nil {
 		return nil, err
 	}
-	for _, layer := range manifest.Layers {
-		if layer.Annotations[ocispec.AnnotationTitle] == name {
-			return s.blob(ctx, repo, layer)
-		}
+	layer, err := findLayer(manifest, reportDigest, name)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("file %s in report %s: %w", name, reportDigest, ErrNotFound)
-}
-
-func (s *OCI) manifest(ctx context.Context, repo *remote.Repository, reportDigest string) (ocispec.Manifest, error) {
-	var m ocispec.Manifest
-	raw, ok := s.cache.get(reportDigest)
-	if !ok {
-		desc, rc, err := repo.FetchReference(ctx, reportDigest)
-		if err != nil {
-			return m, notFoundOr(err, "fetching report manifest "+reportDigest)
-		}
-		defer func() { _ = rc.Close() }()
-		if desc.Size > maxManifestBytes {
-			return m, fmt.Errorf("report manifest %s is %d bytes, over the %d byte limit", reportDigest, desc.Size, maxManifestBytes)
-		}
-		if raw, err = content.ReadAll(rc, desc); err != nil {
-			return m, fmt.Errorf("reading report manifest %s: %w", reportDigest, err)
-		}
-		s.cache.put(reportDigest, raw)
-	}
-	if err := json.Unmarshal(raw, &m); err != nil {
-		return m, fmt.Errorf("decoding report manifest %s: %w", reportDigest, err)
-	}
-	return m, nil
-}
-
-func (s *OCI) blob(ctx context.Context, repo *remote.Repository, layer ocispec.Descriptor) ([]byte, error) {
 	key := layer.Digest.String()
 	if data, ok := s.cache.get(key); ok {
 		return data, nil
 	}
+	return s.shared(ctx, "file "+skill+" "+key, func(ctx context.Context) ([]byte, error) {
+		data, err := s.fetchBlob(ctx, repo, layer)
+		if err != nil {
+			return nil, err
+		}
+		s.cache.put(key, data)
+		return data, nil
+	})
+}
+
+// open validates the manifest digest, opens the skill repository and returns
+// the referrer manifest, from the cache when it is there.
+func (s *OCI) open(ctx context.Context, skill, manifestDigest string) (*remote.Repository, ocispec.Manifest, error) {
+	var m ocispec.Manifest
+	if err := digest.Digest(manifestDigest).Validate(); err != nil {
+		return nil, m, fmt.Errorf("manifest digest %q: %w", manifestDigest, err)
+	}
+	repo, err := remote.NewRepository(s.host + "/" + s.project + "/" + skill)
+	if err != nil {
+		return nil, m, fmt.Errorf("opening repository %s: %w", skill, err)
+	}
+	repo.PlainHTTP = s.plainHTTP
+	repo.Client = s.client
+
+	raw, ok := s.cache.get(manifestDigest)
+	if !ok {
+		raw, err = s.shared(ctx, "manifest "+skill+" "+manifestDigest, func(ctx context.Context) ([]byte, error) {
+			return s.fetchManifest(ctx, repo, manifestDigest)
+		})
+		if err != nil {
+			return nil, m, err
+		}
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, m, fmt.Errorf("decoding manifest %s: %w", manifestDigest, err)
+	}
+	return repo, m, nil
+}
+
+// fetchManifest reads a referrer manifest from the registry and caches it.
+func (s *OCI) fetchManifest(ctx context.Context, repo *remote.Repository, manifestDigest string) ([]byte, error) {
+	desc, rc, err := repo.FetchReference(ctx, manifestDigest)
+	if err != nil {
+		return nil, notFoundOr(err, "fetching manifest "+manifestDigest)
+	}
+	defer func() { _ = rc.Close() }()
+	if desc.Size > maxManifestBytes {
+		return nil, fmt.Errorf("manifest %s is %d bytes, over the %d byte limit", manifestDigest, desc.Size, maxManifestBytes)
+	}
+	raw, err := content.ReadAll(rc, desc) // checks size and digest
+	if err != nil {
+		return nil, fmt.Errorf("reading manifest %s: %w", manifestDigest, err)
+	}
+	s.cache.put(manifestDigest, raw)
+	return raw, nil
+}
+
+// findLayer returns the layer of the manifest whose title is name.
+func findLayer(m ocispec.Manifest, manifestDigest, name string) (ocispec.Descriptor, error) {
+	for _, layer := range m.Layers {
+		if layer.Annotations[ocispec.AnnotationTitle] == name {
+			return layer, nil
+		}
+	}
+	return ocispec.Descriptor{}, fmt.Errorf("file %s in manifest %s: %w", name, manifestDigest, ErrNotFound)
+}
+
+// fetchBlob reads one layer from the registry, at most maxFileBytes, and
+// checks its size and digest. It does not cache.
+func (s *OCI) fetchBlob(ctx context.Context, repo *remote.Repository, layer ocispec.Descriptor) ([]byte, error) {
+	key := layer.Digest.String()
 	if layer.Size > maxFileBytes {
-		return nil, fmt.Errorf("report file %s is %d bytes, over the %d byte limit", key, layer.Size, maxFileBytes)
+		return nil, fmt.Errorf("file %s is %d bytes, over the %d byte limit: %w", key, layer.Size, maxFileBytes, ErrTooLarge)
 	}
 	rc, err := repo.Blobs().Fetch(ctx, layer)
 	if err != nil {
-		return nil, notFoundOr(err, "fetching report file "+key)
+		return nil, notFoundOr(err, "fetching file "+key)
 	}
 	defer func() { _ = rc.Close() }()
 	data, err := content.ReadAll(rc, layer) // checks size and digest
 	if err != nil {
-		return nil, fmt.Errorf("reading report file %s: %w", key, err)
+		return nil, fmt.Errorf("reading file %s: %w", key, err)
 	}
-	s.cache.put(key, data)
 	return data, nil
+}
+
+// shared runs fetch once for all concurrent callers with the same key. The
+// fetch runs without the first caller's cancellation, so one caller giving
+// up does not fail the others (the HTTP client timeout still bounds it); each
+// caller stops waiting when its own context ends. fetch must cache its result
+// before returning, so a caller that arrives after the flight finds it there.
+func (s *OCI) shared(ctx context.Context, key string, fetch func(context.Context) ([]byte, error)) ([]byte, error) {
+	detached := context.WithoutCancel(ctx)
+	ch := s.flight.DoChan(key, func() (any, error) {
+		data, err := fetch(detached)
+		return data, err
+	})
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		data, _ := res.Val.([]byte) // fetch returns []byte
+		return data, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("waiting for %s: %w", key, context.Cause(ctx))
+	}
 }
 
 // notFoundOr maps a registry 404 to ErrNotFound and wraps anything else.

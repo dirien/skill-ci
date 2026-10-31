@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -19,39 +20,69 @@ const (
 	manifestType = "application/vnd.oci.image.manifest.v1+json"
 )
 
-// fakeRegistry serves one report manifest with two files from the registry
-// API, behind basic auth, and counts blob requests.
+// fakeRegistry serves referrer manifests and their blobs from the registry
+// API, behind basic auth, and counts manifest and blob requests. The manifest
+// newFakeRegistry builds is a report with the given files at manifestDgs;
+// addManifest adds more.
 type fakeRegistry struct {
-	srv         *httptest.Server
-	manifestRaw []byte
-	manifestDgs digest.Digest
-	blobs       map[digest.Digest][]byte
-	blobHits    atomic.Int32
+	srv          *httptest.Server
+	manifestDgs  digest.Digest
+	mu           sync.Mutex
+	manifests    map[digest.Digest][]byte
+	blobs        map[digest.Digest][]byte
+	blobHits     atomic.Int32
+	manifestHits atomic.Int32
+	// hold, when set, makes every blob request wait for it to close, after
+	// sending on started (if set).
+	hold    chan struct{}
+	started chan struct{}
+}
+
+// fakeLayer is one file of a fake manifest.
+type fakeLayer struct {
+	name, mediaType string
+	body            []byte
 }
 
 func newFakeRegistry(t *testing.T, files map[string]string) *fakeRegistry {
 	t.Helper()
-	f := &fakeRegistry{blobs: map[digest.Digest][]byte{}}
-	m := ocispec.Manifest{MediaType: manifestType, ArtifactType: artifactType,
-		SchemaVersion: 2,
-		Config:        ocispec.DescriptorEmptyJSON}
+	f := &fakeRegistry{manifests: map[digest.Digest][]byte{}, blobs: map[digest.Digest][]byte{}}
+	var layers []fakeLayer
 	for name, body := range files {
-		d := digest.FromString(body)
-		f.blobs[d] = []byte(body)
-		m.Layers = append(m.Layers, ocispec.Descriptor{
-			MediaType: "application/octet-stream", Digest: d, Size: int64(len(body)),
-			Annotations: map[string]string{ocispec.AnnotationTitle: name},
-		})
+		layers = append(layers, fakeLayer{name: name, mediaType: "application/octet-stream", body: []byte(body)})
 	}
-	var err error
-	if f.manifestRaw, err = json.Marshal(m); err != nil {
-		t.Fatal(err)
-	}
-	f.manifestDgs = digest.FromBytes(f.manifestRaw)
+	f.manifestDgs = f.addManifest(t, artifactType, nil, layers)
 
 	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+// addManifest stores a manifest with the given annotations and layers and
+// returns its digest.
+func (f *fakeRegistry) addManifest(t *testing.T, artifact string, annotations map[string]string, layers []fakeLayer) digest.Digest {
+	t.Helper()
+	m := ocispec.Manifest{MediaType: manifestType, ArtifactType: artifact,
+		SchemaVersion: 2,
+		Config:        ocispec.DescriptorEmptyJSON,
+		Annotations:   annotations}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, l := range layers {
+		d := digest.FromBytes(l.body)
+		f.blobs[d] = l.body
+		m.Layers = append(m.Layers, ocispec.Descriptor{
+			MediaType: l.mediaType, Digest: d, Size: int64(len(l.body)),
+			Annotations: map[string]string{ocispec.AnnotationTitle: l.name},
+		})
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := digest.FromBytes(raw)
+	f.manifests[d] = raw
+	return d
 }
 
 func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
@@ -63,16 +94,29 @@ func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	const prefix = "/v2/skills/acme/"
 	switch {
 	case strings.HasPrefix(r.URL.Path, prefix+"manifests/"):
-		if strings.TrimPrefix(r.URL.Path, prefix+"manifests/") != f.manifestDgs.String() {
+		d := digest.Digest(strings.TrimPrefix(r.URL.Path, prefix+"manifests/"))
+		f.mu.Lock()
+		raw, ok := f.manifests[d]
+		f.mu.Unlock()
+		if !ok {
 			http.NotFound(w, r)
 			return
 		}
+		f.manifestHits.Add(1)
 		w.Header().Set("Content-Type", manifestType)
-		w.Header().Set("Docker-Content-Digest", f.manifestDgs.String())
-		_, _ = w.Write(f.manifestRaw)
+		w.Header().Set("Docker-Content-Digest", d.String())
+		_, _ = w.Write(raw)
 	case strings.HasPrefix(r.URL.Path, prefix+"blobs/"):
 		f.blobHits.Add(1)
+		if f.hold != nil {
+			if f.started != nil {
+				f.started <- struct{}{}
+			}
+			<-f.hold
+		}
+		f.mu.Lock()
 		body, ok := f.blobs[digest.Digest(strings.TrimPrefix(r.URL.Path, prefix+"blobs/"))]
+		f.mu.Unlock()
 		if !ok {
 			http.NotFound(w, r)
 			return
