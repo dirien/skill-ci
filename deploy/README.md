@@ -127,7 +127,7 @@ The keys inside `llm-keys`:
 | `anthropic` | required: the judge, Claude Code, OpenCode `anthropic/...` models | [console.anthropic.com](https://console.anthropic.com) |
 | `openai` | Codex (`openai/...` models), Tier 2 embeddings | [platform.openai.com](https://platform.openai.com) |
 | `openai-base-url` | Codex against a compatible endpoint; defaults to `https://api.openai.com/v1` | your provider |
-| `openrouter` | OpenCode `openrouter/...` models (the demo model list uses one) | [openrouter.ai](https://openrouter.ai) |
+| `openrouter` | OpenCode `openrouter/...` models (the demo model list uses one). An API key from openrouter.ai/settings/keys, not a provisioning key: those cannot run models, and the runner fails the run when it gets one | [openrouter.ai](https://openrouter.ai) |
 | `ollama` | OpenCode `ollama-cloud/...` models | [ollama.com](https://ollama.com) |
 | `nvidia` | OpenCode `nvidia/...` models | [build.nvidia.com](https://build.nvidia.com) |
 

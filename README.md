@@ -32,7 +32,7 @@ config/                Controller manifests (CRD source, RBAC, Deployment, Servi
 reports/               Eval reports downloaded by `make report`
 harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox from the generic sandbox image
 sandbox/               Dockerfile of that image (Python, verifier packages, agent CLIs) and the script that installs the CLIs
-skillevaluator-patch/  Eleven-hunk patch: that environment and its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
+skillevaluator-patch/  Twelve-hunk patch: that environment and its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
 .github/               CI and release workflows, Dependabot (see Releases)
 .goreleaser.yaml       Controller binaries and image of a release
@@ -121,7 +121,7 @@ The harness is part of the measurement, so skill-ci treats the agent and its rel
 
 - **A new agent version is a new entry**, so bumping a version re-evaluates every `beta` and `stable` digest on it. Results stay per entry: the regression gate compares a candidate with the stable version on the same `agent@version/model`, never across harnesses.
 - **`required` per entry decides what gates promotion.** The demo list gates on Claude Code and runs Codex and OpenCode as optional, so they show up everywhere without holding a skill back. `make demo-model-swap MODE=require AGENT=codex` makes Codex gate (the runs that already exist are re-judged at once); `MODE=optional AGENT=codex` undoes it.
-- **The judge is always Anthropic**, whatever agent runs. Codex gets `OPENAI_API_KEY` and `OPENAI_BASE_URL`; OpenCode models other than `anthropic/...` run through the provider's OpenAI-compatible endpoint (patch hunks 6 and 8 to 11). The routes and the checks are in [CONTRACT.md](CONTRACT.md) ("Agent versions", "LLM keys").
+- **The judge is always Anthropic**, whatever agent runs. Codex gets `OPENAI_API_KEY` and `OPENAI_BASE_URL`; OpenCode models other than `anthropic/...` run through the provider's OpenAI-compatible endpoint (patch hunks 6 and 8 to 12). The routes and the checks are in [CONTRACT.md](CONTRACT.md) ("Agent versions", "LLM keys").
 - Upgrading from 0.5: runs created before agent versions have no `agent-version` label and count as the entries without `agentVersion`. Pinned entries are new entries, so applying the pinned list re-evaluates the `beta` and `stable` digests; keep an unpinned entry in the list, or delete the old SkillEvals (`make reset`), to avoid mixing.
 
 ## Reporting site

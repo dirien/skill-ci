@@ -155,7 +155,7 @@ run, whatever agent is under test.
 | `openai` | `OPENAI_API_KEY` | Codex; Tier 2 embeddings |
 | `openai-base-url` | `OPENAI_BASE_URL` | Codex endpoint; the runner uses `https://api.openai.com/v1` when it is missing |
 | `ollama` | `OLLAMA_API_KEY` | OpenCode models `ollama-cloud/<model>` (Ollama Cloud, `https://ollama.com/v1`) |
-| `openrouter` | `OPENROUTER_API_KEY` | OpenCode models `openrouter/<model>` |
+| `openrouter` | `OPENROUTER_API_KEY` | OpenCode models `openrouter/<model>`. An API key, not a provisioning key (the runner rejects those) |
 | `nvidia` | `NVIDIA_API_KEY` | OpenCode models `nvidia/<model>` (NVIDIA Build); Tier 2 embeddings when `openai` is missing |
 
 ### The statistical gate
