@@ -303,9 +303,13 @@ acme-release-notes-v1-1-0-claude-code-2-1-308-claude-opus-5-5 acme-release-notes
 
 Say: nobody pushed a skill. The tool changed, and every skill version in a release channel is tested against it, the way a package is rebuilt against a new compiler. The old results stay: same skill, same model, two harness releases, two entries. If the new release makes a skill worse, the regression gate compares it with the stable version **on the same harness release**, so the answer is about the skill, not about the harness.
 
-This spends tokens and takes 11 to 13 minutes per skill version, so it is a second live trigger: start it and say "here is one I prepared earlier", then show the finished entries on the reporting site (`/skills/acme-release-notes`: one column per `agent@version` and model) or in Grafana (the `agent_version` label). Not verified end to end on the cluster: the bump was exercised with controller and runner unit tests, not with a live run.
+This spends tokens and takes 11 to 13 minutes per skill version, so it is a second live trigger: start it and say "here is one I prepared earlier", then show the finished entries on the reporting site (`/skills/acme-release-notes`: one column per `agent@version` and model) or in Grafana (the `agent_version` label). Rehearsed live on 2026-10-31 with `TO=2.1.300` (2.1.308 was younger than the two-week rule then; it is 18 days old on talk day): four new runs, one per `beta` and `stable` digest, 12 to 15 minutes each. Results on 2.1.300: acme-release-notes v1.1.0 +0.60, k8s-resource-naming v1.0.0 +0.61, python-docstrings v1.0.0 +0.38, all `Helps`; acme-release-notes v1.2.0 `Regressed` again, and its message now names both harness releases, each against stable on the same release:
 
-Undo with `make demo-model-swap MODE=restore`. The runs on 2.1.308 stay; remove the entry's results with `make reset` if they should not count.
+```text
+claude-code@2.1.292/claude-opus-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.98: difference -0.29, 95% CI [-0.31, -0.27]; claude-code@2.1.300/claude-opus-5-5 scores 0.69 with v1.2.0, stable v1.1.0 scored 0.97: difference -0.28, 95% CI [-0.31, -0.26] (tolerance 0.05)
+```
+
+Undo with `make demo-model-swap MODE=restore`. The runs on the bumped release stay and keep counting until they are deleted: `kubectl -n skill-ci delete skillevals -l skillci.dev/agent-version=2.1.308` (or `make reset` for the whole state).
 
 ### Beat 8: other harnesses, and who gates (about 2 minutes)
 

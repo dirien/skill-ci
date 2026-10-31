@@ -1044,9 +1044,9 @@ Source: demo/models.yaml, DEMO.md beats 7 and 8, README.md "Agents and their
 versions". The judge is always Anthropic, whatever agent runs.
 
 Codex and OpenCode ran end to end on 2026-10-31 (every sample skill and
-variant). TODO: the harness bump (make demo-model-swap MODE=bump) is covered
-by unit tests, not yet run live. Rehearse it before the talk and keep the
-fallback.
+variant). The harness bump ran live on 2026-10-31 with 2.1.300: four new runs,
+v1.2.0 Regressed again against stable on the same harness release
+(difference minus 0.28, interval minus 0.31 to minus 0.26). DEMO.md beat 7.
 -->
 
 ---
