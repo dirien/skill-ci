@@ -3,11 +3,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -26,6 +29,7 @@ import (
 	"github.com/dirien/skill-ci/controller/internal/reportsite"
 	"github.com/dirien/skill-ci/controller/internal/reportstore"
 	"github.com/dirien/skill-ci/controller/internal/runner"
+	"github.com/dirien/skill-ci/controller/internal/telemetry"
 	"github.com/dirien/skill-ci/controller/internal/webhook"
 )
 
@@ -44,6 +48,68 @@ func defaultImage(name string) string {
 		tag = "latest"
 	}
 	return "ghcr.io/dirien/" + name + ":" + tag
+}
+
+// envBool reads a boolean environment variable; anything unparsable is false.
+func envBool(name string) bool {
+	v, _ := strconv.ParseBool(os.Getenv(name))
+	return v
+}
+
+// otlpFlags holds the OTLP exporter flags until they are parsed into a telemetry.Config.
+type otlpFlags struct {
+	cfg     telemetry.Config
+	headers string
+}
+
+// bindOTLPFlags registers the OTLP flags. Each one defaults to its OTEL_* environment
+// variable, so the usual OpenTelemetry settings work without flags.
+func bindOTLPFlags(f *otlpFlags) {
+	flag.StringVar(&f.cfg.Endpoint, "otlp-endpoint", os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		"OTLP endpoint for the skillci_* metrics, host:port or a URL (http:// disables TLS); empty disables the export. Env OTEL_EXPORTER_OTLP_ENDPOINT.")
+	flag.StringVar(&f.cfg.Protocol, "otlp-protocol", os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"),
+		"OTLP protocol: http/protobuf (default) or grpc. Env OTEL_EXPORTER_OTLP_PROTOCOL.")
+	flag.StringVar(&f.cfg.URLPath, "otlp-url-path", os.Getenv("OTEL_EXPORTER_OTLP_METRICS_URL_PATH"),
+		"Full OTLP/HTTP metrics path, e.g. /api/v1/otlp/v1/metrics for the Prometheus OTLP receiver. Env OTEL_EXPORTER_OTLP_METRICS_URL_PATH.")
+	flag.BoolVar(&f.cfg.Insecure, "otlp-insecure", envBool("OTEL_EXPORTER_OTLP_INSECURE"),
+		"Disable TLS for the OTLP endpoint. Env OTEL_EXPORTER_OTLP_INSECURE.")
+	flag.StringVar(&f.headers, "otlp-headers", os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"),
+		"Comma separated key=value headers for every export, e.g. an API key. Env OTEL_EXPORTER_OTLP_HEADERS.")
+	flag.DurationVar(&f.cfg.Interval, "otlp-interval", 0,
+		"Time between exports; 0 keeps the SDK default (OTEL_METRIC_EXPORT_INTERVAL in milliseconds, else 60s).")
+}
+
+// addOTLPExporter starts pushing the skillci_* metrics when an OTLP endpoint is set.
+func addOTLPExporter(mgr ctrl.Manager, f otlpFlags) error {
+	cfg := f.cfg
+	if !cfg.Enabled() {
+		return nil
+	}
+	headers, err := telemetry.ParseHeaders(f.headers)
+	if err != nil {
+		return fmt.Errorf("invalid --otlp-headers: %w", err)
+	}
+	cfg.Headers = headers
+	cfg.ServiceVersion = version
+	if err := cfg.Normalize(); err != nil {
+		return fmt.Errorf("invalid OTLP settings: %w", err)
+	}
+	log := ctrl.Log.WithName("otlp")
+	gatherer := telemetry.PrefixGatherer{Gatherer: ctrlmetrics.Registry, Prefix: telemetry.MetricPrefix}
+	exp, err := telemetry.New(context.Background(), cfg, gatherer, log)
+	if err != nil {
+		return fmt.Errorf("creating OTLP exporter: %w", err)
+	}
+	if err := mgr.Add(exp); err != nil {
+		return fmt.Errorf("adding OTLP exporter: %w", err)
+	}
+	interval := "SDK default"
+	if cfg.Interval > 0 {
+		interval = cfg.Interval.Round(time.Millisecond).String()
+	}
+	log.Info("exporting metrics over OTLP", "endpoint", cfg.Endpoint, "protocol", cfg.Protocol,
+		"urlPath", cfg.URLPath, "insecure", cfg.Insecure, "headers", len(cfg.Headers), "interval", interval)
+	return nil
 }
 
 func main() {
@@ -80,6 +146,7 @@ func run() error {
 		harborURL, runnerImage, sandboxImage, pullSecrets, modelsCM, webhookAddr, metricsAddr, reportsAddr string
 		trialBudget                                                                                        int
 		leaderElect                                                                                        bool
+		otlp                                                                                               otlpFlags
 	)
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
@@ -104,6 +171,7 @@ func run() error {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")
 	flag.StringVar(&reportsAddr, "reports-addr", ":8082", "Address for the reporting website; empty disables it.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election (needed only with several replicas).")
+	bindOTLPFlags(&otlp)
 	logOpts := zap.Options{Development: false}
 	logOpts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -163,6 +231,9 @@ func run() error {
 
 	if err := mgr.Add(&controller.PhaseGauge{Reader: mgr.GetClient(), Namespace: cfg.Namespace}); err != nil {
 		return fmt.Errorf("adding phase gauge: %w", err)
+	}
+	if err := addOTLPExporter(mgr, otlp); err != nil {
+		return err
 	}
 
 	hook := &webhook.Handler{
