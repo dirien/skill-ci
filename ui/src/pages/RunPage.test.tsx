@@ -42,7 +42,7 @@ describe("run page", () => {
     );
     expect(screen.getByText(/^Retried once after an infrastructure failure: EnvironmentStartTimeoutError/)).toBeTruthy();
     const grid = screen.getByRole("table", { name: /Trials of case rn-basic/ });
-    expect(within(grid).getByText("withheld")).toBeTruthy();
+    expect(within(grid).getByText("Withheld")).toBeTruthy();
     expect(within(grid).getByText(/secret-scan: the secret scan found a value/)).toBeTruthy();
     expect(within(grid).getByText(/1 dropped/)).toBeTruthy();
     expect(screen.getByText("The report files are stored; this run has no dimension scores.")).toBeTruthy();
@@ -58,7 +58,7 @@ describe("run page", () => {
 
   it("falls back to result.json scores without session links", async () => {
     renderAt(`/runs/${RUN.fallback}`);
-    expect(await screen.findByText(/This run has no trial bundle/)).toBeTruthy();
+    expect(await screen.findByText("No sessions: this run is older than trial bundles, so only the scores from result.json are shown.")).toBeTruthy();
     const grid = screen.getByRole("table", { name: /Trials of case rn-basic/ });
     expect(within(grid).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Arm", "Attempt 1", "Attempt 2", "Attempt 3"]);
     expect(within(grid).queryAllByRole("link")).toHaveLength(0);
@@ -67,9 +67,9 @@ describe("run page", () => {
 
   it("shows unscored trials and the run's failure", async () => {
     renderAt(`/runs/${RUN.unscored}`);
-    expect(await screen.findByText(/^no scores in result.json/)).toBeTruthy();
+    expect(await screen.findByText(/^No scores in result.json/)).toBeTruthy();
     const grid = screen.getByRole("table", { name: /Trials of case rn-basic/ });
-    expect(within(grid).getAllByText("unscored RuntimeError")).toHaveLength(2);
+    expect(within(grid).getAllByText("Unscored RuntimeError")).toHaveLength(2);
     expect(within(grid).getAllByRole("link")).toHaveLength(2);
     expect(screen.getByText("tier3/execution: Harbor job did not complete successfully: 1 errored")).toBeTruthy();
   });

@@ -9,14 +9,24 @@ describe("overview page", () => {
     renderAt("/");
     const failed = await screen.findByText("Failed", { selector: "dt" });
     expect(failed.nextElementSibling?.textContent).toBe("1");
+    // Pending has its own tile, and each phase tile opens the runs in that phase.
+    const pending = screen.getByRole("link", { name: "1 pending run" });
+    expect(pending.getAttribute("href")).toBe("/runs?phase=Pending");
+    expect(screen.getByRole("link", { name: "1 running run" }).getAttribute("href")).toBe("/runs?phase=Running");
 
     const attention = screen.getByRole("region", { name: "Needs attention" });
-    expect(within(attention).getAllByRole("listitem")).toHaveLength(3);
+    const items = within(attention).getAllByRole("listitem");
+    expect(items).toHaveLength(4);
+    // The pill says the run's phase, as the runs table does.
+    expect(items[2]?.textContent).toContain("Running");
+    expect(items[3]?.textContent).toContain("Pending");
+    expect(items[3]?.textContent).toContain("Waiting for a free slot (1 of 1 jobs running).");
+    expect(within(attention).getByText(/^No scores in result.json/)).toBeTruthy();
     expect(within(attention).getByText(/Rejected by Tier 1: tier1\/security/)).toBeTruthy();
 
     const recent = screen.getByRole("region", { name: "Recent runs" });
     const rows = within(recent).getAllByRole("row");
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     const link = within(recent).getAllByRole("link").find((a) => a.getAttribute("href") === `/runs/${RUN.claudeCode}`);
     expect(link?.textContent).toBe("acme-release-notes v1.1.0");
     // The one run with an interval shows it in words next to the bar.

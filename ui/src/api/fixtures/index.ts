@@ -16,6 +16,7 @@ import overview from "./overview.json" with { type: "json" };
 import runClaudeCode from "./run-claude-code.json" with { type: "json" };
 import runCodex from "./run-codex.json" with { type: "json" };
 import runFallback from "./run-fallback.json" with { type: "json" };
+import runPending from "./run-pending.json" with { type: "json" };
 import runUnscored from "./run-unscored.json" with { type: "json" };
 import runsAcme from "./runs-acme.json" with { type: "json" };
 import runs from "./runs.json" with { type: "json" };
@@ -35,6 +36,7 @@ export const RUN = {
   opencode: "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
   unscored: "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
   fallback: "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+  pending: "k8s-resource-naming-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
 } as const;
 
 /** API path (without /api/v1, query included) to fixture. Query-specific entries come first. */
@@ -47,6 +49,7 @@ const ROUTES: [string, unknown][] = [
   [`/runs/${RUN.codex}`, runCodex],
   [`/runs/${RUN.unscored}`, runUnscored],
   [`/runs/${RUN.fallback}`, runFallback],
+  [`/runs/${RUN.pending}`, runPending],
   [`/runs/${RUN.claudeCode}/trials/rn-basic__sryqofs`, trialClaudeCodeWith],
   [`/runs/${RUN.claudeCode}/trials/rn-basic__BQbpoR9`, trialClaudeCodeWithout],
   [`/runs/${RUN.codex}/trials/rn-basic__Cx7aQ1p`, trialCodex],

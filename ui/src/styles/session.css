@@ -640,6 +640,18 @@
   min-width: 28rem;
 }
 
+.compare-side-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* The metrics table is as wide as its columns, not the page. */
+.table-wrap:has(> .compare-table) {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .compare-table thead th:first-child .viz-legend {
   text-transform: none;
 }

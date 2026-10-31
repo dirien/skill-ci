@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/platform"
@@ -59,8 +60,8 @@ func (s *Server) apiSite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// runSummary turns a run into a table row; trials is its Trials state.
-func (s *Server) runSummary(r Run, trials string) apiv1.RunSummary {
+// runSummary turns a run into a table row; trials is its bundle reference.
+func (s *Server) runSummary(r Run, trials bundleRef) apiv1.RunSummary {
 	se := r.se
 	out := apiv1.RunSummary{
 		Name: r.Name, Skill: r.Skill, Version: r.Version, Digest: r.Digest,
@@ -70,7 +71,7 @@ func (s *Server) runSummary(r Run, trials string) apiv1.RunSummary {
 		WithSkill: r.With.ptr(), WithoutSkill: r.Without.ptr(), Lift: r.Lift.ptr(), N: r.N,
 		Publication: se.Status.Publication, Retries: se.Status.Retries,
 		CreatedAt: r.Created, CompletedAt: timePtr(r.Completed), Message: se.Status.Message,
-		HasReport: r.ReportDigest != "", Trials: trials,
+		HasReport: r.ReportDigest != "", Trials: trials.state, TrialsReason: trials.reason,
 	}
 	if t := se.Status.Tiers; t != nil {
 		out.Tiers = apiv1.Tiers{Tier1: t.Tier1, Tier2: t.Tier2, Tier3: t.Tier3}
@@ -145,6 +146,8 @@ func (s *Server) apiOverview(w http.ResponseWriter, r *http.Request) {
 			v.Counts.Succeeded++
 		case v1alpha1.PhaseFailed:
 			v.Counts.Failed++
+		case v1alpha1.PhasePlanned:
+			v.Counts.Planned++
 		}
 	}
 	held, rejected := versionStates(runs)
@@ -223,10 +226,10 @@ func skillNames(runs []Run, ch *Channels) []string {
 	return names
 }
 
-// attention lists failed runs, held back and rejected versions and running
-// runs, in that order, newest first within each kind.
+// attention lists failed runs, held back and rejected versions, running runs
+// and pending runs, in that order, newest first within each kind.
 func attention(runs []Run) []apiv1.AttentionItem {
-	var failed, held, rejected, running []apiv1.AttentionItem
+	var failed, held, rejected, running, pending []apiv1.AttentionItem
 	seenHeld, seenRejected := map[versionKey]bool{}, map[versionKey]bool{}
 	for _, r := range runs { // newest first
 		k := versionKey{r.Skill, r.Digest}
@@ -236,15 +239,16 @@ func attention(runs []Run) []apiv1.AttentionItem {
 		}
 		switch {
 		case r.Phase == string(v1alpha1.PhaseFailed):
-			item.Kind, item.Message = apiv1.AttentionFailed, cmp.Or(r.se.Status.Message, "The run failed.")
+			item.Kind, item.Message = apiv1.AttentionFailed, sentence(cmp.Or(r.se.Status.Message, "The run failed."))
 			failed = append(failed, item)
-		case r.Active():
+		case r.Phase == string(v1alpha1.PhaseRunning):
 			item.Kind, item.Since = apiv1.AttentionRunning, r.Created
-			item.Message = r.Phase + " since " + r.Created.UTC().Format("15:04") + " UTC."
-			if msg := r.se.Status.Message; msg != "" && r.Phase == string(v1alpha1.PhasePending) {
-				item.Message = strings.TrimSuffix(item.Message, ".") + ": " + msg
-			}
+			item.Message = sentence(cmp.Or(r.se.Status.Message, "The Job is running."))
 			running = append(running, item)
+		case r.Phase == string(v1alpha1.PhasePending):
+			item.Kind, item.Since = apiv1.AttentionPending, r.Created
+			item.Message = sentence(cmp.Or(r.se.Status.Message, "Waiting for the Job to start."))
+			pending = append(pending, item)
 		}
 		if r.Required && (r.Regressed != "" || r.Inconclusive != "") && !seenHeld[k] {
 			seenHeld[k] = true
@@ -258,11 +262,27 @@ func attention(runs []Run) []apiv1.AttentionItem {
 		}
 	}
 	out := []apiv1.AttentionItem{}
-	for _, list := range [][]apiv1.AttentionItem{failed, held, rejected, running} {
+	for _, list := range [][]apiv1.AttentionItem{failed, held, rejected, running, pending} {
 		slices.SortStableFunc(list, func(a, b apiv1.AttentionItem) int { return b.Since.Compare(a.Since) })
 		out = append(out, list[:min(len(list), maxAttention)]...)
 	}
 	return out
+}
+
+// sentence starts msg with a capital letter and ends it with a period.
+func sentence(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return msg
+	}
+	if r := []rune(msg); unicode.IsLower(r[0]) {
+		r[0] = unicode.ToUpper(r[0])
+		msg = string(r)
+	}
+	if !strings.HasSuffix(msg, ".") {
+		return msg + "."
+	}
+	return msg
 }
 
 // networkPolicy is the platform network policy in force.

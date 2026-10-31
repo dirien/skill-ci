@@ -83,6 +83,7 @@ export interface Counts {
   running: number;
   succeeded: number;
   failed: number;
+  planned: number;
   skills: number;
   onStable: number;
   heldBack: number;
@@ -90,7 +91,7 @@ export interface Counts {
 }
 
 export interface AttentionItem {
-  kind: "failed" | "held-back" | "rejected" | "running";
+  kind: "failed" | "held-back" | "rejected" | "running" | "pending";
   skill: string;
   version: string;
   run?: string;
@@ -151,6 +152,8 @@ export interface RunSummary {
   message?: string;
   hasReport: boolean;
   trials: TrialsState;
+  /** The skillci.dev/trials-withheld value: why the bundle was withheld, or why there is none (no-trials, disabled). */
+  trialsReason?: string;
 }
 
 export interface RunFilter {
@@ -198,6 +201,8 @@ export interface SkillSummary {
   versions: number;
   runs: number;
   active: number;
+  pending: number;
+  running: number;
   lastRunAt?: string;
   heldBack: string[];
   rejected: string[];

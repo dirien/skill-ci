@@ -16,16 +16,16 @@ const NAV = [
 ];
 
 interface CrumbHandle {
-  crumb?: (params: Record<string, string | undefined>) => Crumb;
+  crumb?: (params: Record<string, string | undefined>) => Crumb | Crumb[];
 }
 
 export function Breadcrumbs() {
-  const crumbs = useMatches()
-    .map((m) => {
-      const handle = m.handle as CrumbHandle | undefined;
-      return handle?.crumb ? { ...handle.crumb(m.params), id: m.id } : null;
-    })
-    .filter((c): c is Crumb & { id: string } => c !== null);
+  const crumbs = useMatches().flatMap((m) => {
+    const handle = m.handle as CrumbHandle | undefined;
+    if (!handle?.crumb) return [];
+    const steps = handle.crumb(m.params);
+    return (Array.isArray(steps) ? steps : [steps]).map((c, i) => ({ ...c, id: `${m.id}-${i}` }));
+  });
   if (crumbs.length === 0) return null;
   return (
     <nav className="crumbs" aria-label="Breadcrumb">

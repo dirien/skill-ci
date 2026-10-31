@@ -26,14 +26,14 @@
       "entry": "codex@0.161.0/openai/gpt-6.1-sol",
       "required": false,
       "listed": true,
-      "runs": 1,
+      "runs": 2,
       "failed": 0,
       "retries": 1,
       "verdicts": {
         "Neutral": 1
       },
       "meanLift": 0.04,
-      "lastRunAt": "2026-10-30T14:08:02Z"
+      "lastRunAt": "2026-10-31T08:52:10Z"
     },
     {
       "agent": "opencode",

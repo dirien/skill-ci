@@ -154,12 +154,14 @@ type Overview struct {
 
 // Counts are the headline numbers of the overview.
 type Counts struct {
-	// Runs counts all SkillEvals; Pending, Running, Succeeded and Failed count them by phase.
+	// Runs counts all SkillEvals; Pending, Running, Succeeded, Failed and
+	// Planned count them by phase and add up to Runs.
 	Runs      int `json:"runs"`
 	Pending   int `json:"pending"`
 	Running   int `json:"running"`
 	Succeeded int `json:"succeeded"`
 	Failed    int `json:"failed"`
+	Planned   int `json:"planned"`
 	// Skills counts skills known to the cluster or the registry.
 	Skills int `json:"skills"`
 	// OnStable counts skills with a stable version.
@@ -178,13 +180,15 @@ const (
 	AttentionHeldBack = "held-back"
 	// AttentionRejected is a version that failed Tier 1 or Tier 2 on a required model.
 	AttentionRejected = "rejected"
-	// AttentionRunning is a run that is Pending or Running.
+	// AttentionRunning is a run in phase Running.
 	AttentionRunning = "running"
+	// AttentionPending is a run in phase Pending, waiting for its Job to start.
+	AttentionPending = "pending"
 )
 
 // AttentionItem is one entry of the "needs attention" list.
 type AttentionItem struct {
-	// Kind is failed, held-back, rejected or running.
+	// Kind is failed, held-back, rejected, running or pending.
 	Kind string `json:"kind"`
 	// Skill and Version name the skill version.
 	Skill   string `json:"skill"`
@@ -294,6 +298,12 @@ type RunSummary struct {
 	HasReport bool `json:"hasReport"`
 	// Trials is stored, withheld, none or unknown (see the Trials constants).
 	Trials string `json:"trials"`
+	// TrialsReason is the skillci.dev/trials-withheld value of the report: why
+	// the runner withheld the bundle (secret-scan, size, build-failed,
+	// attach-failed, or another reason it gave), or why a run with Trials none
+	// has no bundle (no-trials, disabled). Left out otherwise: Trials none with
+	// HasReport and no reason is a report from a runner before trial bundles.
+	TrialsReason string `json:"trialsReason,omitempty"`
 }
 
 // RunFilter is the filter of GET /api/v1/runs, echoed back. Every field matches
@@ -357,10 +367,13 @@ type SkillSummary struct {
 	Beta   string `json:"beta,omitempty"`
 	// Newest is the newest evaluated version.
 	Newest string `json:"newest,omitempty"`
-	// Versions counts evaluated digests; Runs counts SkillEvals; Active counts pending or running ones.
+	// Versions counts evaluated digests; Runs counts SkillEvals; Active counts
+	// pending or running ones, Pending and Running each phase on its own.
 	Versions int `json:"versions"`
 	Runs     int `json:"runs"`
 	Active   int `json:"active"`
+	Pending  int `json:"pending"`
+	Running  int `json:"running"`
 	// LastRunAt is when the newest run was created.
 	LastRunAt *time.Time `json:"lastRunAt,omitempty"`
 	// HeldBack and Rejected list versions, newest first.

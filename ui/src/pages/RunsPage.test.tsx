@@ -8,13 +8,19 @@ import { readQuery } from "./RunsPage.tsx";
 describe("runs page", () => {
   it("lists every run with its columns", async () => {
     renderAt("/runs");
-    await screen.findByText("7 runs");
+    await screen.findByText("8 runs");
     const table = screen.getByRole("table", { name: "Runs" });
     const head = within(table).getAllByRole("columnheader").map((h) => h.textContent);
     expect(head).toEqual(["Run", "Agent", "Model", "Status", "Verdict", "Lift", "Tiers", "Publication", "Trials", "Created"]);
-    expect(within(table).getAllByRole("row")).toHaveLength(8);
-    expect(within(table).getByText("codex@0.161.0")).toBeTruthy();
-    expect(within(table).getAllByText("sessions").length).toBe(4);
+    expect(within(table).getAllByRole("row")).toHaveLength(9);
+    expect(within(table).getAllByText("codex@0.161.0")).toHaveLength(2);
+    expect(within(table).getAllByText("Sessions").length).toBe(4);
+    // A run without sessions says why in a few words.
+    const row = (name: string) => within(table).getByRole("link", { name: new RegExp(name) }).closest("tr") as HTMLElement;
+    expect(within(row("acme-release-notes v1.0.0")).getByText("older run")).toBeTruthy();
+    expect(within(row("python-docstrings v1.1.0")).getByText("Tier 3 not run")).toBeTruthy();
+    expect(within(table).getAllByText("Pending", { selector: ".pill" })).toHaveLength(1);
+    expect(within(table).getAllByText("not yet")).toHaveLength(2);
   });
 
   it("keeps filters in the URL and asks the API with them", async () => {
@@ -59,7 +65,7 @@ describe("runs page", () => {
 
   it("focuses the name filter on /", async () => {
     renderAt("/runs");
-    await screen.findByText("7 runs");
+    await screen.findByText("8 runs");
     fireEvent.keyDown(document, { key: "/" });
     expect(document.activeElement).toBe(screen.getByRole("searchbox", { name: /Name contains/ }));
   });

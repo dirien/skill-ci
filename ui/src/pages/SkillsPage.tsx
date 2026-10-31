@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { api } from "../api/client.ts";
 import { useApi } from "../api/useApi.ts";
 import { Empty, Loaded, Notice, Page } from "../components/Page.tsx";
-import { Pill } from "../components/Status.tsx";
+import { phaseLook, Pill } from "../components/Status.tsx";
 import { time } from "../format.ts";
 
 /** SkillsPage is /skills: the skill catalog. */
@@ -57,11 +57,19 @@ export function SkillsPage() {
                           <td className="num">{s.versions}</td>
                           <td className="num">
                             {s.runs}
-                            {s.active > 0 ? (
+                            {s.running > 0 ? (
                               <>
                                 {" "}
-                                <Pill tone="info" icon="◐">
-                                  {s.active} running
+                                <Pill tone={phaseLook("Running")[0]} icon={phaseLook("Running")[1]}>
+                                  {s.running} running
+                                </Pill>
+                              </>
+                            ) : null}
+                            {s.pending > 0 ? (
+                              <>
+                                {" "}
+                                <Pill tone={phaseLook("Pending")[0]} icon={phaseLook("Pending")[1]}>
+                                  {s.pending} pending
                                 </Pill>
                               </>
                             ) : null}

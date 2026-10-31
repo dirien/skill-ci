@@ -30,6 +30,7 @@ var goldens = []struct {
 	{"run-codex.json", "/api/v1/runs/" + runCodex, http.StatusOK},
 	{"run-unscored.json", "/api/v1/runs/" + runUnscored, http.StatusOK},
 	{"run-fallback.json", "/api/v1/runs/" + runFallback, http.StatusOK},
+	{"run-pending.json", "/api/v1/runs/" + runPending, http.StatusOK},
 	{"skills.json", "/api/v1/skills", http.StatusOK},
 	{"skill-acme-release-notes.json", "/api/v1/skills/" + acme, http.StatusOK},
 	{"models.json", "/api/v1/models", http.StatusOK},

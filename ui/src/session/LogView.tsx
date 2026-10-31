@@ -155,7 +155,7 @@ export function LogView({ log, empty }: { log: TrialLog; empty: string }) {
         </span>
       </div>
       {visible.length === 0 ? (
-        <Empty>No entry in the chosen categories.</Empty>
+        <Empty>No entries in the chosen categories.</Empty>
       ) : (
         <ol className="log" ref={listRef} aria-label="Session log">
           {visible.map((e) => (

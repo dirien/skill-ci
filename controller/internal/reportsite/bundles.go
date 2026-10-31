@@ -86,11 +86,11 @@ func refFromAnnotations(ann map[string]string) bundleRef {
 	return bundleRef{state: apiv1.TrialsNone}
 }
 
-// trialStates returns the Trials state of every run with a report, read
-// concurrently from the report manifests. A manifest not read within
-// listAnnotationsTimeout leaves the run unknown.
-func (s *Server) trialStates(ctx context.Context, runs []Run) map[string]string {
-	out := make(map[string]string, len(runs))
+// trialStates returns the bundle reference of every run, read concurrently
+// from the report manifests of the runs with a report. A manifest not read
+// within listAnnotationsTimeout leaves the run unknown.
+func (s *Server) trialStates(ctx context.Context, runs []Run) map[string]bundleRef {
+	out := make(map[string]bundleRef, len(runs))
 	var mu sync.Mutex
 	ctx, cancel := context.WithTimeout(ctx, listAnnotationsTimeout)
 	defer cancel()
@@ -103,7 +103,7 @@ func (s *Server) trialStates(ctx context.Context, runs []Run) map[string]string 
 			for r := range jobs {
 				ref := s.bundleOf(ctx, r.Skill, r.ReportDigest)
 				mu.Lock()
-				out[r.Name] = ref.state
+				out[r.Name] = ref
 				mu.Unlock()
 			}
 		}()
@@ -111,13 +111,13 @@ func (s *Server) trialStates(ctx context.Context, runs []Run) map[string]string 
 	for _, r := range runs {
 		if r.ReportDigest == "" {
 			mu.Lock()
-			out[r.Name] = apiv1.TrialsNone
+			out[r.Name] = bundleRef{state: apiv1.TrialsNone}
 			mu.Unlock()
 			continue
 		}
 		if ref, ok := s.bundles.get(r.ReportDigest); ok {
 			mu.Lock()
-			out[r.Name] = ref.state
+			out[r.Name] = ref
 			mu.Unlock()
 			continue
 		}
@@ -140,10 +140,10 @@ func withheldText(reason string) string {
 	case "attach-failed":
 		return "the bundle could not be attached to the registry"
 	case withheldNoTrials:
-		return "Tier 3 left no trials to store"
+		return "Tier 3 produced no trials to store"
 	case withheldDisabled:
-		return "trial bundles were off for this run (TRIAL_BUNDLE=off)"
+		return "trial bundles were turned off for this run (TRIAL_BUNDLE=off)"
 	default:
-		return "the runner gave the reason " + reason
+		return "of \"" + reason + "\""
 	}
 }

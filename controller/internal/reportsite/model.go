@@ -230,19 +230,20 @@ func (r Run) Tier3Skipped() bool {
 	return r.Tier3 == v1alpha1.TierSkipped || (r.NoScores() && r.Rejected())
 }
 
-// noReportReason says why an attempt has no report, in a sentence.
+// noReportReason says why an attempt has no trial sessions when it has no
+// report, in a sentence.
 func (r Run) noReportReason(current bool) string {
 	switch {
 	case !current:
-		return "This attempt attached no report."
+		return "No sessions: this attempt stored no report."
 	case r.Phase == string(v1alpha1.PhaseFailed):
-		return "No report stored: the run failed before one was attached."
+		return "No sessions: the run failed before it stored a report."
 	case r.Active():
-		return "The report is attached when the run finishes."
+		return "Trial sessions are stored when the run finishes."
 	case r.Phase == string(v1alpha1.PhasePlanned):
-		return "No report: a dry run creates no Job."
+		return "No sessions: a dry run starts no Job."
 	default:
-		return "No report stored for this run."
+		return "No sessions: this run stored no report."
 	}
 }
 

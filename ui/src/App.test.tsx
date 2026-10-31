@@ -23,12 +23,13 @@ describe("app shell", () => {
     }
     expect(await screen.findByText("skill-ci", { selector: "code" })).toBeTruthy();
     const runs = await screen.findByText("Runs", { selector: "dt" });
-    expect(runs.nextElementSibling?.textContent).toBe("7");
+    expect(runs.nextElementSibling?.textContent).toBe("8");
   });
 
   it("builds breadcrumbs from the routes", async () => {
     renderAt(`/runs/${RUN.claudeCode}/trials/rn-basic__sryqofs/files`);
     const crumbs = await screen.findByRole("navigation", { name: "Breadcrumb" });
+    expect(within(crumbs).getAllByRole("link").map((a) => a.textContent)).toEqual(["Overview", "Runs", RUN.claudeCode]);
     expect(within(crumbs).getByRole("link", { name: RUN.claudeCode }).getAttribute("href")).toBe(`/runs/${RUN.claudeCode}`);
     expect(within(crumbs).getByText("rn-basic__sryqofs").getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: /^Files/ }).getAttribute("aria-current")).toBe("page");

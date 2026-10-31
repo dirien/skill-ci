@@ -256,6 +256,31 @@
   border-left: 3px solid var(--bad);
 }
 
+/* A tile that links to its list: the whole tile is the target, the focus ring goes around it. */
+.count-link {
+  position: relative;
+}
+
+.count-link a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.count-link:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.count-link a:focus-visible {
+  outline: none;
+}
+
+.count-link:has(a:focus-visible) {
+  outline: var(--focus-width) solid var(--focus);
+  outline-offset: 2px;
+}
+
 .count dd .lift {
   font-size: var(--text-md);
   font-weight: 400;
@@ -370,6 +395,11 @@
   flex: 1 1 14rem;
 }
 
+.field-label kbd {
+  line-height: 1.1;
+  margin-left: var(--space-1);
+}
+
 .field-label {
   font-size: var(--text-2xs);
   font-weight: 600;
@@ -435,6 +465,13 @@
   overflow-wrap: anywhere;
 }
 
+@media (max-width: 40rem) {
+  .attention li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
+
 .findings-list,
 .behaviors-plain {
   margin: 0;
@@ -462,8 +499,17 @@
   color: var(--fg);
 }
 
+/* Skill names never break inside: the run column keeps them on one line. */
 .run-link .strong {
   color: var(--accent);
+  white-space: nowrap;
+}
+
+/* Positioned so its screen reader text stays inside the table's scroller. */
+.trials-note {
+  position: relative;
+  display: block;
+  white-space: nowrap;
 }
 
 .file-links {

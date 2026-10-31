@@ -13,6 +13,7 @@ describe("skills page", () => {
     expect(within(row).getByText("0 of 1")).toBeTruthy();
     const k8s = within(table).getByRole("rowheader", { name: "k8s-resource-naming" }).closest("tr") as HTMLElement;
     expect(within(k8s).getByText("1 running")).toBeTruthy();
+    expect(within(k8s).getByText("1 pending")).toBeTruthy();
   });
 });
 
@@ -50,7 +51,7 @@ describe("models page", () => {
     expect(within(codex).getByText("+0.04")).toBeTruthy();
     expect(within(codex).getByText("Neutral")).toBeTruthy();
     const claude = within(table).getByRole("rowheader", { name: "claude-code@2.1.292" }).closest("tr") as HTMLElement;
-    expect(within(claude).getByText("required")).toBeTruthy();
+    expect(within(claude).getByText("Required")).toBeTruthy();
     expect(within(claude).getByRole("link", { name: "5" }).getAttribute("href")).toBe(
       "/runs?agent=claude-code%402.1.292&model=claude-haiku-5-5",
     );

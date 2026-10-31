@@ -100,7 +100,7 @@ func (s *Server) runDetail(ctx context.Context, se *v1alpha1.SkillEval, at attem
 	run := newRun(se, s.cfg.Thresholds.Percent())
 	ref := s.bundleOf(ctx, run.Skill, run.ReportDigest)
 	v := apiv1.RunDetail{
-		Run:              s.runSummary(run, ref.state),
+		Run:              s.runSummary(run, ref),
 		SpecAgentVersion: se.Spec.AgentVersion,
 		Channels:         orEmpty(s.channels.get(ctx).Tags(run.Skill, run.Digest)),
 		Findings:         orEmpty(se.Status.Findings),
@@ -255,16 +255,16 @@ func (s *Server) grid(ctx context.Context, run Run, at attempt) apiv1.TrialGrid 
 		}
 		return g
 	case ref.reason == withheldNoTrials:
-		return none(apiv1.GridNone, "No trials stored: "+withheldText(ref.reason)+".")
+		return none(apiv1.GridNone, "No sessions: "+withheldText(ref.reason)+".")
 	}
 	// No bundle: the scores of result.json, without sessions.
-	state, reason := apiv1.GridFallback, "This run has no trial bundle (runner before trial bundles): scores from result.json, no sessions."
+	state, reason := apiv1.GridFallback, "No sessions: this run is older than trial bundles, so only the scores from result.json are shown."
 	switch {
 	case ref.reason == withheldDisabled:
-		reason = "This run has no trial bundle: " + withheldText(ref.reason) + ". Scores from result.json, no sessions."
+		reason = "No sessions: " + withheldText(ref.reason) + ", so only the scores from result.json are shown."
 	case ref.state == apiv1.TrialsWithheld:
 		state = apiv1.GridWithheld
-		reason = "The runner withheld the trial bundle (" + ref.reason + "): " + withheldText(ref.reason) + ". Scores from result.json, no sessions."
+		reason = "No sessions: the runner withheld the trial bundle because " + withheldText(ref.reason) + ". Only the scores from result.json are shown."
 	}
 	data, err := s.cfg.Reports.File(ctx, run.Skill, at.reportDigest, reportstore.FileResult)
 	switch {

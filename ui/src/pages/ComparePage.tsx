@@ -116,11 +116,13 @@ function Side({ title, side, run, job, behaviors }: { title: string; side: Compa
   return (
     <section className="compare-side panel" aria-labelledby={`${id}-h`}>
       <header className="panel-head">
-        <h2 id={`${id}-h`}>{title}</h2>
+        <div className="compare-side-title">
+          <h2 id={`${id}-h`}>{title}</h2>
+          {t?.status === "scored" ? <Mark ok={!!t.passed} okText="passed" badText="did not pass" /> : null}
+          {t?.score !== undefined ? <span className="num strong">{score(t.score)}</span> : null}
+        </div>
         {t ? (
           <>
-            {t.status === "scored" ? <Mark ok={!!t.passed} okText="passed" badText="did not pass" /> : null}
-            <span className="num strong">{score(t.score)}</span>
             {t.hasSession ? (
               <Link to={trialHref(run, t.id, job)} className="small">
                 Open session {t.id}
@@ -165,15 +167,22 @@ function Side({ title, side, run, job, behaviors }: { title: string; side: Compa
           <pre className="prompt-text">{side.header.final}</pre>
         </div>
       ) : null}
-      <h3 className="subhead">Log</h3>
       {log.length === 0 ? (
-        <Empty>No log.</Empty>
+        side.missing ? null : (
+          <>
+            <h3 className="subhead">Log</h3>
+            <Empty>This trial recorded no log entries.</Empty>
+          </>
+        )
       ) : (
-        <ol className="log log-compact" aria-label={`${title} log`}>
-          {log.map((e) => (
-            <EntryView key={e.id} e={e} target={false} compact />
-          ))}
-        </ol>
+        <>
+          <h3 className="subhead">Log</h3>
+          <ol className="log log-compact" aria-label={`${title} log`}>
+            {log.map((e) => (
+              <EntryView key={e.id} e={e} target={false} compact />
+            ))}
+          </ol>
+        </>
       )}
       {side.files.length ? (
         <>

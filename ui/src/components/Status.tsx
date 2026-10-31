@@ -2,7 +2,8 @@
 // is always an icon and a word; the color only repeats what they say.
 import type { ReactNode } from "react";
 
-import type { Phase, TierStatus, Tiers, TrialsState, Verdict } from "../api/types.ts";
+import type { Phase, RunSummary, TierStatus, Tiers, Verdict } from "../api/types.ts";
+import { cap } from "../format.ts";
 
 export type Tone = "ok" | "bad" | "warn" | "info" | "neutral" | "opp";
 
@@ -32,7 +33,8 @@ export function Badge({ tone, icon, children }: { tone: Tone; icon?: string; chi
   );
 }
 
-const PHASE: Record<Phase, [Tone, string]> = {
+/** PHASE is the tone and icon of each run phase, the same on every page. */
+export const PHASE: Record<Phase, [Tone, string]> = {
   Pending: ["neutral", "○"],
   Planned: ["neutral", "◌"],
   Running: ["info", "◐"],
@@ -40,8 +42,12 @@ const PHASE: Record<Phase, [Tone, string]> = {
   Failed: ["bad", "✕"],
 };
 
+export function phaseLook(phase: Phase): [Tone, string] {
+  return PHASE[phase] ?? ["neutral", "○"];
+}
+
 export function PhasePill({ phase }: { phase: Phase }) {
-  const [tone, icon] = PHASE[phase] ?? ["neutral", "○"];
+  const [tone, icon] = phaseLook(phase);
   return (
     <Pill tone={tone} icon={icon}>
       {phase}
@@ -105,42 +111,68 @@ export function PublicationPill({ value }: { value?: string }) {
   if (value === "passed")
     return (
       <Pill tone="ok" icon="✓">
-        passed
+        Passed
       </Pill>
     );
   if (value === "failed")
     return (
       <Pill tone="bad" icon="✕">
-        failed
+        Failed
       </Pill>
     );
   return (
     <Pill tone="neutral" icon="●">
-      {value}
+      {cap(value)}
     </Pill>
   );
 }
 
-/** TrialsText says whether a run has trial sessions. */
-export function TrialsText({ state }: { state: TrialsState }) {
-  switch (state) {
-    case "stored":
-      return (
-        <Pill tone="info" icon="≡">
-          sessions
-        </Pill>
-      );
-    case "withheld":
-      return (
-        <Pill tone="warn" icon="!">
-          withheld
-        </Pill>
-      );
-    case "unknown":
-      return <span className="muted">unknown</span>;
-    default:
-      return <span className="muted">none</span>;
+/** WITHHELD_SHORT names a skillci.dev/trials-withheld reason in two or three words. */
+const WITHHELD_SHORT: Record<string, [string, string]> = {
+  "secret-scan": ["secret found", "The secret scan found a value after redaction, so no trial was stored."],
+  size: ["too large", "The bundle was over its size limit."],
+  "build-failed": ["build failed", "The bundle could not be built."],
+  "attach-failed": ["upload failed", "The bundle could not be attached to the registry."],
+};
+
+/** trialsNote is the short reason a run has no sessions, and its longer explanation. */
+export function trialsNote(r: Pick<RunSummary, "trials" | "trialsReason" | "hasReport" | "phase" | "tiers">): [string, string] {
+  if (r.trials === "withheld") {
+    const known = r.trialsReason ? WITHHELD_SHORT[r.trialsReason] : undefined;
+    return known ?? [r.trialsReason ?? "no reason", `The runner withheld the trial bundle${r.trialsReason ? ` (${r.trialsReason})` : ""}.`];
   }
+  if (r.trials === "unknown") return ["registry slow", "The registry did not answer in time; open the run to see its trials."];
+  if (r.phase === "Pending" || r.phase === "Running") return ["not yet", "Sessions are stored when the run finishes."];
+  if (r.phase === "Planned") return ["dry run", "A dry run starts no trials."];
+  if (!r.hasReport) return ["no report", "The run stored no report, so there are no sessions."];
+  if (r.tiers.tier3 === "skipped") return ["Tier 3 not run", "Tier 1 or 2 rejected this version, so no live trials ran."];
+  if (r.trialsReason === "disabled") return ["bundles off", "Trial bundles were turned off for this run (TRIAL_BUNDLE=off)."];
+  if (r.trialsReason === "no-trials") return ["no trials", "Tier 3 produced no trials to store."];
+  return ["older run", "This run is older than trial bundles: scores only, no sessions."];
+}
+
+/** TrialsText says whether a run has trial sessions and, when not, why in two or three words. */
+export function TrialsText({ run }: { run: Pick<RunSummary, "trials" | "trialsReason" | "hasReport" | "phase" | "tiers"> }) {
+  if (run.trials === "stored")
+    return (
+      <Pill tone="info" icon="≡">
+        Sessions
+      </Pill>
+    );
+  const [short, long] = trialsNote(run);
+  return (
+    <span className="trials-note" title={long}>
+      {run.trials === "withheld" ? (
+        <Pill tone="warn" icon="!">
+          Withheld
+        </Pill>
+      ) : (
+        <span className="muted">None</span>
+      )}
+      <span className="cell-sub">{short}</span>
+      <span className="sr-only">. {long}</span>
+    </span>
+  );
 }
 
 /** PassBadge is PASSED, FAILED or NOT JUDGED for a criterion. */

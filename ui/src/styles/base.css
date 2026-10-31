@@ -350,6 +350,11 @@ input[type="text"] {
   font-weight: 500;
 }
 
+/* Row headers are names (skills, arms, labels): they never break inside. */
+.table tbody th[scope="row"] {
+  white-space: nowrap;
+}
+
 .table tbody tr:last-child > * {
   border-bottom: 0;
 }

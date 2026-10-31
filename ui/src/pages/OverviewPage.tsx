@@ -5,8 +5,8 @@ import type { AttentionItem, ChannelRow, NetworkPolicy, Overview } from "../api/
 import { useApi } from "../api/useApi.ts";
 import { Empty, Loaded, MetaStrip, Notice, Page, Section } from "../components/Page.tsx";
 import { RunsTable, runHref } from "../components/RunsTable.tsx";
-import { Pill, type Tone } from "../components/Status.tsx";
-import { time } from "../format.ts";
+import { phaseLook, Pill, type Tone } from "../components/Status.tsx";
+import { plural, time } from "../format.ts";
 
 /** OverviewPage is "/": counts, needs attention, recent runs, release channels, network policy. */
 export function OverviewPage() {
@@ -18,29 +18,56 @@ export function OverviewPage() {
   );
 }
 
-function OverviewBody({ o }: { o: Overview }) {
-  const c = o.counts;
-  const tiles: [string, number, string?][] = [
-    ["Runs", c.runs],
-    ["Running", c.running],
-    ["Succeeded", c.succeeded],
-    ["Failed", c.failed],
-    ["Skills", c.skills],
-    ["On stable", c.onStable],
-    ["Held back", c.heldBack],
-    ["Rejected", c.rejected],
+/** Tile is one stat tile: its label, value, where it links and what the link says. */
+interface Tile {
+  label: string;
+  value: number;
+  to: string;
+  linkText: string;
+  bad?: boolean;
+}
+
+// The run tiles count runs by phase and add up to Runs. Pending (waiting for a
+// free slot) gets its own tile next to Running: a queue that does not drain is
+// a capacity problem, a run that does not finish is a different one.
+function tiles(c: Overview["counts"]): Tile[] {
+  const phase = (label: string, value: number, p: string, bad = false): Tile => ({
+    label,
+    value,
+    to: `/runs?phase=${p}`,
+    linkText: `${value} ${label.toLowerCase()} run${value === 1 ? "" : "s"}`,
+    bad,
+  });
+  return [
+    { label: "Runs", value: c.runs, to: "/runs", linkText: `All ${c.runs} runs` },
+    phase("Pending", c.pending, "Pending"),
+    phase("Running", c.running, "Running"),
+    phase("Succeeded", c.succeeded, "Succeeded"),
+    phase("Failed", c.failed, "Failed", true),
+    ...(c.planned > 0 ? [phase("Planned", c.planned, "Planned")] : []),
+    { label: "Skills", value: c.skills, to: "/skills", linkText: `${c.skills} skills` },
+    { label: "On stable", value: c.onStable, to: "/skills", linkText: `${c.onStable} skills on stable` },
+    { label: "Held back", value: c.heldBack, to: "/skills", linkText: `${c.heldBack} versions held back`, bad: true },
+    { label: "Rejected", value: c.rejected, to: "/skills", linkText: `${c.rejected} versions rejected`, bad: true },
   ];
+}
+
+function OverviewBody({ o }: { o: Overview }) {
   return (
     <>
       <dl className="counts">
-        {tiles.map(([label, value]) => (
-          <div key={label} className={value > 0 && (label === "Failed" || label === "Rejected") ? "count count-bad" : "count"}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
+        {tiles(o.counts).map((t) => (
+          <div key={t.label} className={t.bad && t.value > 0 ? "count count-link count-bad" : "count count-link"}>
+            <dt>{t.label}</dt>
+            <dd>
+              <Link to={t.to} aria-label={t.linkText} className="plain">
+                {t.value}
+              </Link>
+            </dd>
           </div>
         ))}
       </dl>
-      <Section title="Needs attention" extra={<span className="muted">{o.attention.length} items</span>}>
+      <Section title="Needs attention" extra={<span className="muted">{plural(o.attention.length, "item")}</span>}>
         {o.attention.length === 0 ? <Empty>Nothing needs attention.</Empty> : <AttentionList items={o.attention} />}
       </Section>
       <Section title="Recent runs" extra={<Link to="/runs">All runs</Link>}>
@@ -59,11 +86,13 @@ function OverviewBody({ o }: { o: Overview }) {
   );
 }
 
+// Running and pending items use the phase pills of the runs table.
 const ATTENTION: Record<AttentionItem["kind"], [Tone, string, string]> = {
-  failed: ["bad", "✕", "Failed"],
+  failed: [...phaseLook("Failed"), "Failed"],
   "held-back": ["warn", "!", "Held back"],
   rejected: ["bad", "✕", "Rejected"],
-  running: ["info", "◐", "Running"],
+  running: [...phaseLook("Running"), "Running"],
+  pending: [...phaseLook("Pending"), "Pending"],
 };
 
 function AttentionList({ items }: { items: AttentionItem[] }) {

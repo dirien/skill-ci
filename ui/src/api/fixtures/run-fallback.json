@@ -146,7 +146,7 @@
   },
   "trials": {
     "state": "fallback",
-    "reason": "This run has no trial bundle (runner before trial bundles): scores from result.json, no sessions.",
+    "reason": "No sessions: this run is older than trial bundles, so only the scores from result.json are shown.",
     "job": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
     "attemptsPerCase": 3,
     "cases": [

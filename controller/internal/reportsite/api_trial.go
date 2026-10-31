@@ -75,7 +75,7 @@ func (s *Server) resolveTrials(r *http.Request, params ...string) (*trialReq, *a
 		s.cfg.Log.Error(ref.err, "reading report annotations", "run", name)
 		return nil, registryError("Harbor did not return the report manifest of run %s: %s", name, errText(ref.err))
 	case ref.state == apiv1.TrialsWithheld:
-		return nil, withheld("The runner withheld the trial bundle of run %s (%s): %s.", name, ref.reason, withheldText(ref.reason))
+		return nil, withheld("The runner withheld the trial bundle of run %s because %s.", name, withheldText(ref.reason))
 	case ref.state != apiv1.TrialsStored:
 		return nil, notFound("Run %s has no trial bundle.", name)
 	}

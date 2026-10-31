@@ -62,7 +62,7 @@ export function ModelsPage() {
                           )}
                         </th>
                         <td className="mono">{m.model}</td>
-                        <td>{m.required ? <Pill tone="info" icon="●">required</Pill> : <span className="muted">optional</span>}</td>
+                        <td>{m.required ? <Pill tone="info" icon="●">Required</Pill> : <span className="muted">optional</span>}</td>
                         <td className="mono">{m.sandboxProfile ?? <span className="muted">default</span>}</td>
                         <td className="num">
                           {m.runs > 0 ? <Link to={`/runs?agent=${encodeURIComponent(agentRef(m.agent, m.agentVersion))}&model=${encodeURIComponent(m.model)}`}>{m.runs}</Link> : 0}

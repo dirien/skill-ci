@@ -55,8 +55,13 @@ func (s *Server) apiSkills(w http.ResponseWriter, r *http.Request) {
 		}
 		row.Runs, row.Versions = len(mine), len(digestsOf(runs, skill))
 		for _, run := range mine {
-			if run.Active() {
+			switch v1alpha1.Phase(run.Phase) {
+			case v1alpha1.PhasePending:
 				row.Active++
+				row.Pending++
+			case v1alpha1.PhaseRunning:
+				row.Active++
+				row.Running++
 			}
 			if row.Newest == "" || newerFirst(run.Version, row.Newest) < 0 {
 				row.Newest = run.Version
@@ -185,7 +190,7 @@ func (s *Server) skillDetail(ctx context.Context, skill string, runs []Run, ch *
 		for i, c := range order {
 			for _, r := range group {
 				if r.Agent == c.agent && r.AgentVersion == c.agentVersion && r.Model == c.model {
-					row.Cells[i] = matrixCell(r, states[r.Name])
+					row.Cells[i] = matrixCell(r, states[r.Name].state)
 					latest = append(latest, r)
 					break // newest first
 				}

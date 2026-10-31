@@ -7,7 +7,7 @@ import { PhaseBar, ScoreMeter } from "../components/Charts.tsx";
 import { Empty, Loaded, MetaStrip, Notice, Page, PromptBox, Section } from "../components/Page.tsx";
 import { runHref } from "../components/RunsTable.tsx";
 import { Mark, PassBadge, Pill } from "../components/Status.tsx";
-import { agentRef, armLabel, clock, count, duration, plural, score, time, usd } from "../format.ts";
+import { agentRef, armLabel, cap, clock, count, duration, plural, score, time, usd } from "../format.ts";
 import { CriteriaPanel, FindingsPanel } from "../session/Aside.tsx";
 import { EntryLink, FoldText, StepChips } from "../session/Entry.tsx";
 import { LogView } from "../session/LogView.tsx";
@@ -29,7 +29,7 @@ export function TrialLayout() {
 
 function SkillValue({ m }: { m: TrialMetadata }) {
   const s = m.skill;
-  const word = { invoked: "invoked", loaded: "loaded, not invoked", "not-used": "not used", unknown: "unknown" }[s.state];
+  const word = { invoked: "Invoked", loaded: "Loaded, not invoked", "not-used": "Not used", unknown: "Unknown" }[s.state];
   const tone = s.state === "invoked" ? "ok" : s.state === "loaded" ? "warn" : "neutral";
   const icon = s.state === "invoked" ? "✓" : s.state === "loaded" ? "!" : "○";
   return (
@@ -128,7 +128,7 @@ function TrialBody({ s, job }: { s: TrialSession; job?: string }) {
           </span>
         ) : (
           <Pill tone="bad" icon="✕">
-            {h.status}
+            {cap(h.status)}
           </Pill>
         )
       }

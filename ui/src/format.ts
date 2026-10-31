@@ -2,6 +2,11 @@
 // duration, a byte count or a time, so the app reads as one product.
 import type { Arm, Interval } from "./api/types.ts";
 
+/** cap starts a status word with a capital letter: "passed" becomes "Passed". */
+export function cap(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 /** score writes a 0..1 score with two decimals, or a dash when unknown. */
 export function score(v: number | undefined): string {
   return v === undefined ? "-" : v.toFixed(2);

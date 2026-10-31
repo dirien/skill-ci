@@ -83,6 +83,7 @@ var (
 	runFallback = evals.Name(acme, "v1.0.0", claude, "2.1.292", haiku)
 	runRejected = evals.Name(pydoc, "v1.1.0", claude, "2.1.292", haiku)
 	runRunning  = evals.Name(k8s, "v1.0.0", claude, "2.1.292", haiku)
+	runPending  = evals.Name(k8s, "v1.0.0", codex, "0.161.0", gpt)
 )
 
 // Report and bundle digests. The first ones are those of the hand-made UI fixtures.
@@ -316,10 +317,10 @@ func ts(month time.Month, day, hour, minute, second int) time.Time {
 	return time.Date(2026, month, day, hour, minute, second, 0, time.UTC)
 }
 
-// worldSpecs are the seven runs of the UI fixtures: three agents on acme
+// worldSpecs are the eight runs of the UI fixtures: three agents on acme
 // v1.1.0 (claude-code scored, codex retried with a withheld trial, opencode),
 // a failed run with unscored trials, a run from before trial bundles, a run
-// rejected by Tier 1 and one that is still running.
+// rejected by Tier 1, one that is still running and one waiting for a slot.
 func worldSpecs() []evalSpec {
 	full := &v1alpha1.NetworkSpec{Mode: "full", Source: "default"}
 	python := &v1alpha1.NetworkSpec{Mode: "allowlist", Source: "skill", Allow: []string{"@python"}}
@@ -381,6 +382,12 @@ func worldSpecs() []evalSpec {
 			skill: k8s, version: "v1.0.0", digest: k8sV100, agent: claude, agentVersion: "2.1.292", model: haiku, required: true,
 			trigger: v1alpha1.TriggerPush, attempts: 3, created: ts(10, 31, 8, 52, 10), phase: v1alpha1.PhaseRunning,
 			pushedBy: "release-bot", network: &v1alpha1.NetworkSpec{Mode: "allowlist", Source: "skill", Allow: []string{"kubernetes.io"}},
+		},
+		{
+			skill: k8s, version: "v1.0.0", digest: k8sV100, agent: codex, agentVersion: "0.161.0", model: gpt,
+			trigger: v1alpha1.TriggerPush, attempts: 3, created: ts(10, 31, 8, 52, 10), phase: v1alpha1.PhasePending,
+			message: "waiting for a free slot (1 of 1 jobs running)", pushedBy: "release-bot",
+			network: &v1alpha1.NetworkSpec{Mode: "allowlist", Source: "skill", Allow: []string{"kubernetes.io"}},
 		},
 	}
 }

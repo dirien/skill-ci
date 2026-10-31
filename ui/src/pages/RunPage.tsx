@@ -1,14 +1,14 @@
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { api } from "../api/client.ts";
-import type { GridCase, Report, RunDetail, RunSummary, TrialCell, TrialGrid, WithheldTrial } from "../api/types.ts";
+import type { GridCase, Report, RunDetail, RunSummary, TrialCell, TrialGrid, TrialsState, WithheldTrial } from "../api/types.ts";
 import { useApi } from "../api/useApi.ts";
 import { DimensionTable, ScoreMeter } from "../components/Charts.tsx";
 import { Lift } from "../components/Lift.tsx";
 import { Empty, Loaded, MetaStrip, Notice, Page, Section } from "../components/Page.tsx";
 import { runHref } from "../components/RunsTable.tsx";
 import { Mark, PhasePill, Pill, PublicationPill, TierMarkers, VerdictPill } from "../components/Status.tsx";
-import { agentRef, compact, count, duration, plural, score, time, usd } from "../format.ts";
+import { agentRef, cap, compact, count, duration, plural, score, time, usd } from "../format.ts";
 
 const enc = encodeURIComponent;
 
@@ -52,6 +52,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
   const current = d.attempts.find((a) => a.current);
   const viewing = job ? d.attempts.find((a) => a.jobName === job) : current;
   const ranOther = r.ranVersion && d.specAgentVersion && r.ranVersion !== d.specAgentVersion;
+  const active = r.phase === "Pending" || r.phase === "Running";
   return (
     <Page
       docTitle={r.name}
@@ -69,7 +70,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
       aside={
         <>
           <PhasePill phase={r.phase} />
-          <VerdictPill verdict={r.verdict} />
+          {r.verdict ? <VerdictPill verdict={r.verdict} /> : null}
         </>
       }
     >
@@ -81,7 +82,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
       ) : null}
       {r.message ? (
         <Notice tone={r.phase === "Failed" ? "bad" : "neutral"} icon={r.phase === "Failed" ? "✕" : "i"}>
-          {r.message}
+          {cap(r.message)}
         </Notice>
       ) : null}
       {d.retried && r.retries > 0 ? (
@@ -131,7 +132,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
 
       <Section title="Scores">
         {noScores ? (
-          <p>Tier 3 not run: Tier 1 rejected this version, so no live trials were spent.</p>
+          <p>Tier 3 not run: {r.tiers.tier2 === "failed" && r.tiers.tier1 !== "failed" ? "Tier 2" : "Tier 1"} rejected this version, so no live trials were spent.</p>
         ) : r.withSkill === undefined ? (
           <Empty>No scores yet.</Empty>
         ) : (
@@ -170,7 +171,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
 
       <Section title="SkillEvaluator tiers" extra={<TierMarkers tiers={r.tiers} />}>
         {d.findings.length === 0 ? (
-          <Empty>No findings.</Empty>
+          <Empty>{active ? "The tiers run once the Job starts." : "No findings."}</Empty>
         ) : (
           <ul className="findings-list">
             {d.findings.map((f) => (
@@ -182,7 +183,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
         )}
       </Section>
 
-      <ReportView report={d.report} />
+      <ReportView report={d.report} active={active} />
 
       <TrialsView grid={d.trials} run={r.name} job={job} />
 
@@ -217,7 +218,7 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
                 </>
               ) : (
                 <>
-                  <Mark ok={false} badText="not enforced" /> {d.network.reason ?? "not enforced"}
+                  <Mark ok={false} badText="not enforced" /> {d.network.reason ?? (active ? "not yet, the policy comes with the Job" : "not enforced")}
                 </>
               ),
               wide: true,
@@ -265,6 +266,13 @@ function RunBody({ d, job }: { d: RunDetail; job?: string }) {
   );
 }
 
+const ATTEMPT_SESSIONS: Record<TrialsState, string> = {
+  stored: "sessions stored",
+  withheld: "sessions withheld",
+  none: "no sessions",
+  unknown: "sessions unknown",
+};
+
 function Attempts({ d, job }: { d: RunDetail; job?: string }) {
   const selected = job ?? d.attempts.find((a) => a.current)?.jobName;
   return (
@@ -282,7 +290,7 @@ function Attempts({ d, job }: { d: RunDetail; job?: string }) {
             {a.current ? <span className="tag">current</span> : null}
             <span className="mono muted"> {a.jobName}</span>
             <span className="muted"> · {a.reportDigest ? "report stored" : "no report"}</span>
-            <span className="muted"> · sessions {a.trials}</span>
+            <span className="muted"> · {ATTEMPT_SESSIONS[a.trials]}</span>
             {a.message ? <div className="cell-sub">{a.message}</div> : null}
           </li>
         ))}
@@ -305,13 +313,13 @@ function ReportFiles({ report }: { report: Report }) {
   );
 }
 
-function ReportView({ report }: { report: Report }) {
+function ReportView({ report, active }: { report: Report; active: boolean }) {
   const extra = <ReportFiles report={report} />;
   switch (report.state) {
     case "none":
       return (
         <Section title="Report">
-          <p className="muted">Not stored: this run has no report digest.</p>
+          <p className="muted">{active ? "The report is stored when the run finishes." : "No report stored for this run."}</p>
         </Section>
       );
     case "missing":
@@ -358,14 +366,14 @@ const WITHHELD_REASON: Record<WithheldTrial["reason"], string> = {
 };
 
 function TrialCellView({ cell, grid, run, job }: { cell: TrialCell | null; grid: TrialGrid; run: string; job?: string }) {
-  if (!cell) return <td className="trial-cell trial-missing">missing</td>;
+  if (!cell) return <td className="trial-cell trial-missing">Missing</td>;
   const linked = grid.state === "stored" && cell.hasSession;
   if (cell.status === "withheld") {
     const w = grid.withheld.find((x) => x.id === cell.id);
     return (
       <td className="trial-cell">
         <Pill tone="warn" icon="!" title={w ? WITHHELD_REASON[w.reason] : undefined}>
-          withheld
+          Withheld
         </Pill>
         <div className="cell-sub">{w ? `${w.reason}: ${WITHHELD_REASON[w.reason]}` : "not in the bundle"}</div>
       </td>
@@ -380,7 +388,7 @@ function TrialCellView({ cell, grid, run, job }: { cell: TrialCell | null; grid:
       </span>
     ) : (
       <Pill tone="bad" icon="✕">
-        {cell.status}
+        {cap(cell.status)}
         {cell.errorType ? ` ${cell.errorType}` : ""}
       </Pill>
     );
@@ -491,19 +499,19 @@ function TrialsView({ grid, run, job }: { grid: TrialGrid; run: string; job?: st
     case "fallback":
       notice = (
         <Notice tone="info" icon="i">
-          {grid.reason ?? "This run has no trial bundle: scores from result.json, no sessions."}
+          {grid.reason ?? "No sessions: this run is older than trial bundles, so only the scores from result.json are shown."}
         </Notice>
       );
       break;
     case "withheld":
       notice = (
         <Notice tone="warn" icon="!">
-          The runner withheld the trial bundle{grid.reason ? `: ${grid.reason}` : "."}
+          {grid.reason ?? "No sessions: the runner withheld the trial bundle."}
         </Notice>
       );
       break;
     case "missing":
-      notice = <p className="muted">Not stored: the trial bundle is no longer in the registry.</p>;
+      notice = <p className="muted">{grid.reason ?? "No sessions: the trial bundle is no longer in the registry."}</p>;
       break;
     case "error":
       notice = (

@@ -214,7 +214,7 @@ func TestRunsFilterSortAndPages(t *testing.T) {
 		return out
 	}
 	runs := apiv1.Prefix + "/runs"
-	if got := names(runs + "?agent=codex@0.161.0"); len(got) != 1 || got[0] != runCodex {
+	if got := names(runs + "?agent=codex@0.161.0"); len(got) != 2 || got[0] != runPending || got[1] != runCodex {
 		t.Errorf("agent filter = %v", got)
 	}
 	if got := names(runs + "?q=OPENCODE"); len(got) != 1 || got[0] != runOpencode {
@@ -226,19 +226,19 @@ func TestRunsFilterSortAndPages(t *testing.T) {
 	if got := names(runs + "?publication=failed&verdict=Rejected"); len(got) != 1 || got[0] != runRejected {
 		t.Errorf("publication and verdict filter = %v", got)
 	}
-	if got := names(runs + "?sort=lift"); len(got) != 7 || got[0] != runClaude || got[1] != runFallback {
+	if got := names(runs + "?sort=lift"); len(got) != 8 || got[0] != runClaude || got[1] != runFallback {
 		t.Errorf("sort=lift = %v", got)
 	}
-	if got := names(runs + "?sort=oldest"); got[0] != runFallback || got[6] != runRunning {
+	if got := names(runs + "?sort=oldest"); got[0] != runFallback || got[7] != runRunning {
 		t.Errorf("sort=oldest = %v", got)
 	}
-	if got := names(runs + "?sort=skill"); got[0] != runUnscored || got[6] != runRejected {
+	if got := names(runs + "?sort=skill"); got[0] != runUnscored || got[7] != runRejected {
 		t.Errorf("sort=skill = %v", got)
 	}
 	rec := h.get(runs + "?pageSize=3&page=3")
 	var list apiv1.RunList
 	decode(t, rec, &list)
-	if len(list.Items) != 1 || list.Pagination != (apiv1.Pagination{Page: 3, PageSize: 3, Total: 7, Pages: 3}) {
+	if len(list.Items) != 2 || list.Pagination != (apiv1.Pagination{Page: 3, PageSize: 3, Total: 8, Pages: 3}) {
 		t.Errorf("page 3 of 3 = %d items, %+v", len(list.Items), list.Pagination)
 	}
 	if got := names(runs + "?pageSize=3&page=9"); len(got) != 0 {
@@ -266,7 +266,7 @@ func TestRunDetailStates(t *testing.T) {
 	// The earlier attempt of the retried run attached no report.
 	v := get(runPath(runCodex) + "?job=" + runCodex)
 	if v.Report.State != apiv1.ReportNone || v.Trials.State != apiv1.GridNone || v.Trials.Job != runCodex ||
-		v.Trials.Reason != "This attempt attached no report." {
+		v.Trials.Reason != "No sessions: this attempt stored no report." {
 		t.Errorf("earlier attempt: report %q, trials %+v", v.Report.State, v.Trials)
 	}
 	if len(v.Attempts) != 2 || v.Attempts[0].Current || !v.Attempts[1].Current || v.Attempts[0].Trials != apiv1.TrialsNone {
@@ -279,7 +279,7 @@ func TestRunDetailStates(t *testing.T) {
 	}
 	// A run that has not finished.
 	v = get(runPath(runRunning))
-	if v.Report.State != apiv1.ReportNone || v.RefreshSeconds != refreshSeconds || v.Trials.Reason != "The report is attached when the run finishes." {
+	if v.Report.State != apiv1.ReportNone || v.RefreshSeconds != refreshSeconds || v.Trials.Reason != "Trial sessions are stored when the run finishes." {
 		t.Errorf("running run: %+v, refresh %d", v.Trials, v.RefreshSeconds)
 	}
 	// The registry fails: states, not a status code.
@@ -315,6 +315,9 @@ func TestWithheldAndDisabledBundles(t *testing.T) {
 			decode(t, h.get(runPath(runFallback)), &v)
 			if v.Trials.State != tt.state || v.Run.Trials != tt.trials || !strings.Contains(v.Trials.Reason, withheldText(tt.reason)) {
 				t.Errorf("grid %q (%s), run trials %q", v.Trials.State, v.Trials.Reason, v.Run.Trials)
+			}
+			if v.Run.TrialsReason != tt.reason {
+				t.Errorf("run trials reason = %q, want %q", v.Run.TrialsReason, tt.reason)
 			}
 			if tt.state != apiv1.GridNone && (len(v.Trials.Cases) != 1 || v.Trials.Cases[0].WithSkill[0].HasSession) {
 				t.Errorf("the grid should show the result.json scores without links: %+v", v.Trials.Cases)
@@ -392,11 +395,11 @@ func TestOverviewAttention(t *testing.T) {
 	for _, a := range o.Attention {
 		kinds = append(kinds, a.Kind+" "+a.Run)
 	}
-	want := []string{"failed " + runUnscored, "rejected " + runRejected, "running " + runRunning}
+	want := []string{"failed " + runUnscored, "rejected " + runRejected, "running " + runRunning, "pending " + runPending}
 	if strings.Join(kinds, ",") != strings.Join(want, ",") {
 		t.Errorf("attention = %v, want %v", kinds, want)
 	}
-	if o.Counts != (apiv1.Counts{Runs: 7, Running: 1, Succeeded: 5, Failed: 1, Skills: 3, OnStable: 2, Rejected: 1}) {
+	if o.Counts != (apiv1.Counts{Runs: 8, Pending: 1, Running: 1, Succeeded: 5, Failed: 1, Skills: 3, OnStable: 2, Rejected: 1}) {
 		t.Errorf("counts = %+v", o.Counts)
 	}
 	if o.Network.Source != v1alpha1.ConfigSourceSkillCIConfig || o.Network.EnforcedBy != "cilium" || o.Network.HubbleRelay == "" {

@@ -10,6 +10,33 @@ export function runHref(name: string, job?: string): string {
   return `/runs/${encodeURIComponent(name)}${job ? `?job=${encodeURIComponent(job)}` : ""}`;
 }
 
+/** BreakAtSlash lets a long model name (openrouter/qwen/qwen3.8-flash) wrap after a slash only. */
+function BreakAtSlash({ text }: { text: string }) {
+  const parts = text.split("/");
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>
+          <span className="nowrap">{i < parts.length - 1 ? `${p}/` : p}</span>
+          {i < parts.length - 1 ? <wbr /> : null}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** TwoLineTime writes the date and the time as two unbreakable halves, so a narrow column wraps between them. */
+function TwoLineTime({ iso }: { iso: string }) {
+  const t = time(iso);
+  const cut = t.indexOf(" ");
+  if (cut < 0) return <>{t}</>;
+  return (
+    <>
+      <span className="nowrap">{t.slice(0, cut)}</span> <span className="nowrap">{t.slice(cut + 1)}</span>
+    </>
+  );
+}
+
 export function RunsTable({ runs, caption }: { runs: RunSummary[]; caption: string }) {
   return (
     <div className="table-wrap">
@@ -52,7 +79,9 @@ export function RunsTable({ runs, caption }: { runs: RunSummary[]; caption: stri
                 {agentRef(r.agent, r.agentVersion)}
                 {r.ranVersion && r.agentVersion && r.ranVersion !== r.agentVersion ? <div className="cell-sub">ran {r.ranVersion}</div> : null}
               </td>
-              <td className="mono nowrap">{r.model}</td>
+              <td className="mono">
+                <BreakAtSlash text={r.model} />
+              </td>
               <td>
                 <PhasePill phase={r.phase} />
                 {r.durationSec !== undefined ? <div className="cell-sub">{duration(r.durationSec)}</div> : null}
@@ -72,13 +101,15 @@ export function RunsTable({ runs, caption }: { runs: RunSummary[]; caption: stri
               <td>
                 {r.trials === "stored" ? (
                   <Link to={`${runHref(r.name)}#trials`} aria-label={`Trial sessions of ${r.name}`} className="plain">
-                    <TrialsText state={r.trials} />
+                    <TrialsText run={r} />
                   </Link>
                 ) : (
-                  <TrialsText state={r.trials} />
+                  <TrialsText run={r} />
                 )}
               </td>
-              <td className="nowrap">{time(r.createdAt)}</td>
+              <td>
+                <TwoLineTime iso={r.createdAt} />
+              </td>
             </tr>
           ))}
         </tbody>

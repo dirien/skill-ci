@@ -19,7 +19,7 @@ describe("trial session", () => {
     expect(screen.getByText(/^Write the release notes for version 1.4.0/, { selector: "pre.prompt-text" })).toBeTruthy();
     const meta = container.querySelector('dl[aria-label="Trial metadata"]') as HTMLElement;
     const text = meta.textContent ?? "";
-    for (const part of ["Armwith skill", "Attempt1 of 1", "claude-code@2.1.292", "Workspace/workspace", "invoked", "Pushed byrelease-bot", "4 of 4 passed", "ATIF-v1.7"]) {
+    for (const part of ["Armwith skill", "Attempt1 of 1", "claude-code@2.1.292", "Workspace/workspace", "Invoked", "Pushed byrelease-bot", "4 of 4 passed", "ATIF-v1.7"]) {
       expect(text).toContain(part);
     }
     expect(text).toContain("ANTHROPIC_API_KEY via api.anthropic.com");

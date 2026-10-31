@@ -22,6 +22,28 @@
       "trials": "none"
     },
     {
+      "name": "k8s-resource-naming-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
+      "skill": "k8s-resource-naming",
+      "version": "v1.0.0",
+      "digest": "sha256:c1a8151ffefab1c0039287867675f25d13cc6f7bd060575f98c4bad82a3ae8fe",
+      "agent": "codex",
+      "agentVersion": "0.161.0",
+      "model": "openai/gpt-6.1-sol",
+      "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+      "required": false,
+      "attempts": 3,
+      "trigger": "push",
+      "pushedBy": "release-bot",
+      "phase": "Pending",
+      "tiers": {},
+      "networkMode": "allowlist",
+      "retries": 0,
+      "createdAt": "2026-10-31T08:52:10Z",
+      "message": "waiting for a free slot (1 of 1 jobs running)",
+      "hasReport": false,
+      "trials": "none"
+    },
+    {
       "name": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
       "skill": "acme-release-notes",
       "version": "v1.2.0",
@@ -176,7 +198,8 @@
       "completedAt": "2026-10-29T11:03:30Z",
       "durationSec": 210,
       "hasReport": true,
-      "trials": "none"
+      "trials": "none",
+      "trialsReason": "no-trials"
     },
     {
       "name": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
@@ -219,7 +242,7 @@
   "pagination": {
     "page": 1,
     "pageSize": 50,
-    "total": 7,
+    "total": 8,
     "pages": 1
   },
   "filter": {
@@ -248,6 +271,7 @@
     ],
     "phases": [
       "Failed",
+      "Pending",
       "Running",
       "Succeeded"
     ],

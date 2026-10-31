@@ -106,7 +106,11 @@ func (s *channelSource) get(ctx context.Context) *Channels {
 	if s.snap != nil && s.now().Sub(s.at) < channelTTL {
 		return s.snap
 	}
-	ctx, cancel := context.WithTimeout(ctx, channelTimeout)
+	// The snapshot is shared by every request for channelTTL, so the request
+	// that happens to load it must not cut it short: a browser that navigates
+	// away (or React aborting a fetch on unmount) would cache "context
+	// canceled" for everyone. channelTimeout still bounds the load.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), channelTimeout)
 	defer cancel()
 	s.snap, s.at = s.load(ctx), s.now()
 	return s.snap

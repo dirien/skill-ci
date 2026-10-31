@@ -1,0 +1,83 @@
+{
+  "run": {
+    "name": "k8s-resource-naming-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
+    "skill": "k8s-resource-naming",
+    "version": "v1.0.0",
+    "digest": "sha256:c1a8151ffefab1c0039287867675f25d13cc6f7bd060575f98c4bad82a3ae8fe",
+    "agent": "codex",
+    "agentVersion": "0.161.0",
+    "model": "openai/gpt-6.1-sol",
+    "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+    "required": false,
+    "attempts": 3,
+    "trigger": "push",
+    "pushedBy": "release-bot",
+    "phase": "Pending",
+    "tiers": {},
+    "networkMode": "allowlist",
+    "retries": 0,
+    "createdAt": "2026-10-31T08:52:10Z",
+    "message": "waiting for a free slot (1 of 1 jobs running)",
+    "hasReport": false,
+    "trials": "none"
+  },
+  "specAgentVersion": "0.161.0",
+  "channels": [],
+  "samples": {
+    "withSkill": [],
+    "withoutSkill": []
+  },
+  "findings": [],
+  "conditions": [],
+  "network": {
+    "mode": "allowlist",
+    "source": "skill",
+    "declared": [
+      "kubernetes.io"
+    ],
+    "hosts": [],
+    "enforced": false,
+    "legacy": false
+  },
+  "sandbox": {
+    "profile": "default",
+    "specProfile": "default",
+    "warmPool": "default"
+  },
+  "report": {
+    "state": "none",
+    "dimensions": [],
+    "files": []
+  },
+  "trials": {
+    "state": "none",
+    "reason": "Trial sessions are stored when the run finishes.",
+    "job": "k8s-resource-naming-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
+    "attemptsPerCase": 0,
+    "cases": [],
+    "totals": {
+      "trials": 0,
+      "scored": 0,
+      "unscored": 0,
+      "withheld": 0,
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "tokensCached": 0,
+      "costUsd": 0,
+      "costEstimated": false,
+      "agentSec": 0,
+      "durationSec": 0
+    },
+    "credentials": [],
+    "withheld": []
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "jobName": "k8s-resource-naming-v1-0-0-codex-0-161-0-openai-gpt-6-1-sol",
+      "current": true,
+      "trials": "none"
+    }
+  ],
+  "refreshSeconds": 15
+}
