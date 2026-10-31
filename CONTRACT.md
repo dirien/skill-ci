@@ -160,7 +160,7 @@ The runner reads them from SkillEvaluator's `result.json`: `agents.<agent>.pass_
 
 `report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds.
 
-If no score was produced it writes `{"error": "<reason>"}` and exits 1.
+If no score was produced it writes `{"error": "<reason>"}` and exits 1. A skill without a Tier 3 source (none of `evals/evals.json`, `evals.jsonl`, `evals.yaml`, `evals.yml`, `dataset.json`, `dataset.jsonl`, and no `evals/harbor/` tasks) gets the Tier 1 + 2 gate only; when the gate passes, the runner starts no Tier 3 run and writes ``{"error": "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. Draft them with `make draft-evals SKILL=<skill>` (skillevaluator create-eval-dataset), review them, and push again"}`` (the gate's tiers and findings go to the container log). A Tier 1 or 2 failure is reported as Rejected, as for any skill. The runner never generates or rewrites a dataset (`validate --no-autopilot`): the gate runs the test cases the author committed.
 
 The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; the controller manifests own them from now on.
 

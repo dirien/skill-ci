@@ -397,7 +397,8 @@ resources:
     options:
       provider: ${k8s}
 
-  # Scrapes the controller's /metrics. The Service itself ships with the controller manifests (config/).
+  # Scrapes the controller's /metrics. The Service itself ships with the controller's Helm chart
+  # (make deploy). To push the same metrics over OTLP instead, see CONTRACT.md "OpenTelemetry export".
   controllerServiceMonitor:
     type: kubernetes:yaml/v2:ConfigGroup
     properties:

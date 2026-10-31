@@ -194,7 +194,9 @@ Versions of `acme-release-notes` for the push beat live in `demo/variants/acme-r
 
 `demo/push-skill.sh <skill> <version> [dir]` publishes any directory as a version, so more variants are a directory away. A variant at `demo/variants/<skill>/<version>/` is picked up automatically.
 
-Check the datasets without any LLM call: `make check-skills`.
+Check the datasets without any LLM call: `make check-skills` (a case whose `expected_skill` is null is a negative, off-skill case).
+
+A skill needs test cases before the live evaluation can run: without `evals/evals.json` it gets Tier 1 and 2 only, and the run fails with "no eval dataset". To start one, `make draft-evals SKILL=<name>` (or `DIR=<skill dir>`) runs SkillEvaluator's `create-eval-dataset --full` in a short-lived pod from the runner image with the Anthropic key of `llm-keys`: one LLM request, about 20 seconds, four cases (explicit, implicit, contextual, negative). It never overwrites an existing file unless `FORCE=1`, fails instead of writing SkillEvaluator's generic template when the LLM call did not happen, and prints a review checklist. Review the draft: the generator reads `SKILL.md`, so its assertions repeat the skill's own wording and cannot catch a rule the skill forgot, and it only checks the reply, so add assertions on files the agent has to write. skill-ci never drafts or regenerates test cases inside the gate.
 
 ### Tiers and scanners in the runner
 
