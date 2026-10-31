@@ -179,18 +179,18 @@ The details and the flags are in [CONTRACT.md](CONTRACT.md).
 
 ## Sample skills
 
-The skills under `skills/` are demo material written for this talk, not production skills. Each has three eval cases in the agentskills.io format (3 attempts per arm when deployed, so 9 trials per arm: a small sample, which is why the gate uses confidence intervals). The datasets were checked with SkillEvaluator's dataset loader and `skillevaluator tier1`. Live results on the cluster (2026-10-30, lift over no skill, models haiku / sonnet / opus; opus is optional and never gates):
+The skills under `skills/` are demo material written for this talk, not production skills. Each has three eval cases in the agentskills.io format (3 attempts per arm when deployed, so 9 trials per arm: a small sample, which is why the gate uses confidence intervals). The datasets were checked with SkillEvaluator's dataset loader and `skillevaluator tier1`. Live results on the cluster (2026-10-31, release 0.7.x, lift over no skill for Claude Code + Opus 5.5 / Codex + gpt-6.1-sol / OpenCode + Qwen 3.8 Flash; only Claude Code is required, the other two never gate):
 
 | Skill | What it encodes | Measured lift and outcome |
 | --- | --- | --- |
-| `acme-release-notes` | A made-up release note format (`ACME-RN/2`) | v1.0.0 +0.60 / +0.63 / +0.59, with-skill 0.95 on all three. No model can know the format without the skill |
-| `k8s-resource-naming` | A team-specific naming and labelling convention for Kubernetes resources | v1.0.0 +0.57 / +0.62 / +0.57, `stable`. The conventions (`prd` instead of `prod`, `-cfg` and `-sec` suffixes, `acme.io/*` labels) are arbitrary, so a model cannot guess them |
-| `python-docstrings` | Google-style docstrings | v1.0.0 +0.03 (haiku, Neutral) / +0.43 / +0.41. Stays `beta`: promotion needs +0.10 on every required model. Not Obsolete, because the no-skill scores (0.52 to 0.59) are below 0.80. Haiku scores almost the same with and without the skill; sonnet and opus gain about +0.4 |
+| `acme-release-notes` | A made-up release note format (`ACME-RN/2`) | v1.0.0 +0.59 / +0.25 / +0.57, with-skill 0.95 / 0.72 / 0.96. No model can know the format without the skill |
+| `k8s-resource-naming` | A team-specific naming and labelling convention for Kubernetes resources | v1.0.0 +0.57 / +0.20 / +0.54, `stable`. The conventions (`prd` instead of `prod`, `-cfg` and `-sec` suffixes, `acme.io/*` labels) are arbitrary, so a model cannot guess them |
+| `python-docstrings` | Google-style docstrings | v1.0.0 +0.38 / +0.13 / +0.39, `stable`. The baseline is higher (0.46 to 0.58) because models half know the convention. Not Obsolete, because the no-skill scores are below 0.80. On the earlier list with Haiku required it gained only +0.03 there and stayed on `beta` |
 
 Versions of `acme-release-notes` for the push beat live in `demo/variants/acme-release-notes/`:
 
-- `v1.1.0` adds two rules (sort bullets by ticket ID, `- None [ACME-0]` for an empty section) and matching assertions. Measured: with-skill 0.95 on all three models, lift +0.58 / +0.64 / +0.58, so it takes over `stable`.
-- `v1.2.0` is a deliberate regression. Its rules (a `# Release` heading, friendly summary, `## Features`/`## Bug fixes`, emojis) contradict the unchanged evals. Measured: with-skill 0.69 / 0.70 / 0.71, still a positive lift (+0.33 / +0.39 / +0.34) over no skill, but 0.24 to 0.26 below stable. The regression gate marks haiku and sonnet `Regressed` and keeps the version at `beta`; opus is optional and keeps `Helps`.
+- `v1.1.0` adds two rules (sort bullets by ticket ID, `- None [ACME-0]` for an empty section) and matching assertions. Measured: with-skill 0.98 / 0.72 / 0.95, lift +0.61 / +0.27 / +0.57, so it takes over `stable`.
+- `v1.2.0` is a deliberate regression. Its rules (a `# Release` heading, friendly summary, `## Features`/`## Bug fixes`, emojis) contradict the unchanged evals. Measured on Claude Code: with-skill 0.69, still a positive lift (+0.33) over no skill, but -0.29 against stable v1.1.0 (95% CI [-0.31, -0.27]). The regression gate marks it `Regressed` and keeps the version at `beta`. The optional entries drop too (Codex 0.47, `Neutral` at +0.01; OpenCode 0.72, still `Helps` at +0.35) and gate nothing.
 
 `demo/push-skill.sh <skill> <version> [dir]` publishes any directory as a version, so more variants are a directory away. A variant at `demo/variants/<skill>/<version>/` is picked up automatically.
 
@@ -204,7 +204,15 @@ The profile is SkillEvaluator's built-in `external`, the only one it ships. For 
 
 `demo/variants/k8s-resource-naming/v1.1.0` is a deliberately unsafe variant that Tier 1 rejects, see `demo/variants/README.md`. To run the checks locally, install the same scanners and run `skillevaluator validate skills/<name> --tiers 1,2`; the skill directory must be named like the skill.
 
-## What was tested (2026-10-30)
+## What was tested
+
+### 2026-10-31: both deploy paths and three agents
+
+1. **Pulumi path.** `pulumi up` on the DOKS stack removed the in-cluster builder and the private registry; `make deploy` installs each release from GHCR (0.7.0 to 0.7.3 in turn). A second `pulumi preview` shows no changes.
+2. **Vanilla path.** On a fresh DOKS cluster: `deploy/install.sh` from the published OCI chart (about 20 minutes), re-runs that keep every Secret and skip an unchanged Harbor (under a minute), the upgrade from 0.7.0 to 0.7.2, a pushed skill evaluated end to end with the same numbers as the Pulumi cluster, then `deploy/uninstall.sh --yes --purge-crds` twice, leaving no namespace, CRD, release or volume.
+3. **Three agents.** Claude Code 2.1.292 + Opus 5.5, Codex 0.161.0 + gpt-6.1-sol and OpenCode 1.19.1 + Qwen 3.8 Flash (through OpenRouter) on every sample skill and the demo variants: 9 trials per arm, results in "Sample skills" above and in DEMO.md.
+
+### 2026-10-30: the pilot
 
 1. **Trials in Agent Sandbox on DOKS.** SkillEvaluator ran from a Kubernetes Job with in-cluster credentials. Each trial was an Agent Sandbox; no sandboxes were left behind. (That run built a task image per trial in the cluster. The sandbox image replaced the builder afterwards, see "Findings".)
 2. **Model matrix.** Same skill, three pinned models, three parallel Jobs:
@@ -229,6 +237,9 @@ The profile is SkillEvaluator's built-in `external`, the only one it ships. For 
 - **The controller must deduplicate by digest, not tag**, or every promotion triggers a new eval.
 - **A lift above zero is not enough to promote.** v1.2.0 of the sample skill still beats no skill by +0.33 or more. Only the comparison with the stable version catches that, hence the regression gate.
 - **Verdicts depend on the other versions.** Results arrive in any order (a SkillEval takes 11 to 13 minutes and they run three at a time), so the stable version can finish after the candidate. The controller re-runs the policy for the sibling SkillEvals of a skill when one succeeds or a tag moves, and an older version never takes `stable` from a newer one that is not worse. Without the second rule two equally good versions swap the tag on every reconcile.
+- **OpenCode behind a gateway needed two more patch hunks.** SkillEvaluator refuses an agent import path outside `docker`, `kata` and `local` unless it is allow-listed, and the gateway OpenCode wrapper was not (hunk 6), so Tier 3 was skipped. The wrapper also renames the model to `skillevaluator-gateway/<id>`, a provider Harbor does not know, so the key never reached the sandbox (hunk 12). `runner/check_patch.py` checks both at image build.
+- **An OpenRouter provisioning key looks valid and is not.** It passes `GET /api/v1/key`, but every chat call answers 401 "User not found.". The runner now asks for the key type before any work.
+- **The Harbor chart restarts Harbor on every `helm upgrade`.** It renders new internal secrets each time, and their checksums are pod annotations. `deploy/install.sh` upgrades Harbor only when its chart version or values change.
 - **Tag changes and webhooks.** Tag changes through the Harbor API do not fire webhooks; `oras tag` does. The controller uses the API.
 
 ## Reproduce
