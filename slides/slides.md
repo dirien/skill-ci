@@ -448,6 +448,71 @@ stack I built to try it, on plain Kubernetes.
 
 ---
 
+# A skill is an OCI artifact
+
+<div class="grid grid-cols-[1.1fr_1fr] gap-10 mt-2 items-start zm">
+  <div class="ociman" v-click>
+    <div class="gpu-caption gpu-caption--accent">net-pypi-check:v1.1.0 in Harbor</div>
+
+```json
+{
+  "artifactType": "application/vnd.agentskill.v1",
+  "layers": [{
+    "mediaType": "…image.layer.v1.tar+gzip",
+    "annotations": {
+      "org.opencontainers.image.title": "net-pypi-check"
+    }
+  }],
+  "annotations": {
+    "skillci.dev/network": "allowlist",
+    "skillci.dev/network-allow": "@python"
+  }
+}
+```
+
+  </div>
+  <div class="ocigets">
+    <div class="ocigets__row" v-click><strong>Digest</strong><span>What was tested is byte for byte what ships</span></div>
+    <div class="ocigets__row" v-click><strong>Tags</strong><span>Release channels: <code>beta</code>, <code>stable</code></span></div>
+    <div class="ocigets__row" v-click><strong>Referrers</strong><span>Evidence attached to the digest: reports, sessions, later signatures</span></div>
+    <div class="ocigets__row" v-click><strong>Registry</strong><span>Access control, replication, retention, scanning</span></div>
+  </div>
+</div>
+
+<div class="ocistrap" v-click>No new registry. No new protocol. No new client.</div>
+
+<style scoped>
+.ociman :deep(pre), .ociman :deep(code) { font-size: 0.82rem !important; line-height: 1.5 !important; }
+.ocigets { display: flex; flex-direction: column; gap: 0.75rem; }
+.ocigets__row { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
+.ocigets__row strong { font-size: 1.2rem; color: var(--p-primary); }
+.ocistrap { margin-top: 1.4rem; padding: 0.7rem 1.1rem; border-left: 4px solid var(--p-primary); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--p-fg); }
+</style>
+
+<!--
+[about 45 seconds, keep it]
+
+This is the whole idea in one picture. [click] A skill version in Harbor: one
+manifest, one layer with the skill folder, and annotations. The skill even
+declares its network here, so the platform reads it like an image label. ORAS
+pushed it; nothing about it is special to skills.
+
+What we get for free: [click] the digest. What the eval tested is byte for
+byte what a developer pulls. [click] Tags. beta and stable are just tags, so
+the release channel is the thing people already know. [click] Referrers. The
+eval report and every trial session hang off the digest, I show that in a
+minute. [click] And the registry does what registries do: access control,
+replication to other sites, retention, scanning.
+
+[click] So there is no new registry, no new protocol and no new client to
+run. If your platform can ship container images, it can ship skills.
+
+Source: oras manifest fetch of skills/net-pypi-check:v1.1.0 on the DOKS
+cluster, 2026-10-31 (config is the OCI empty descriptor, trimmed here).
+-->
+
+---
+
 # One push, one controller, many sandboxes
 
 <div class="diagram-slide">
@@ -1330,6 +1395,59 @@ acme-release-notes skill page), recorded 2026-10-31.
 
 ---
 
+# The evidence travels with the artifact
+
+<div class="grid grid-cols-[1.25fr_1fr] gap-10 mt-2 items-start zm">
+  <div class="tree" v-click>
+    <div class="gpu-caption gpu-caption--accent">oras discover skills/net-pypi-check:v1.1.0</div>
+
+```text
+skills/net-pypi-check@sha256:6c9e260654e5…
+├── application/vnd.skillci.report.v1+json      ×3
+│     agent: claude-code    lift: +0.58
+│     publication: passed
+│     trials: sha256:f06911ca3561…
+└── application/vnd.skillci.trials.v1+json      ×3
+      one per agent, redacted, every trial session
+```
+
+  </div>
+  <div class="ocigets">
+    <div class="ocigets__row" v-click><strong>Pull it</strong><span><code>oras pull</code> the report from any machine with read access</span></div>
+    <div class="ocigets__row" v-click><strong>Copy it</strong><span><code>oras cp -r</code> moves the skill and its evidence together</span></div>
+    <div class="ocigets__row" v-click><strong>Delete it</strong><span>Remove the version and its evidence goes with it</span></div>
+  </div>
+</div>
+
+<style scoped>
+.tree :deep(pre), .tree :deep(code) { font-size: 0.85rem !important; line-height: 1.5 !important; }
+.ocigets { display: flex; flex-direction: column; gap: 0.75rem; }
+.ocigets__row { display: grid; grid-template-columns: 7rem 1fr; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
+.ocigets__row strong { font-size: 1.2rem; color: var(--p-primary); }
+</style>
+
+<!--
+[about 30 seconds]
+
+Where does the evidence live? Not in a database next to the registry. [click]
+On the artifact. This is oras discover on one skill version: three eval
+reports, one per agent, each with its lift and SkillEvaluator's publication
+verdict as annotations, and three trial bundles with every session the agents
+ran, redacted before upload. The report points at its bundle by digest.
+
+[click] Anyone with read access pulls the report, no dashboard needed.
+[click] Copy the skill to another registry with its referrers and the
+evidence comes along. [click] Delete the version and the evidence goes with
+it.
+
+Source: oras discover --format tree on the DOKS cluster, 2026-10-31, after
+the 0.11 release (trial bundles); trimmed to one report's annotations.
+Checked the same day on Harbor 2.15.4: oras cp -r copied a referrer with its
+subject, and deleting the subject artifact removed the referrer too.
+-->
+
+---
+
 # Scraped or pushed: the same numbers
 
 <div class="otel-flow" v-click>
@@ -1527,7 +1645,7 @@ Template: "Success Kid", via imgflip.
 
 <ol class="bp zm">
   <v-clicks>
-  <li><span class="bp__n">1</span>Skills are OCI artifacts in a registry</li>
+  <li><span class="bp__n">1</span>Skills are OCI artifacts: digest, tags, referrers</li>
   <li><span class="bp__n">2</span>A push webhook and the model list start the evals</li>
   <li><span class="bp__n">3</span>Static and security checks run before any tokens</li>
   <li><span class="bp__n">4</span>With and without the skill, several attempts, an interval</li>
@@ -1544,7 +1662,9 @@ Template: "Success Kid", via imgflip.
 <!--
 [24:00 to 24:25]
 
-Five things to take home. The skills live in a registry as OCI artifacts. A
+Five things to take home. The skills live in a registry as OCI artifacts:
+the digest is what was tested, the tags are the channels, and the evidence
+hangs off the digest as referrers. A
 push webhook and the model list, including harness versions, start the evals.
 The cheap static and security checks run before any tokens. The live run
 compares with and without the skill, with several attempts and a confidence
