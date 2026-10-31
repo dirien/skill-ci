@@ -490,8 +490,8 @@ excalidraw.com, then run npm run diagrams).
   <div class="gpu-card gpu-card--muted part" v-click><ph-arrows-down-up class="part__icon" /><div class="part__name">ORAS</div><div class="part__job">Pushes, pulls, and tags skills</div><div class="part__ver">1.3.0</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-magnifying-glass class="part__icon" /><div class="part__name">SkillEvaluator</div><div class="part__job">Three tiers, with and without lift</div><div class="part__ver">NVIDIA, 0.6.0 + patch</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-flask class="part__icon" /><div class="part__name">Harbor framework</div><div class="part__job">Runs the agent trials</div><div class="part__ver">0.24.0</div></div>
-  <div class="gpu-card gpu-card--muted part" v-click><ph-cube class="part__icon" /><div class="part__name">Agent Sandbox</div><div class="part__job">One Sandbox per trial</div><div class="part__ver">kubernetes-sigs, v1.0.9</div></div>
-  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">SkillEval CRD, Jobs, policy, tags</div><div class="part__ver">Go, 0.8.0</div></div>
+  <div class="gpu-card gpu-card--muted part" v-click><ph-cube class="part__icon" /><div class="part__name">Agent Sandbox</div><div class="part__job">Warm pools, one pod per trial</div><div class="part__ver">kubernetes-sigs, v1.0.9</div></div>
+  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">CRDs, Jobs, network policy, tags</div><div class="part__ver">Go, 0.10.1</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-chart-line-up class="part__icon" /><div class="part__name">Prometheus + Grafana</div><div class="part__job">Lift per skill version, or OTLP to any backend</div><div class="part__ver">kube-prometheus-stack</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-browsers class="part__icon" /><div class="part__name">Reporting site</div><div class="part__job">Every run, in plain words</div><div class="part__ver">served by the controller</div></div>
 </div>
@@ -515,10 +515,11 @@ Kubernetes 1.36.5.
 [click] NVIDIA's SkillEvaluator does the actual evaluation: three tiers and
 live with and without the skill runs. I run 0.6.0 with a small patch.
 [click] The Harbor framework runs agent trials.
-[click] Agent Sandbox, from kubernetes-sigs, gives each trial its own
-Sandbox.
+[click] Agent Sandbox, from kubernetes-sigs, keeps a warm pool of sandbox
+pods, and each trial claims one.
 [click] The controller is the part I wrote: the SkillEval CRD, the Jobs, the
-policy, the tag moves.
+network policies, the tag moves, and two CRDs for the platform team: the
+SkillCIConfig and the SandboxProfile.
 [click] Prometheus and Grafana for the numbers over time. The same metrics
 can also go out over OpenTelemetry, to whatever backend you already run.
 [click] And a small reporting site served by the controller.
@@ -738,6 +739,74 @@ Sources: agentskills.io/skill-creation/evaluating-skills; SkillEvaluator 0.6.0
 create-eval-dataset (tested on the DOKS cluster 2026-10-31: claude-opus-5-5,
 about 20 s, 4 cases); anthropics/skills skill-creator (Apache-2.0);
 skills/acme-release-notes/evals/evals.json.
+-->
+
+---
+
+# The skill declares its network, the platform enforces it
+
+<div class="grid grid-cols-[1fr_1.15fr] gap-8 mt-4 items-start zm">
+  <div class="netdecl" v-click>
+    <div class="gpu-caption gpu-caption--accent">SKILL.md frontmatter</div>
+
+```yaml
+metadata:
+  skillci.dev/network: allowlist
+  skillci.dev/network-allow: "@python,dl.k8s.io"
+```
+
+  <p class="netdecl__note">Pushed as OCI annotations, read by the controller.</p>
+  </div>
+  <div class="modes">
+    <div class="mode" v-click><code>none</code><span>the agent's model API and the judge, nothing else</span></div>
+    <div class="mode" v-click><code>allowlist</code><span>plus named domains and bundles like <code>@python</code></span></div>
+    <div class="mode" v-click><code>full</code><span>the internet, never the cluster</span></div>
+    <div class="modes__how" v-click>One CiliumNetworkPolicy per evaluation, the same for both arms. Platform default and ceiling in the SkillCIConfig CRD.</div>
+  </div>
+</div>
+
+<style scoped>
+.netdecl :deep(pre), .netdecl :deep(code) { font-size: 0.95rem !important; line-height: 1.55 !important; }
+.netdecl__note { margin: 0.8rem 0 0 !important; font-size: 1.05rem !important; color: var(--p-fg-muted); }
+.modes { display: flex; flex-direction: column; gap: 0.8rem; }
+.mode { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
+.mode > code { font-size: 1.1rem; font-weight: 700; }
+.modes__how { padding: 0.6rem 1rem; border-left: 4px solid var(--p-primary); font-size: 1rem; line-height: 1.35; color: var(--p-fg-muted); }
+</style>
+
+<!--
+[cut if short on time, about 40 seconds]
+
+A skill that downloads tools at run time behaves differently with and without
+network, so the network is part of what a skill depends on. [click] The skill
+says what it needs, in the metadata of its frontmatter, which the agentskills
+spec leaves open for exactly this. The push copies it into the OCI
+annotations, so the controller reads it like an image label.
+
+[click] none: the agent can reach its model API and the judge, nothing else.
+The judge part I learned from the first live run: SkillEvaluator scores each
+trial inside the sandbox, so with Codex the judge on api.anthropic.com was
+blocked until the controller allowed it. [click]
+allowlist: plus named domains, and bundles the platform defines, like @python
+for pypi.org and files.pythonhosted.org. [click] full: the internet, but
+never the cluster: no Harbor, no Kubernetes API from inside a trial.
+
+[click] The controller creates one CiliumNetworkPolicy per evaluation before
+the trials start, with the same rules for the with and without arms. The
+platform team sets the default and a ceiling in the SkillCIConfig, an object
+in the cluster it edits with kubectl or GitOps, so a skill cannot ask for
+more than the platform allows. A skill that declares nothing gets full.
+
+Verified on the DOKS cluster on 2026-10-31 with release 0.10.1, a skill that
+renders banners with the Python package art, Claude Code with Opus 5.5:
+none: hubble observe shows pypi.org resolved and the connections dropped,
+with skill 0.67; allowlist @python: the trials reach pypi.org, with skill
+0.94; no metadata (full): 0.94. Without the skill about 0.39 in all three.
+Codex in none mode: 0.72 with, 0.46 without (judge host allowed).
+Trials claim pods from a SandboxWarmPool that a SandboxProfile defines.
+Sources: Cilium toFQDNs test on the DOKS cluster 2026-10-31 (api.anthropic.com
+allowed, pypi.org and github.com blocked, pypi.org 200 without the policy);
+agentskills.io/specification (metadata field); CONTRACT.md "Network modes".
 -->
 
 ---
@@ -1478,7 +1547,7 @@ controller chart alone works with a Harbor you already run. [click] QR code
 for the repo.
 
 Source: README.md "Layout", "Helm chart", "Run the demo".
-Releases are tagged (v0.8.0 on 2026-10-31) and the GHCR images and chart are
+Releases are tagged (v0.10.1 on 2026-10-31) and the GHCR images and chart are
 public. TODO: make the GitHub repo public before the talk.
 -->
 
