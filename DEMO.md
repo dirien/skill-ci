@@ -49,7 +49,9 @@ acme-release-notes       sha256:7d8ab5a5f659    stable, v1.1.0
 acme-release-notes       sha256:dc63d710bde5    beta, v1.2.0
 ```
 
-To rebuild this state from scratch: `make reset`, `make seed`, then `make demo-push VERSION=v1.1.0`, `make demo-push SKILL=k8s-resource-naming VERSION=v1.1.0`, and once v1.1.0 holds `stable`, `make demo-push VERSION=v1.2.0`. About an hour of cluster time.
+Pre-baked for beat 7: four more Claude Code runs on release 2.1.300 (v1.1.0 and v1.2.0 of acme-release-notes, v1.0.0 of the other two), from the live rehearsal of `make demo-model-swap MODE=bump`; the model list itself is back on 2.1.292. They are required runs, so they count: v1.2.0 is Regressed on both releases, everything else `Helps`. `kubectl -n skill-ci get skillevals` shows 22 SkillEvals.
+
+To rebuild this state from scratch: `make reset`, `make seed`, then `make demo-push VERSION=v1.1.0`, `make demo-push SKILL=k8s-resource-naming VERSION=v1.1.0`, and once v1.1.0 holds `stable`, `make demo-push VERSION=v1.2.0`; for the 2.1.300 runs, `make demo-model-swap MODE=bump TO=2.1.300`, wait, then `MODE=restore`. About an hour and a half of cluster time.
 
 Four things to know before you talk about these numbers:
 
