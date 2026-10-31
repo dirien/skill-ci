@@ -6,9 +6,8 @@ SHELL := /bin/bash
 PULUMI_ENV ?= $(HOME)/.pulumi-local/skill-ci-env.sh
 PULUMI ?= pulumi
 
-# Release that `make deploy` installs. Default: the newest vX.Y.Z tag of this checkout, whose images
-# and chart the release workflow published to GHCR. Override: TAG=0.8.0, or CONTROLLER_TAG,
-# RUNNER_TAG and SANDBOX_TAG one by one (demo/deploy.sh).
+# Release that `make deploy` installs on the Pulumi stack: the stack config skillCiVersion (default in
+# infra/Pulumi.yaml, the same as SKILL_CI_VERSION in deploy/versions.env). TAG=0.8.1 sets it first.
 
 # Demo beats.
 SKILL ?= acme-release-notes
@@ -44,7 +43,7 @@ preview: ## Show what pulumi up would change
 	@cd infra && { [ ! -f "$(PULUMI_ENV)" ] || . "$(PULUMI_ENV)"; } && $(PULUMI) preview
 
 .PHONY: deploy
-deploy: ## Install a release with the Helm chart and its GHCR images (TAG=0.8.0, default the newest vX.Y.Z tag)
+deploy: ## Install a skill-ci release (OCI chart, CRD, GHCR images) with pulumi up (TAG=0.8.1 sets skillCiVersion)
 	@demo/deploy.sh
 
 .PHONY: seed

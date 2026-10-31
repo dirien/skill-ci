@@ -1439,7 +1439,7 @@ swap the evaluator, keep the loop.
   <div class="gpu-card gpu-card--primary way" v-click>
     <ph-rocket-launch class="way__icon" />
     <div class="way__title">With Pulumi</div>
-    <p><code>make up</code> creates DOKS, Harbor, Agent Sandbox, and monitoring from a Pulumi YAML program</p>
+    <p><code>make up</code> creates DOKS, Harbor, Agent Sandbox, monitoring, and the controller from a Pulumi YAML program</p>
   </div>
   <div class="gpu-card gpu-card--primary way" v-click>
     <ph-sailboat class="way__icon" />
@@ -1471,8 +1471,8 @@ demo runbook. The three skills are demo material written for this talk, not
 production skills.
 
 [click] With Pulumi: make up builds the cluster, Harbor, secrets, Agent
-Sandbox, and Prometheus with Grafana; make deploy installs a release from
-GHCR. [click] With plain Helm: deploy/install.sh does the same with Helm
+Sandbox, Prometheus with Grafana, and the controller from the published OCI
+chart; make deploy TAG=... moves the stack to another release. [click] With plain Helm: deploy/install.sh does the same with Helm
 charts and kubectl, every step documented in deploy/README.md, and the
 controller chart alone works with a Harbor you already run. [click] QR code
 for the repo.

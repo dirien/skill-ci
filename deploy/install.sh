@@ -47,7 +47,7 @@ kc() { kubectl ${kctx[@]+"${kctx[@]}"} "$@"; }
 hm() { helm ${hctx[@]+"${hctx[@]}"} "$@"; }
 
 # otlp_set_args fills otlp_args with the chart values of the OTLP_* variables, nothing when OTLP_ENDPOINT
-# is empty. The same function is in demo/deploy.sh: keep both identical.
+# is empty. The Pulumi path sets the same chart values from stack config (infra/Pulumi.yaml, otlp*).
 otlp_args=()
 otlp_set_args() {
   if [[ -z "${OTLP_ENDPOINT:-}" ]]; then

@@ -28,7 +28,7 @@ The default images are `ghcr.io/dirien/skill-ci-controller`, `skill-ci-runner` a
 chart's `appVersion`, so a chart of release X.Y.Z runs the images of X.Y.Z. They are public: there are no pull
 secrets and no registry or image builder to set up. From a checkout, `helm install skill-ci charts/skill-ci-controller
 --set image.tag=0.8.1 --set controller.runnerImage.tag=0.8.1 --set controller.sandboxImage.tag=0.8.1` does the same
-(`make deploy` does it with the newest release tag). For private packages create a `docker-registry` Secret and
+(on the Pulumi stack `make deploy` installs the published chart, see `infra/Pulumi.yaml`). For private packages create a `docker-registry` Secret and
 set `imagePullSecrets` (see below).
 
 The chart is meant to be installed once per namespace under the release name `skill-ci`: resource names

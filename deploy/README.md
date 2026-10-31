@@ -319,8 +319,8 @@ or `skill-ci-models`.
 ### OpenTelemetry export (optional)
 
 The controller can also push its `skillci_*` metrics over OTLP to an OpenTelemetry Collector, Grafana Alloy, a
-Prometheus OTLP receiver or a vendor endpoint. It is off by default. `install.sh` (and `demo/deploy.sh` on the
-Pulumi path) read these variables and pass each one to the chart only when it is set:
+Prometheus OTLP receiver or a vendor endpoint. It is off by default. `install.sh` reads these variables and passes
+each one to the chart only when it is set (the Pulumi path uses stack config instead, `otlp*` in `infra/Pulumi.yaml`):
 
 | Variable | Chart value | Example |
 | --- | --- | --- |

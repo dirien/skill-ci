@@ -27,7 +27,7 @@ infra/dashboards/      Grafana dashboard JSON (provisioned through a ConfigMap)
 skills/                Sample skills with evals (demo material, see below)
 demo/                  Shell scripts behind the Makefile targets, skill version variants, initial model list
 controller/            The skill-ci controller (Go)
-charts/                Helm chart of the controller (what `make deploy` installs)
+charts/                Helm chart of the controller, published as oci://ghcr.io/dirien/charts/skill-ci-controller
 config/                Controller manifests (CRD source, RBAC, Deployment, Service), plain `kubectl apply -k` alternative
 reports/               Eval reports downloaded by `make report`
 harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox from the generic sandbox image
@@ -40,7 +40,7 @@ runner/                In-cluster runner image and the SkillEval Job (ORAS init 
 
 ## Helm chart
 
-`charts/skill-ci-controller/` packages the controller (CRD, RBAC, runner ServiceAccount, Deployment, Service, optional ServiceMonitor) as a Helm 4 chart. `make deploy` installs it (and applies the CRD first, because Helm never upgrades `crds/`); `kubectl apply -k config/` still works as a plain-manifest alternative. `make chart-crds` copies `config/crd/` into the chart, `make chart-lint` runs `helm lint --strict`, kubeconform, yamllint and a packaging check. See [the chart README](charts/skill-ci-controller/README.md) for values, adopting an existing install with `--take-ownership` and pushing the chart to an OCI registry.
+`charts/skill-ci-controller/` packages the controller (CRD, RBAC, runner ServiceAccount, Deployment, Service, optional ServiceMonitor) as a Helm 4 chart, published to GHCR as an OCI artifact on every release. On the Pulumi stack the release is a resource of `infra/Pulumi.yaml` (the published chart, with the CRD applied separately because Helm never upgrades `crds/`), installed by `make up` or `make deploy`; `kubectl apply -k config/` still works as a plain-manifest alternative. `make chart-crds` copies `config/crd/` into the chart, `make chart-lint` runs `helm lint --strict`, kubeconform, yamllint and a packaging check. See [the chart README](charts/skill-ci-controller/README.md) for values, adopting an existing install with `--take-ownership` and pushing the chart to an OCI registry.
 
 ## Releases
 
@@ -65,7 +65,7 @@ helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version 
 
 The GHCR packages of a private repository are private. Make the four packages (three images and the chart) public in the package settings, which is how they are meant to be used, or give the cluster pull credentials: a `docker-registry` Secret in the namespace and `--set 'imagePullSecrets[0].name=ghcr'`, which the chart uses for the controller and passes to the controller for the runner Jobs and the sandboxes. Helm never upgrades `crds/`, so apply the CRD of the new version before an upgrade: `helm show crds oci://ghcr.io/dirien/charts/skill-ci-controller --version X.Y.Z | kubectl apply --server-side -f -`.
 
-The demo flow: tag a release, then `make deploy` installs the working-tree chart with the images of the newest `vX.Y.Z` tag (`make deploy TAG=0.7.0` to pick one). Nothing is built in the cluster. `make release-snapshot` dry-runs the GoReleaser build locally (needs `goreleaser` and Docker), `make sandbox-image` builds the sandbox image locally.
+The demo flow: tag a release, then `make deploy` installs it with `pulumi up`: the published OCI chart of the stack's `skillCiVersion` (default in `infra/Pulumi.yaml`, the same as `SKILL_CI_VERSION` in `deploy/versions.env`) and the controller, runner and sandbox images of that release (`make deploy TAG=0.8.1` sets the version first). Nothing is built in the cluster. `make release-snapshot` dry-runs the GoReleaser build locally (needs `goreleaser` and Docker), `make sandbox-image` builds the sandbox image locally.
 
 ### CI
 
@@ -85,7 +85,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | Target | What it does |
 | --- | --- |
 | `make up` | `pulumi up`: cluster, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
-| `make deploy` | Applies the CRD and installs the controller with its Helm chart (`helm upgrade --install --take-ownership`) and the GHCR images of the newest release tag (`TAG=0.7.0`, or `CONTROLLER_TAG`, `RUNNER_TAG`, `SANDBOX_TAG` one by one; `GHCR_PULL_SECRET=ghcr` for private packages) |
+| `make deploy` | `pulumi up` with the stack's skill-ci release: the SkillEval CRD and the controller from the OCI chart `oci://ghcr.io/dirien/charts/skill-ci-controller`, with the GHCR images of the same release (`TAG=0.8.1` sets the stack config `skillCiVersion` first). The OTLP export is stack config too: `pulumi config set otlpEndpoint ...` (see `infra/Pulumi.yaml`) |
 | `make sandbox-image` | Builds the sandbox image locally as `skill-ci-sandbox:local` (needs Docker) |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
 | `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |
@@ -99,7 +99,7 @@ Everything goes through `make` (`make help` lists the targets). Scripts print wh
 | `make lint` | shellcheck, yamllint, markdownlint, JSON checks and the dataset check of the skills |
 | `make chart-lint` | `helm lint --strict`, kubeconform, yamllint and a packaging check of the chart |
 
-Suggested order on a fresh checkout, once a release is tagged: `make up`, `make deploy`, `make seed RETRIGGER=1`, `make status`. The retrigger matters when the skills were pushed before the controller existed, because Harbor retries a failed webhook delivery only a few times.
+Suggested order on a fresh checkout, once a release is tagged: `make up` (cluster, Harbor, monitoring and the controller of the stack's release), `make seed RETRIGGER=1`, `make status`; `make deploy TAG=...` later moves the stack to another release. The retrigger matters when the skills were pushed before the controller existed, because Harbor retries a failed webhook delivery only a few times.
 
 Demo beats after that (a SkillEval takes 11 to 13 minutes and three run at a time, so [DEMO.md](DEMO.md) pre-bakes the results and uses at most one live trigger):
 
@@ -252,7 +252,7 @@ The profile is SkillEvaluator's built-in `external`, the only one it ships. For 
 make up                       # or: cd infra && pulumi up
 
 # Images, controller, skills
-make deploy                   # the images of the newest vX.Y.Z tag, or TAG=0.7.0
+make deploy                   # the stack's skillCiVersion, or TAG=0.8.1
 kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$ANTHROPIC_API_KEY"
 make seed RETRIGGER=1
 make status
