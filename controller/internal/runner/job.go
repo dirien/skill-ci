@@ -112,7 +112,8 @@ func JobName(se *v1alpha1.SkillEval) string {
 }
 
 // NewJob renders the Job that evaluates one SkillEval. The Job is named by
-// JobName and is owned by the SkillEval.
+// JobName and is owned by the SkillEval. SANDBOX_WARM_POOL comes from
+// status.warmPool, which the controller sets before it creates the Job.
 func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 	env := []corev1.EnvVar{
 		{Name: "SKILL_REF", Value: cfg.Registry + "/" + cfg.Project + "/" + se.Spec.Skill + "@" + se.Spec.Digest},
@@ -120,6 +121,11 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 		{Name: "AGENT", Value: se.Spec.Agent},
 		{Name: "MODEL", Value: se.Spec.Model},
 		{Name: "ATTEMPTS", Value: strconv.Itoa(se.Spec.Attempts)},
+		// The runner labels its trial pods with it, which the eval's network policy selects.
+		{Name: "SKILLEVAL_NAME", Value: se.Name},
+	}
+	if se.Status.WarmPool != "" { // without it the runner starts a bare Sandbox per trial
+		env = append(env, corev1.EnvVar{Name: "SANDBOX_WARM_POOL", Value: se.Status.WarmPool})
 	}
 	if se.Spec.AgentVersion != "" { // without it the runner uses its default pin for the agent
 		env = append(env, corev1.EnvVar{Name: "AGENT_VERSION", Value: se.Spec.AgentVersion})

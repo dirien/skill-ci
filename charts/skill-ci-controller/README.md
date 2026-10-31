@@ -16,6 +16,10 @@ The chart replaces `kubectl apply -k config/`. Its defaults reproduce `config/ma
   - Secret `llm-keys` (`anthropic`; optional `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter`), read by runner Jobs
   - ConfigMap `skill-ci-models` (key `models.yaml`)
 - Optional: the Prometheus Operator CRDs for `serviceMonitor.enabled`.
+- Optional: the Agent Sandbox extensions CRDs (`sandboxtemplates`, `sandboxwarmpools`, `sandboxclaims` in
+  `extensions.agents.x-k8s.io`) for warm trial pods; without them every trial starts a bare `Sandbox`.
+- Optional: Cilium (CRD `ciliumnetworkpolicies.cilium.io`) for the network modes `none` and `allowlist`;
+  without it only `full` runs (see `controller.network`).
 
 ## Install
 
@@ -37,7 +41,7 @@ default to the chart name (`skill-ci-controller`) and the controller hardcodes t
 
 ### CRD handling
 
-The `SkillEval` CRD lives in `crds/`. Helm installs it before everything else and never upgrades or deletes
+The `SkillEval` and `SandboxProfile` CRDs live in `crds/`. Helm installs it before everything else and never upgrades or deletes
 it. After a schema change, apply the CRD by hand and then upgrade the release:
 
 ```sh
@@ -100,7 +104,7 @@ keys are rejected.
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | Pull Secrets of the controller pod; the names are also passed as `--image-pull-secrets` and used for the runner Jobs and the sandboxes. Set for private GHCR packages |
 | `serviceAccount.create`, `.name`, `.annotations` | `true`, `""`, `{}` | Controller ServiceAccount |
-| `rbac.create`, `rbac.extraRules` | `true`, `[]` | Controller Role and RoleBinding |
+| `rbac.create`, `rbac.extraRules` | `true`, `[]` | Controller Role and RoleBinding, and a ClusterRole and ClusterRoleBinding `<fullname>-crds-<namespace>` that only reads CustomResourceDefinitions (Cilium and Agent Sandbox detection) |
 | `controller.namespace` | `""` (release namespace) | `--namespace` |
 | `controller.harborUrl` | `http://harbor.harbor.svc.cluster.local` | `--harbor-url` |
 | `controller.harborProject` | `skills` | `--harbor-project` |
@@ -120,6 +124,15 @@ keys are rejected.
 | `controller.maxRetries` | `1` | `--max-retries`: fresh Jobs after an infrastructure failure, 0 disables; needs controller image 0.4.1 or newer |
 | `controller.dryRun` | `false` | `--dry-run` |
 | `controller.leaderElect` | `false` | `--leader-elect` |
+| `controller.defaultSandboxProfile` | `default` | `--default-sandbox-profile`: the SandboxProfile of a model list entry without `sandboxProfile`; when it does not exist, runs start a bare Sandbox per trial. Needs controller image 0.9.0 or newer, as do all `controller.network` values |
+| `controller.network.default` | `full` | `--network-default`: the mode of a skill that declares no `skillci.dev/network` |
+| `controller.network.modes` | `[none, allowlist, full]` | `--network-modes`: the modes a skill may declare; another one fails the run without a Job |
+| `controller.network.enforcement` | `auto` | `--network-enforcement`: `auto` (CiliumNetworkPolicies when Cilium's CRD exists), `cilium` (require Cilium), `off` (no policies) |
+| `controller.network.alwaysAllow` | `[]` | `--network-always-allow`: hosts added to `none` and `allowlist`, for example a proxy |
+| `controller.network.bundles` | `apt`, `github`, `node`, `python` | `--network-bundles`: name to hosts, named as `@<name>` in `skillci.dev/network-allow`. A map that merges with the defaults; `null` drops a bundle |
+| `controller.network.preinstalledAgents` | `[claude-code@2.1.292, codex@0.161.0, opencode@1.19.1]` | `--preinstalled-agents`: agent pins in the sandbox image |
+| `controller.network.agentInstallHosts` | `[registry.npmjs.org]` | `--agent-install-hosts`: added to `none` and `allowlist` for an entry whose agent version is not preinstalled |
+| `sandboxProfiles` | `{default: {image: "", resources: {cpu: "1", memory: 2Gi}, warmPool: {replicas: 2}}}` | SandboxProfiles created in the controller namespace, name to spec (`image`, `resources`, `warmPool.replicas`, `runtimeClassName`, `nodeSelector`, `tolerations`). An empty image is `--sandbox-image`. `null` drops one. Rendered only when the chart ships the SandboxProfile CRD |
 | `controller.logging.level`, `.encoder`, `.development` | `""`, `""`, `false` | `--zap-log-level`, `--zap-encoder`, `--zap-devel` |
 | `ports.webhook`, `ports.metrics`, `ports.reports` | `8080`, `8081`, `8082` | Container ports, `--webhook-addr`, `--metrics-addr`, `--reports-addr` |
 | `reports.enabled` | `true` | Serve the reporting website on `ports.reports` (needs controller image 0.3.0 or newer; `false` passes an empty `--reports-addr`) |
@@ -129,7 +142,7 @@ keys are rejected.
 | `secrets.llmKeys.existingSecret` | `llm-keys` | Used by runner Jobs; the controller hardcodes the name |
 | `secrets.llmKeys.anthropic`, `.openai`, `.openaiBaseUrl`, `.nvidia`, `.ollama`, `.openrouter` | `""` | Only with `create: true`: the Secret keys `anthropic` (required), `openai`, `openai-base-url`, `nvidia`, `ollama`, `openrouter`. See "LLM keys" |
 | `secrets.<name>.create` | `false` | Create the Secret from inline values (demos only) |
-| `runner.enabled` | `true` | Runner ServiceAccount, Role, RoleBinding |
+| `runner.enabled` | `true` | Runner ServiceAccount, Role (Sandboxes, SandboxClaims, pods, exec), RoleBinding |
 | `runner.serviceAccount.name` | `skill-eval-runner` | Hardcoded in the controller |
 | `runner.pullSecretName` | `""` | A Secret the runner may `get`; empty adds no rule. Only for trials that build task images in a registry of your own (`TASK_IMAGE_REGISTRY` on the runner, see CONTRACT.md "Sandbox image") |
 | `runner.extraRules` | `[]` | |

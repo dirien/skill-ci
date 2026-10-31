@@ -35,6 +35,8 @@ type Handler struct {
 	Token string
 	// Attempts is the trials per arm for new SkillEvals.
 	Attempts int
+	// DefaultSandboxProfile is the SandboxProfile of an entry that names none.
+	DefaultSandboxProfile string
 	// Log receives one line per request.
 	Log logr.Logger
 }
@@ -84,6 +86,7 @@ func (h *Handler) handle(ctx context.Context, p Payload) (int, error) {
 			ok, err := evals.Ensure(ctx, h.Client, h.Namespace, evals.Request{
 				Skill: push.Skill, Version: push.Version, Digest: push.Digest,
 				Model: m, Attempts: h.Attempts, Trigger: v1alpha1.TriggerPush,
+				DefaultSandboxProfile: h.DefaultSandboxProfile,
 			})
 			if err != nil {
 				return created, fmt.Errorf("ensuring skilleval: %w", err)

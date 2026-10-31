@@ -1,4 +1,4 @@
-// Package v1alpha1 contains the SkillEval API of skillci.dev.
+// Package v1alpha1 contains the SkillEval and SandboxProfile APIs of skillci.dev.
 // +kubebuilder:object:generate=true
 // +groupName=skillci.dev
 package v1alpha1
@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	// GroupVersion is the group and version of the SkillEval API.
+	// GroupVersion is the group and version of the skillci.dev API.
 	GroupVersion = schema.GroupVersion{Group: "skillci.dev", Version: "v1alpha1"}
 
 	// SchemeBuilder registers the API types with a runtime.Scheme.
@@ -21,7 +21,7 @@ var (
 )
 
 func addKnownTypes(s *runtime.Scheme) error {
-	s.AddKnownTypes(GroupVersion, &SkillEval{}, &SkillEvalList{})
+	s.AddKnownTypes(GroupVersion, &SkillEval{}, &SkillEvalList{}, &SandboxProfile{}, &SandboxProfileList{})
 	metav1.AddToGroupVersion(s, GroupVersion)
 	return nil
 }

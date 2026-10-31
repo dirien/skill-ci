@@ -158,6 +158,7 @@ func (r *ModelsReconciler) evaluateTagged(ctx context.Context, added []models.Mo
 				ok, err := evals.Ensure(ctx, r.Client, r.Config.Namespace, evals.Request{
 					Skill: skill, Version: version, Digest: art.Digest, Model: m,
 					Attempts: r.Config.Attempts, Trigger: v1alpha1.TriggerModelChange,
+					DefaultSandboxProfile: r.Config.DefaultSandboxProfile,
 				})
 				if err != nil {
 					return created, fmt.Errorf("evaluating %s %s: %w", skill, version, err)

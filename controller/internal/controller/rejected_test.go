@@ -48,6 +48,10 @@ func TestRunningTierResult(t *testing.T) {
 			v1alpha1.PhaseSucceeded, v1alpha1.VerdictRejected, "0.90", &v1alpha1.TierStatuses{Tier1: "failed"}, "", 1, ""},
 		{"older runner: no tiers, nothing recorded", `{"withSkill":0.95,"withoutSkill":0.36,"lift":0.59}`,
 			v1alpha1.PhaseSucceeded, v1alpha1.VerdictHelps, "0.95", nil, "", 0, ""},
+		{"an error after the gate keeps the tiers and findings",
+			`{"error":"no eval dataset: add evals/evals.json","tiers":{"tier1":"passed","tier2":"passed","tier3":"skipped"},` +
+				`"publication":"incomplete","findings":["tier1/quality: description is short"]}`,
+			v1alpha1.PhaseFailed, "", "", &v1alpha1.TierStatuses{Tier1: "passed", Tier2: "passed", Tier3: "skipped"}, "", 1, "no eval dataset"},
 		{"no scores and no failed tier is a failure",
 			`{"tiers":{"tier1":"incomplete","tier2":"passed","tier3":"skipped"},"publication":"incomplete"}`,
 			v1alpha1.PhaseFailed, "", "", nil, "", 0, "no scores and no failed tier"},

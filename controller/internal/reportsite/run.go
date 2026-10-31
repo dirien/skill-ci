@@ -23,6 +23,8 @@ const (
 	// conditionRetried is set when a run was started again after an
 	// infrastructure failure; its message is the failure of the earlier Job.
 	conditionRetried = "Retried"
+	// conditionNetworkPolicy mirrors controller.ConditionNetworkPolicy.
+	conditionNetworkPolicy = "NetworkPolicy"
 )
 
 // Score is a score as the controller stores it, a string with two decimals,
@@ -108,6 +110,59 @@ type Run struct {
 	Publication string
 	// Findings are the short strings naming the failing tier and check.
 	Findings []string
+	// Network is the network the trials got; see NetworkView.
+	Network NetworkView
+	// SandboxProfile is the SandboxProfile the run used; empty for a bare Sandbox per trial.
+	SandboxProfile string
+	// SpecProfile is the SandboxProfile the spec names; empty means the controller default.
+	SpecProfile string
+	// WarmPool is the SandboxWarmPool the trials were claimed from; empty for a bare Sandbox.
+	WarmPool string
+}
+
+// NetworkView is the network of a run, for the run page.
+type NetworkView struct {
+	// Mode is none, allowlist or full; empty when the run predates network modes.
+	Mode string
+	// Source is skill or default.
+	Source string
+	// Declared are the hosts and @bundles the skill declared.
+	Declared []string
+	// Hosts are the hosts the trials could reach on TCP 443, bundles expanded.
+	Hosts []string
+	// Policy is the CiliumNetworkPolicy that enforced the mode, empty when none did.
+	Policy string
+	// Enforced reports whether a policy enforced the mode.
+	Enforced bool
+	// Reason and Message are those of the NetworkPolicy condition.
+	Reason, Message string
+}
+
+// Legacy reports whether the run predates network modes: it ran with full and no policy.
+func (n NetworkView) Legacy() bool { return n.Mode == "" }
+
+// SourceText says where the mode comes from, in words.
+func (n NetworkView) SourceText() string {
+	switch n.Source {
+	case v1alpha1.NetworkSourceSkill:
+		return "declared by the skill"
+	case v1alpha1.NetworkSourceDefault:
+		return "platform default, the skill declares none"
+	default:
+		return ""
+	}
+}
+
+// Reach says what the trials could reach, in words.
+func (n NetworkView) Reach() string {
+	switch n.Mode {
+	case "", v1alpha1.NetworkFull:
+		return "The internet, not the cluster."
+	case v1alpha1.NetworkNone:
+		return "Only the model API hosts."
+	default:
+		return "The model API hosts and the hosts the skill declares."
+	}
 }
 
 func newRun(se *v1alpha1.SkillEval, confidence string) Run {
@@ -129,6 +184,16 @@ func newRun(se *v1alpha1.SkillEval, confidence string) Run {
 		r.CI, r.N = "", ""
 	}
 	r.Publication, r.Findings = se.Status.Publication, se.Status.Findings
+	r.SandboxProfile, r.SpecProfile, r.WarmPool = se.Status.SandboxProfile, se.Spec.SandboxProfile, se.Status.WarmPool
+	if n := se.Spec.Network; n != nil {
+		r.Network.Mode, r.Network.Source, r.Network.Declared = n.Mode, n.Source, n.Allow
+	}
+	if n := se.Status.Network; n != nil {
+		if n.Mode != "" {
+			r.Network.Mode = n.Mode
+		}
+		r.Network.Hosts, r.Network.Policy, r.Network.Enforced = n.Hosts, n.Policy, n.Enforced
+	}
 	if r.Phase == "" {
 		r.Phase = string(v1alpha1.PhasePending)
 	}
@@ -145,6 +210,9 @@ func newRun(se *v1alpha1.SkillEval, confidence string) Run {
 		}
 		if c.Type == conditionRetried && c.Status == metav1.ConditionTrue {
 			r.Retried = c.Message
+		}
+		if c.Type == conditionNetworkPolicy {
+			r.Network.Reason, r.Network.Message = c.Reason, c.Message
 		}
 	}
 	return r
@@ -390,6 +458,23 @@ func (r Run) RetryNote() string {
 		return note + "."
 	}
 	return note + ": " + r.Retried
+}
+
+// SandboxText says what the trials ran in, in words.
+func (r Run) SandboxText() string {
+	switch {
+	case r.WarmPool != "":
+		return "SandboxProfile " + r.SandboxProfile + ", trial pods claimed from warm pool " + r.WarmPool
+	case r.SandboxProfile != "":
+		return "SandboxProfile " + r.SandboxProfile + ", a bare Sandbox per trial (the Agent Sandbox extensions are not installed)"
+	case r.Phase == string(v1alpha1.PhasePending) || r.Phase == string(v1alpha1.PhasePlanned):
+		if r.SpecProfile != "" {
+			return "SandboxProfile " + r.SpecProfile
+		}
+		return "the default SandboxProfile"
+	default:
+		return "a bare Sandbox per trial"
+	}
 }
 
 // HasReport reports whether the runner stored a report for this run.

@@ -14,4 +14,4 @@ keywords:
 sources:
   - https://github.com/dirien/skill-ci
 annotations:
-  skillci.dev/crd-source: config/crd/skillci.dev_skillevals.yaml
+  skillci.dev/crd-source: config/crd/skillci.dev_skillevals.yaml,config/crd/skillci.dev_sandboxprofiles.yaml

@@ -67,7 +67,26 @@
     <div><dt>Completed</dt><dd>{{if .Run.Completed.IsZero}}<span class="muted">not yet</span>{{else}}<time datetime="{{rfc .Run.Completed}}">{{tsSec .Run.Completed}} UTC</time> <span class="muted">{{age .Run.Completed}}</span>{{end}}</dd></div>
     <div><dt>Duration</dt><dd>{{dur .Run.Duration}} <span class="muted">from creation to completion</span></dd></div>
     <div><dt>Job</dt><dd class="mono">{{dash .Run.JobName}}</dd></div>
+    <div><dt>Sandbox</dt><dd>{{.Run.SandboxText}}</dd></div>
   </dl>
+</section>
+
+<section aria-labelledby="network-h">
+  <h2 id="network-h">Network</h2>
+  {{with .Run.Network}}
+  {{if .Legacy}}
+  <p class="empty">{{if eq $.Run.Phase "Pending"}}The network is decided when the run starts.{{else}}full: this run predates network modes. The trials had the internet and no policy of skill-ci.{{end}}</p>
+  {{else}}
+  <dl class="facts">
+    <div><dt>Mode</dt><dd><code>{{.Mode}}</code>{{with .SourceText}} <span class="muted">({{.}})</span>{{end}}</dd></div>
+    <div><dt>Reach</dt><dd>{{.Reach}}</dd></div>
+    {{if .Declared}}<div><dt>Declared</dt><dd class="mono wrap">{{range $i, $d := .Declared}}{{if $i}}, {{end}}{{$d}}{{end}}</dd></div>{{end}}
+    {{if .Hosts}}<div><dt>Allowed hosts</dt><dd class="mono wrap">{{range $i, $h := .Hosts}}{{if $i}}, {{end}}{{$h}}{{end}} <span class="muted">(TCP 443)</span></dd></div>{{end}}
+    <div><dt>Enforcement</dt><dd>{{if .Enforced}}CiliumNetworkPolicy <code>{{.Policy}}</code>{{else if eq .Reason "Enforced" "NotEnforced" ""}}not enforced by skill-ci{{else}}the run did not start ({{.Reason}}){{end}}</dd></div>
+  </dl>
+  {{with .Message}}<p class="sub">{{.}}</p>{{end}}
+  {{end}}
+  {{end}}
 </section>
 
 <section aria-labelledby="conditions-h">

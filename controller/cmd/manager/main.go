@@ -23,8 +23,10 @@ import (
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/controller"
+	"github.com/dirien/skill-ci/controller/internal/crds"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/metrics"
+	"github.com/dirien/skill-ci/controller/internal/network"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 	"github.com/dirien/skill-ci/controller/internal/reportsite"
 	"github.com/dirien/skill-ci/controller/internal/reportstore"
@@ -112,6 +114,78 @@ func addOTLPExporter(mgr ctrl.Manager, f otlpFlags) error {
 	return nil
 }
 
+// networkFlags holds the --network-* flags until they are parsed into a network.Policy.
+type networkFlags struct {
+	def, modes, enforcement, alwaysAllow, bundles, preinstalled, installHosts string
+}
+
+// bindNetworkFlags registers the network mode flags.
+func bindNetworkFlags(f *networkFlags) {
+	flag.StringVar(&f.def, "network-default", "full", "Network mode of a skill that declares none: none, allowlist or full.")
+	flag.StringVar(&f.modes, "network-modes", "none,allowlist,full", "Comma separated network modes a skill may declare; a run with another mode fails.")
+	flag.StringVar(&f.enforcement, "network-enforcement", string(network.EnforcementAuto),
+		"auto: enforce with CiliumNetworkPolicies when the ciliumnetworkpolicies.cilium.io CRD exists; cilium: require Cilium; off: no policies.")
+	flag.StringVar(&f.alwaysAllow, "network-always-allow", "", "Comma separated hosts added to the none and allowlist modes, for example a proxy.")
+	flag.StringVar(&f.bundles, "network-bundles", network.FormatBundles(network.DefaultBundles),
+		"Host bundles a skill names as @<bundle>: name=host,host;name=host.")
+	flag.StringVar(&f.preinstalled, "preinstalled-agents", strings.Join(network.DefaultPreinstalledAgents, ","),
+		"Comma separated agent@version pins in the sandbox image; another agent version adds --agent-install-hosts to none and allowlist.")
+	flag.StringVar(&f.installHosts, "agent-install-hosts", strings.Join(network.DefaultAgentInstallHosts, ","),
+		"Comma separated hosts an agent install needs (Harbor installs the CLI with npm).")
+}
+
+// policy parses the network flags.
+func (f networkFlags) policy() (network.Policy, error) {
+	modes, err := network.ParseModes(f.modes)
+	if err != nil {
+		return network.Policy{}, fmt.Errorf("invalid --network-modes: %w", err)
+	}
+	bundles, err := network.ParseBundles(f.bundles)
+	if err != nil {
+		return network.Policy{}, fmt.Errorf("invalid --network-bundles: %w", err)
+	}
+	p := network.Policy{
+		Default: strings.TrimSpace(f.def), Allowed: modes, Enforcement: network.Enforcement(strings.TrimSpace(f.enforcement)),
+		AlwaysAllow: network.SplitList(f.alwaysAllow), Bundles: bundles,
+		Preinstalled: network.SplitList(f.preinstalled), InstallHosts: network.SplitList(f.installHosts),
+	}
+	if err := p.Validate(); err != nil {
+		return network.Policy{}, fmt.Errorf("invalid network flags: %w", err)
+	}
+	return p, nil
+}
+
+// setupSandboxProfiles registers the SandboxProfile reconciler and the
+// baseline network policy. Without the SandboxProfile CRD (an upgrade that
+// did not apply the new CRDs) it registers nothing and runs fall back to a
+// bare Sandbox per trial.
+func setupSandboxProfiles(mgr ctrl.Manager, detector crds.Checker, cfg controller.Config) error {
+	log := ctrl.Log.WithName("setup")
+	ctx := context.Background()
+	if err := mgr.Add(&controller.BaselinePolicy{Client: mgr.GetClient(), CRDs: detector, Namespace: cfg.Namespace, Network: cfg.Network}); err != nil {
+		return fmt.Errorf("adding baseline network policy: %w", err)
+	}
+	present, err := detector.Has(ctx, sandboxProfileCRD)
+	if err != nil {
+		// Most likely the ClusterRole that reads CRDs is missing; runs still work.
+		log.Error(err, "detecting the SandboxProfile CRD, profiles are not reconciled", "crd", sandboxProfileCRD)
+		return nil
+	}
+	if !present {
+		log.Info("SandboxProfile CRD not found: profiles are not reconciled and runs start a bare Sandbox per trial", "crd", sandboxProfileCRD)
+		return nil
+	}
+	if err := (&controller.SandboxProfileReconciler{
+		Client: mgr.GetClient(), CRDs: detector, Config: cfg,
+	}).SetupWithManager(ctx, mgr); err != nil {
+		return fmt.Errorf("registering sandboxprofile controller: %w", err)
+	}
+	return nil
+}
+
+// sandboxProfileCRD is the CRD of the SandboxProfile kind.
+const sandboxProfileCRD = "sandboxprofiles.skillci.dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
@@ -147,6 +221,7 @@ func run() error {
 		trialBudget                                                                                        int
 		leaderElect                                                                                        bool
 		otlp                                                                                               otlpFlags
+		netFlags                                                                                           networkFlags
 	)
 	flag.StringVar(&cfg.Namespace, "namespace", "skill-ci", "Namespace for SkillEvals, Jobs and the model list.")
 	flag.StringVar(&harborURL, "harbor-url", "http://harbor.harbor.svc.cluster.local", "Harbor base URL.")
@@ -171,6 +246,9 @@ func run() error {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")
 	flag.StringVar(&reportsAddr, "reports-addr", ":8082", "Address for the reporting website; empty disables it.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election (needed only with several replicas).")
+	flag.StringVar(&cfg.DefaultSandboxProfile, "default-sandbox-profile", "default",
+		"SandboxProfile of a model list entry without sandboxProfile; when it does not exist, runs start a bare Sandbox per trial.")
+	bindNetworkFlags(&netFlags)
 	bindOTLPFlags(&otlp)
 	logOpts := zap.Options{Development: false}
 	logOpts.BindFlags(flag.CommandLine)
@@ -179,6 +257,11 @@ func run() error {
 	if th.Confidence <= 0 || th.Confidence >= 1 {
 		return fmt.Errorf("invalid --confidence %v: must be between 0 and 1", th.Confidence)
 	}
+	netPolicy, err := netFlags.policy()
+	if err != nil {
+		return err
+	}
+	cfg.Network = netPolicy
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&logOpts)))
 	setupLog := ctrl.Log.WithName("setup")
@@ -216,10 +299,12 @@ func run() error {
 	}
 
 	registry := harbor.New(harborURL, cfg.Project, os.Getenv("HARBOR_USERNAME"), os.Getenv("HARBOR_PASSWORD"))
+	detector := &crds.Detector{Reader: mgr.GetAPIReader()}
 
 	if err := (&controller.SkillEvalReconciler{
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Harbor: registry,
 		Recorder: mgr.GetEventRecorder("skill-ci-controller"), Config: cfg, Budget: controller.NewBudget(trialBudget),
+		CRDs: detector,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("registering skilleval controller: %w", err)
 	}
@@ -227,6 +312,10 @@ func run() error {
 		Client: mgr.GetClient(), Harbor: registry, ConfigMap: modelsCM, Config: cfg,
 	}).SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("registering models controller: %w", err)
+	}
+
+	if err := setupSandboxProfiles(mgr, detector, cfg); err != nil {
+		return err
 	}
 
 	if err := mgr.Add(&controller.PhaseGauge{Reader: mgr.GetClient(), Namespace: cfg.Namespace}); err != nil {
@@ -238,7 +327,8 @@ func run() error {
 
 	hook := &webhook.Handler{
 		Client: mgr.GetClient(), Namespace: cfg.Namespace, Project: cfg.Project, ModelsConfigMap: modelsCM,
-		Token: os.Getenv("WEBHOOK_TOKEN"), Attempts: cfg.Attempts, Log: ctrl.Log.WithName("webhook"),
+		Token: os.Getenv("WEBHOOK_TOKEN"), Attempts: cfg.Attempts, DefaultSandboxProfile: cfg.DefaultSandboxProfile,
+		Log: ctrl.Log.WithName("webhook"),
 	}
 	if err := mgr.Add(webhook.NewServer(webhookAddr, hook)); err != nil {
 		return fmt.Errorf("adding webhook server: %w", err)
@@ -254,7 +344,9 @@ func run() error {
 		}
 	}
 
-	setupLog.Info("starting manager", "namespace", cfg.Namespace, "dryRun", cfg.DryRun, "runnerImage", runnerImage, "sandboxImage", sandboxImage)
+	setupLog.Info("starting manager", "namespace", cfg.Namespace, "dryRun", cfg.DryRun, "runnerImage", runnerImage, "sandboxImage", sandboxImage,
+		"networkDefault", cfg.Network.DefaultMode(), "networkModes", cfg.Network.AllowedModes(), "networkEnforcement", cfg.Network.EnforcementMode(),
+		"defaultSandboxProfile", cfg.DefaultSandboxProfile)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("running manager: %w", err)
 	}

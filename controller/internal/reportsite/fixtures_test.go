@@ -59,6 +59,10 @@ type spec struct {
 	retried               string // message of the Retried condition
 	n, ci                 string // trials per arm ("9/9") and lift interval ("[+0.41, +0.73]")
 	inconclusive          string // message of the Inconclusive condition
+	network               *v1alpha1.NetworkSpec
+	netStatus             *v1alpha1.NetworkStatus
+	netCond               *metav1.Condition // the NetworkPolicy condition
+	profile, warmPool     string            // status.sandboxProfile and status.warmPool
 }
 
 func at(hour, minute int) time.Time {
@@ -109,6 +113,13 @@ func (s spec) object() *v1alpha1.SkillEval {
 			Type: "Inconclusive", Status: metav1.ConditionTrue, Reason: "NotEnoughEvidence", Message: s.inconclusive,
 			LastTransitionTime: metav1.NewTime(s.started.Add(s.took)),
 		})
+	}
+	se.Spec.Network, se.Status.Network = s.network, s.netStatus
+	se.Status.SandboxProfile, se.Status.WarmPool = s.profile, s.warmPool
+	if s.netCond != nil {
+		c := *s.netCond
+		c.LastTransitionTime = metav1.NewTime(s.started)
+		se.Status.Conditions = append(se.Status.Conditions, c)
 	}
 	se.Status.Retries = s.retries
 	if s.retried != "" {

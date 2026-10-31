@@ -52,6 +52,8 @@ func (r *SkillEvalReconciler) retryRun(ctx context.Context, se *v1alpha1.SkillEv
 	log := logf.FromContext(ctx)
 	oldJob := se.Status.JobName
 	se.Status.Retries++
+	// The next Job reports its own gate.
+	se.Status.Tiers, se.Status.Publication, se.Status.Findings = nil, "", nil
 	meta.SetStatusCondition(&se.Status.Conditions, metav1.Condition{
 		Type: ConditionRetried, Status: metav1.ConditionTrue, Reason: ReasonInfrastructureFailure, Message: failure,
 	})

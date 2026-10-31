@@ -215,3 +215,24 @@ func scheme(t *testing.T) *runtime.Scheme {
 	}
 	return s
 }
+
+func TestNewSandboxProfile(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry models.Model
+		def   string
+		want  string
+	}{
+		{name: "entry names a profile", entry: models.Model{Agent: "a", Model: "m", SandboxProfile: "big"}, def: "default", want: "big"},
+		{name: "entry names none", entry: models.Model{Agent: "a", Model: "m"}, def: "default", want: "default"},
+		{name: "no default either", entry: models.Model{Agent: "a", Model: "m"}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := New("skill-ci", Request{Skill: "s", Version: "v1.0.0", Digest: "sha256:aa", Model: tt.entry, DefaultSandboxProfile: tt.def})
+			if se.Spec.SandboxProfile != tt.want {
+				t.Fatalf("got %q, want %q", se.Spec.SandboxProfile, tt.want)
+			}
+		})
+	}
+}

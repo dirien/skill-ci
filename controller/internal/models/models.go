@@ -3,8 +3,10 @@ package models
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/yaml"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
@@ -24,6 +26,10 @@ type Model struct {
 	Model string `json:"model"`
 	// Required marks models whose result gates promotion.
 	Required bool `json:"required,omitempty"`
+	// SandboxProfile names the SandboxProfile the trials run in; empty means
+	// the controller's --default-sandbox-profile. It is not part of the
+	// identity: changing it affects new runs only.
+	SandboxProfile string `json:"sandboxProfile,omitempty"`
 }
 
 // Harness is agent@version, or the agent alone when no version is pinned.
@@ -57,6 +63,11 @@ func Parse(data []byte) ([]Model, error) {
 		}
 		if m.AgentVersion != "" && !v1alpha1.ValidAgentVersion(m.AgentVersion) {
 			return nil, fmt.Errorf("model entry %s: agentVersion %q must be a release like 2.1.292", m.Key(), m.AgentVersion)
+		}
+		if m.SandboxProfile != "" {
+			if errs := validation.IsDNS1123Subdomain(m.SandboxProfile); len(errs) > 0 {
+				return nil, fmt.Errorf("model entry %s: sandboxProfile %q: %s", m.Key(), m.SandboxProfile, strings.Join(errs, "; "))
+			}
 		}
 		if seen[m.Key()] {
 			return nil, fmt.Errorf("duplicate model entry %s", m.Key())

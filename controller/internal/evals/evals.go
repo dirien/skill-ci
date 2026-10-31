@@ -118,6 +118,17 @@ type Request struct {
 	Attempts int
 	// Trigger records why the eval is created.
 	Trigger v1alpha1.Trigger
+	// DefaultSandboxProfile is the profile of an entry that names none
+	// (--default-sandbox-profile).
+	DefaultSandboxProfile string
+}
+
+// SandboxProfile returns the profile the request's runs use: the entry's, else the default.
+func (r Request) SandboxProfile() string {
+	if r.Model.SandboxProfile != "" {
+		return r.Model.SandboxProfile
+	}
+	return r.DefaultSandboxProfile
 }
 
 // New builds the SkillEval for a request.
@@ -132,11 +143,12 @@ func New(namespace string, r Request) *v1alpha1.SkillEval {
 			Digest:  r.Digest,
 			Agent:   r.Model.Agent,
 			// A pinned version is the identity; an unpinned entry leaves it to the runner's default.
-			AgentVersion: r.Model.AgentVersion,
-			Model:        r.Model.Model,
-			Required:     r.Model.Required,
-			Attempts:     r.Attempts,
-			Trigger:      r.Trigger,
+			AgentVersion:   r.Model.AgentVersion,
+			Model:          r.Model.Model,
+			Required:       r.Model.Required,
+			Attempts:       r.Attempts,
+			Trigger:        r.Trigger,
+			SandboxProfile: r.SandboxProfile(),
 		},
 	}
 }

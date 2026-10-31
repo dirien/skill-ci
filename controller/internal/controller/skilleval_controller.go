@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/crds"
 	"github.com/dirien/skill-ci/controller/internal/evals"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/metrics"
@@ -45,6 +46,8 @@ type SkillEvalReconciler struct {
 	Config Config
 	// Budget caps the trials started by this process.
 	Budget *Budget
+	// CRDs detects Cilium; nil means no optional CRD is installed.
+	CRDs crds.Checker
 }
 
 // SetupWithManager registers the reconciler. Status writes do not change the
@@ -135,6 +138,14 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 			return ctrl.Result{}, err
 		}
 	}
+	plan, failure, err := r.prepareRun(ctx, se)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if failure != "" {
+		log.Info("run cannot start", "skilleval", se.Name, "reason", failure)
+		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, failure)
+	}
 
 	if r.Config.DryRun {
 		log.Info("dry run: would start a Job", "skill", se.Spec.Skill, "version", se.Spec.Version,
@@ -152,6 +163,12 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: capacityRetry}, nil
+	}
+	if plan.network.Cilium {
+		// The policy must select the trial pods before the first one starts.
+		if err := r.ensureEvalPolicy(ctx, se, plan.network); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	if !r.Budget.Spend(trials) {
 		log.Info("trial budget exhausted", "skilleval", se.Name, "trials", trials)
@@ -197,6 +214,7 @@ func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1
 	case parseErr != nil:
 		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, parseErr.Error())
 	case res.Error != "":
+		recordGate(se, res) // the Tier 1 + 2 gate may have run before the error
 		// Scores or a rejection next to an error are a result, not a lost run.
 		if res.HasScores() || res.Rejected() {
 			return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, res.Error)
@@ -237,6 +255,13 @@ func applyResult(se *v1alpha1.SkillEval, res runner.Result, th policy.Thresholds
 	if res.AgentVersion != "" { // what the trials ran; an older runner leaves the requested one
 		st.AgentVersion = res.AgentVersion
 	}
+	recordGate(se, res)
+}
+
+// recordGate keeps the tiers, publication and findings of a runner error
+// payload, so a run that failed after the Tier 1 + 2 gate still shows the gate.
+func recordGate(se *v1alpha1.SkillEval, res runner.Result) {
+	st := &se.Status
 	st.Tiers = nil
 	if res.Tiers.Known() {
 		st.Tiers = &v1alpha1.TierStatuses{Tier1: res.Tiers.Tier1, Tier2: res.Tiers.Tier2, Tier3: res.Tiers.Tier3}

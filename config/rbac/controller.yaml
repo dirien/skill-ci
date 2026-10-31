@@ -1,4 +1,6 @@
-# Identity and permissions of the skill-ci controller. Everything is namespaced.
+# Identity and permissions of the skill-ci controller. Everything is namespaced except reading
+# CustomResourceDefinitions, which tells the controller whether Cilium and the Agent Sandbox
+# extensions are installed.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -21,6 +23,33 @@ rules:
   - apiGroups: ["skillci.dev"]
     resources: ["skillevals/finalizers"]
     verbs: ["update"]
+  # SandboxProfiles: the controller reads them and writes their status.
+  - apiGroups: ["skillci.dev"]
+    resources: ["sandboxprofiles"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["skillci.dev"]
+    resources: ["sandboxprofiles/status"]
+    verbs: ["get", "update", "patch"]
+  # Needed to set blockOwnerDeletion on the templates and warm pools it owns.
+  - apiGroups: ["skillci.dev"]
+    resources: ["sandboxprofiles/finalizers"]
+    verbs: ["update"]
+  # The SandboxTemplate and SandboxWarmPool of every SandboxProfile (Agent Sandbox extensions).
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxtemplates", "sandboxwarmpools"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxwarmpools/status"]
+    verbs: ["get"]
+  # Network modes: the baseline policy and one policy per SkillEval.
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumnetworkpolicies"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
+  # Only the openai-base-url key, which decides the model host of Codex runs with network none or allowlist.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["llm-keys"]
+    verbs: ["get"]
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["create", "get", "list", "watch", "delete"]
@@ -52,3 +81,25 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: skill-ci-controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skill-ci-controller-crds-skill-ci
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: skill-ci-controller-crds-skill-ci
+subjects:
+  - kind: ServiceAccount
+    name: skill-ci-controller
+    namespace: skill-ci
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: skill-ci-controller-crds-skill-ci

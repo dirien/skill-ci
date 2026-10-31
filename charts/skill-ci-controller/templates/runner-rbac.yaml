@@ -1,5 +1,6 @@
 {{- if .Values.runner.enabled }}
-# Identity of the runner Jobs: they create one Agent Sandbox per trial.
+# Identity of the runner Jobs: they claim one warm trial pod per trial from the SandboxProfile's
+# warm pool (SandboxClaim), or create a bare Agent Sandbox per trial without one.
 # The controller hardcodes the ServiceAccount name skill-eval-runner.
 apiVersion: v1
 kind: ServiceAccount
@@ -23,6 +24,9 @@ metadata:
 rules:
   - apiGroups: ["agents.x-k8s.io"]
     resources: ["sandboxes"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: ["extensions.agents.x-k8s.io"]
+    resources: ["sandboxclaims"]
     verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: [""]
     resources: ["pods"]

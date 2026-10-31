@@ -1,0 +1,17 @@
+{{- /* Only with a chart that ships the SandboxProfile CRD (crds/ is copied from config/crd). */}}
+{{- if .Files.Get "crds/skillci.dev_sandboxprofiles.yaml" }}
+{{- range $name, $spec := .Values.sandboxProfiles }}
+{{- if $spec }}
+---
+apiVersion: skillci.dev/v1alpha1
+kind: SandboxProfile
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "skill-ci-controller.watchNamespace" $ }}
+  labels:
+    {{- include "skill-ci-controller.labels" $ | nindent 4 }}
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}
+{{- end }}
+{{- end }}

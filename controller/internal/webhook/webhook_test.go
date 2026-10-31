@@ -81,11 +81,11 @@ func newHandler(t *testing.T, token string, existing ...client.Object) (*Handler
 	}
 	cm := &corev1.ConfigMap{
 		Name: "skill-ci-models", Namespace: "skill-ci",
-		Data: map[string]string{"models.yaml": "models:\n- {agent: claude-code, model: claude-haiku-5-5, required: true}\n- {agent: claude-code, model: claude-sonnet-5-5, required: true}\n"},
+		Data: map[string]string{"models.yaml": "models:\n- {agent: claude-code, model: claude-haiku-5-5, required: true}\n- {agent: claude-code, model: claude-sonnet-5-5, required: true, sandboxProfile: big}\n"},
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(append(existing, cm)...).Build()
 	return &Handler{Client: c, Namespace: "skill-ci", Project: "skills", ModelsConfigMap: "skill-ci-models",
-		Token: token, Attempts: 1, Log: logr.Discard()}, c
+		Token: token, Attempts: 1, DefaultSandboxProfile: "default", Log: logr.Discard()}, c
 }
 
 func post(h *Handler, auth string, p Payload) *httptest.ResponseRecorder {
@@ -161,6 +161,10 @@ func TestHandlerDedupe(t *testing.T) {
 	for _, se := range list.Items {
 		if se.Spec.Trigger != v1alpha1.TriggerPush || !se.Spec.Required || se.Spec.Attempts != 1 {
 			t.Errorf("unexpected spec %+v", se.Spec)
+		}
+		wantProfile := map[string]string{"claude-haiku-5-5": "default", "claude-sonnet-5-5": "big"}[se.Spec.Model]
+		if se.Spec.SandboxProfile != wantProfile {
+			t.Errorf("%s: sandboxProfile %q, want %q", se.Name, se.Spec.SandboxProfile, wantProfile)
 		}
 	}
 }

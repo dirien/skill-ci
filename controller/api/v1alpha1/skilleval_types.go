@@ -127,6 +127,71 @@ type SkillEvalSpec struct {
 	// +kubebuilder:validation:Enum=push;model-change;manual
 	// +kubebuilder:default=manual
 	Trigger Trigger `json:"trigger,omitempty"`
+	// SandboxProfile names the SandboxProfile whose warm pool the trials run
+	// in, copied from the model list entry (default: the controller's
+	// --default-sandbox-profile). Empty means the default profile, and a bare
+	// Sandbox per trial when that profile does not exist.
+	// +optional
+	// +kubebuilder:validation:MaxLength=253
+	SandboxProfile string `json:"sandboxProfile,omitempty"`
+	// Network is the network the skill declared for its trials, or the
+	// platform default. The controller fills it in from the OCI manifest
+	// annotations of the digest before the run starts.
+	// +optional
+	Network *NetworkSpec `json:"network,omitempty"`
+}
+
+// Network modes of a trial sandbox.
+const (
+	// NetworkNone allows only the model API hosts.
+	NetworkNone = "none"
+	// NetworkAllowlist allows the model API hosts and the hosts the skill declares.
+	NetworkAllowlist = "allowlist"
+	// NetworkFull allows the internet, but not the cluster.
+	NetworkFull = "full"
+)
+
+// Sources of a SkillEval's network mode.
+const (
+	// NetworkSourceSkill means the skill declared the mode (skillci.dev/network).
+	NetworkSourceSkill = "skill"
+	// NetworkSourceDefault means the skill declared none and the platform default applies.
+	NetworkSourceDefault = "default"
+)
+
+// NetworkSpec is the network a skill's trials may use.
+type NetworkSpec struct {
+	// Mode is none, allowlist or full. A mode the platform does not allow
+	// fails the run before any Job starts.
+	// +kubebuilder:validation:MaxLength=32
+	Mode string `json:"mode"`
+	// Allow holds the hosts and @bundles the skill declared
+	// (skillci.dev/network-allow), as declared. Used only with allowlist.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=64
+	Allow []string `json:"allow,omitempty"`
+	// Source says where the mode comes from: skill or default.
+	// +kubebuilder:validation:Enum=skill;default
+	Source string `json:"source"`
+}
+
+// NetworkStatus is the network the trials got.
+type NetworkStatus struct {
+	// Mode is the effective mode: none, allowlist or full.
+	// +optional
+	Mode string `json:"mode,omitempty"`
+	// Policy is the CiliumNetworkPolicy that enforces the mode; empty when
+	// nothing enforces it.
+	// +optional
+	Policy string `json:"policy,omitempty"`
+	// Enforced reports whether a CiliumNetworkPolicy enforces the mode.
+	Enforced bool `json:"enforced"`
+	// Hosts are the hosts the trials may reach on TCP 443 with none and
+	// allowlist, bundles expanded, sorted. Empty for full.
+	// +optional
+	// +listType=atomic
+	Hosts []string `json:"hosts,omitempty"`
 }
 
 // TierStatuses holds the outcome of the three SkillEvaluator tiers. An empty
@@ -213,6 +278,18 @@ type SkillEvalStatus struct {
 	// +optional
 	// +kubebuilder:validation:Minimum=0
 	Retries int `json:"retries,omitempty"`
+	// Network is the network the trials got; absent for runs made before
+	// network modes existed (they ran with full).
+	// +optional
+	Network *NetworkStatus `json:"network,omitempty"`
+	// SandboxProfile is the SandboxProfile the run used; empty when it ran a
+	// bare Sandbox per trial.
+	// +optional
+	SandboxProfile string `json:"sandboxProfile,omitempty"`
+	// WarmPool is the SandboxWarmPool the runner claimed trial pods from
+	// (SANDBOX_WARM_POOL); empty for a bare Sandbox per trial.
+	// +optional
+	WarmPool string `json:"warmPool,omitempty"`
 	// Message is a human readable detail, for example a failure reason.
 	Message string `json:"message,omitempty"`
 	// CompletedAt is when the eval reached Succeeded or Failed.
@@ -238,6 +315,7 @@ type SkillEvalStatus struct {
 // +kubebuilder:printcolumn:name="Lift",type=string,JSONPath=`.status.lift`
 // +kubebuilder:printcolumn:name="Verdict",type=string,JSONPath=`.status.verdict`
 // +kubebuilder:printcolumn:name="Tier1",type=string,JSONPath=`.status.tiers.tier1`
+// +kubebuilder:printcolumn:name="Network",type=string,JSONPath=`.status.network.mode`
 // +kubebuilder:printcolumn:name="Lift CI",type=string,priority=1,JSONPath=`.status.liftCI`
 // +kubebuilder:printcolumn:name="N",type=string,priority=1,JSONPath=`.status.n`
 // +kubebuilder:printcolumn:name="Publication",type=string,priority=1,JSONPath=`.status.publication`

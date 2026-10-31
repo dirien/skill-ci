@@ -3,6 +3,7 @@ package harbor
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"sync"
@@ -48,9 +49,24 @@ func (f *Fake) ListArtifacts(_ context.Context, skill string) ([]Artifact, error
 	}
 	out := make([]Artifact, 0, len(f.repos[skill]))
 	for _, a := range f.repos[skill] {
-		out = append(out, Artifact{Digest: a.Digest, Tags: slices.Clone(a.Tags)})
+		out = append(out, Artifact{Digest: a.Digest, Tags: slices.Clone(a.Tags), Annotations: maps.Clone(a.Annotations)})
 	}
 	return out, nil
+}
+
+// GetArtifact implements Client.
+func (f *Fake) GetArtifact(_ context.Context, skill, digest string) (Artifact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.Err != nil {
+		return Artifact{}, f.Err
+	}
+	for _, a := range f.repos[skill] {
+		if a.Digest == digest {
+			return Artifact{Digest: a.Digest, Tags: slices.Clone(a.Tags), Annotations: maps.Clone(a.Annotations)}, nil
+		}
+	}
+	return Artifact{}, fmt.Errorf("fake harbor: %s@%s: %w", skill, digest, ErrNotFound)
 }
 
 // AddTag implements Client.

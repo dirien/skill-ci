@@ -5,11 +5,16 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: skill-ci
 resources:
+  - crd/skillci.dev_sandboxprofiles.yaml
   - crd/skillci.dev_skillevals.yaml
   - rbac/controller.yaml
   - rbac/runner.yaml
   - manager/deployment.yaml
   - manager/service.yaml
+  # Needs the SandboxProfile CRD above to be established: on a new cluster a first
+  # `kubectl apply -k config/` may report it; apply again. Until the profile exists,
+  # runs start a bare Sandbox per trial.
+  - manager/sandboxprofile.yaml
 images:
   - name: ghcr.io/dirien/skill-ci-controller
     newTag: 0.8.1

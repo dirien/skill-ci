@@ -460,3 +460,69 @@ func TestJobPassesTheLLMKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestJobSandboxWarmPoolAndEvalName(t *testing.T) {
+	tests := []struct {
+		name     string
+		warmPool string
+		retries  int
+		want     map[string]string // "" means absent
+	}{
+		{name: "bare Sandbox fallback", want: map[string]string{"SKILLEVAL_NAME": "acme-v1-0-0-haiku", "SANDBOX_WARM_POOL": ""}},
+		{name: "warm pool of the profile", warmPool: "default",
+			want: map[string]string{"SKILLEVAL_NAME": "acme-v1-0-0-haiku", "SANDBOX_WARM_POOL": "default"}},
+		{name: "a retry Job keeps the SkillEval name", retries: 2,
+			want: map[string]string{"SKILLEVAL_NAME": "acme-v1-0-0-haiku", "SANDBOX_WARM_POOL": "", "SANDBOX_CPUS": "", "SANDBOX_MEMORY_MB": ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &v1alpha1.SkillEval{Name: "acme-v1-0-0-haiku", Spec: v1alpha1.SkillEvalSpec{Skill: "acme", Agent: "claude-code", Model: "haiku", Attempts: 1}}
+			se.Status.WarmPool, se.Status.Retries = tt.warmPool, tt.retries
+			job := NewJob(se, Config{Image: "r:1"})
+			if tt.retries > 0 && job.Name == se.Name {
+				t.Fatalf("retry job name %s", job.Name)
+			}
+			plain := map[string]string{}
+			for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+				if e.ValueFrom == nil {
+					plain[e.Name] = e.Value
+				}
+			}
+			for name, want := range tt.want {
+				got, present := plain[name]
+				if got != want || present != (want != "") {
+					t.Errorf("%s = %q (set: %v), want %q", name, got, present, want)
+				}
+			}
+		})
+	}
+}
+
+func TestParseResultErrorKeepsTheGate(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      string
+		tiers    Tiers
+		findings []string
+	}{
+		{name: "error after the gate",
+			msg: `{"error":"no eval dataset: add evals/evals.json","tiers":{"tier1":"passed","tier2":"passed","tier3":"skipped"},` +
+				`"findings":["tier1/quality: description is short"]}`,
+			tiers: Tiers{"passed", "passed", "skipped"}, findings: []string{"tier1/quality: description is short"}},
+		{name: "error after tier 3 started",
+			msg:   `{"error":"no scores in result.json: AgentTimeoutError","tiers":{"tier1":"passed","tier2":"passed","tier3":"incomplete"},"findings":[]}`,
+			tiers: Tiers{"passed", "passed", "incomplete"}},
+		{name: "error before the gate", msg: `{"error":"pulling the skill failed"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := ParseResult(tt.msg)
+			if err != nil || res.Error == "" {
+				t.Fatalf("got %+v, %v", res, err)
+			}
+			if res.Tiers != tt.tiers || !slices.Equal(res.Findings, tt.findings) || res.Rejected() || res.HasScores() {
+				t.Fatalf("got tiers %+v findings %v", res.Tiers, res.Findings)
+			}
+		})
+	}
+}

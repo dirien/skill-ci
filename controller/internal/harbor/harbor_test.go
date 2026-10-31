@@ -3,6 +3,7 @@ package harbor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -57,5 +58,61 @@ func TestHTTPClient(t *testing.T) {
 	bad := New(srv.URL, "skills", "robot", "wrong")
 	if _, err := bad.ListRepositories(ctx); err == nil {
 		t.Error("ListRepositories() with bad credentials should fail")
+	}
+}
+
+func TestGetArtifact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/api/v2.0/projects/skills/repositories/acme/artifacts/sha256:aa":
+			_, _ = w.Write([]byte(`{"digest":"sha256:aa","tags":[{"name":"v1.0.0"}],` +
+				`"annotations":{"skillci.dev/network":"allowlist","skillci.dev/network-allow":"@python"}}`))
+		case "/api/v2.0/projects/skills/repositories/acme/artifacts/sha256:bb":
+			_, _ = w.Write([]byte(`{"digest":"sha256:bb","annotations":null}`))
+		case "/api/v2.0/projects/skills/repositories/acme/artifacts/sha256:cc":
+			http.Error(w, "boom", http.StatusInternalServerError)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "skills", "robot", "pw")
+	tests := []struct {
+		digest   string
+		want     Artifact
+		notFound bool
+		wantErr  bool
+	}{
+		{digest: "sha256:aa", want: Artifact{Digest: "sha256:aa", Tags: []string{"v1.0.0"}, Annotations: map[string]string{
+			"skillci.dev/network": "allowlist", "skillci.dev/network-allow": "@python",
+		}}},
+		{digest: "sha256:bb", want: Artifact{Digest: "sha256:bb"}},
+		{digest: "sha256:cc", wantErr: true},
+		{digest: "sha256:dd", wantErr: true, notFound: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.digest, func(t *testing.T) {
+			got, err := c.GetArtifact(context.Background(), "acme", tt.digest)
+			if tt.wantErr {
+				if err == nil || errors.Is(err, ErrNotFound) != tt.notFound {
+					t.Fatalf("got %v, want error (not found %t)", err, tt.notFound)
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %+v, %v; want %+v", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestFakeGetArtifact(t *testing.T) {
+	f := NewFake(map[string][]Artifact{"acme": {{Digest: "sha256:aa", Annotations: map[string]string{"k": "v"}}}})
+	got, err := f.GetArtifact(context.Background(), "acme", "sha256:aa")
+	if err != nil || got.Annotations["k"] != "v" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if _, err := f.GetArtifact(context.Background(), "acme", "sha256:zz"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("got %v, want ErrNotFound", err)
 	}
 }

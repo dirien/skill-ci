@@ -47,6 +47,10 @@ spec:
             - --metrics-addr=:8081
             - --reports-addr=:8082
             - --leader-elect=false
+            - --default-sandbox-profile=default
+            - --network-default=full
+            - --network-modes=none,allowlist,full
+            - --network-enforcement=auto
           env:
             - name: HARBOR_USERNAME
               valueFrom:

@@ -1,0 +1,13 @@
+# The default SandboxProfile: model list entries without sandboxProfile run here
+# (--default-sandbox-profile). The image is empty, so the controller's --sandbox-image is used.
+apiVersion: skillci.dev/v1alpha1
+kind: SandboxProfile
+metadata:
+  name: default
+  namespace: skill-ci
+spec:
+  resources:
+    cpu: "1"
+    memory: 2Gi
+  warmPool:
+    replicas: 2

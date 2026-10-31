@@ -73,6 +73,20 @@ spec:
             - --metrics-addr=:{{ .Values.ports.metrics }}
             - --reports-addr={{ if .Values.reports.enabled }}:{{ .Values.ports.reports }}{{ end }}
             - --leader-elect={{ $ctl.leaderElect }}
+            - --default-sandbox-profile={{ $ctl.defaultSandboxProfile }}
+            {{- with $ctl.network }}
+            - --network-default={{ .default }}
+            - --network-modes={{ join "," .modes }}
+            - --network-enforcement={{ .enforcement }}
+            - --network-always-allow={{ join "," .alwaysAllow }}
+            {{- $bundles := list }}
+            {{- range $name, $hosts := .bundles }}
+            {{- $bundles = append $bundles (printf "%s=%s" $name (join "," $hosts)) }}
+            {{- end }}
+            - --network-bundles={{ join ";" $bundles }}
+            - --preinstalled-agents={{ join "," .preinstalledAgents }}
+            - --agent-install-hosts={{ join "," .agentInstallHosts }}
+            {{- end }}
             {{- with $ctl.logging.level }}
             - --zap-log-level={{ . }}
             {{- end }}

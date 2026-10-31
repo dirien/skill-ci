@@ -24,7 +24,13 @@ type Artifact struct {
 	Digest string
 	// Tags are the tag names pointing at the digest.
 	Tags []string
+	// Annotations are the OCI manifest annotations, for example
+	// skillci.dev/network; nil when the manifest has none.
+	Annotations map[string]string
 }
+
+// ErrNotFound is returned by GetArtifact for a digest the registry does not have.
+var ErrNotFound = errors.New("artifact not found")
 
 // HasTag reports whether the artifact carries tag.
 func (a Artifact) HasTag(tag string) bool {
@@ -47,6 +53,9 @@ type Client interface {
 	ListRepositories(ctx context.Context) ([]string, error)
 	// ListArtifacts returns the artifacts of one skill with their tags.
 	ListArtifacts(ctx context.Context, skill string) ([]Artifact, error)
+	// GetArtifact returns one artifact of a skill, by digest, with its tags
+	// and annotations. A missing artifact is an error wrapping ErrNotFound.
+	GetArtifact(ctx context.Context, skill, digest string) (Artifact, error)
 	// AddTag tags the artifact with the given digest. Adding an existing tag succeeds.
 	AddTag(ctx context.Context, skill, digest, tag string) error
 	// RemoveTag removes a tag from the artifact. Removing a missing tag succeeds.
@@ -97,25 +106,52 @@ func (c *HTTPClient) ListRepositories(ctx context.Context) ([]string, error) {
 func (c *HTTPClient) ListArtifacts(ctx context.Context, skill string) ([]Artifact, error) {
 	var arts []Artifact
 	err := c.paginate(ctx, c.artifactsPath(skill)+"?with_tag=true", func(raw json.RawMessage) (int, error) {
-		var page []struct {
-			Digest string `json:"digest"`
-			Tags   []struct {
-				Name string `json:"name"`
-			} `json:"tags"`
-		}
+		var page []apiArtifact
 		if err := json.Unmarshal(raw, &page); err != nil {
 			return 0, fmt.Errorf("decoding artifacts: %w", err)
 		}
 		for _, a := range page {
-			art := Artifact{Digest: a.Digest}
-			for _, t := range a.Tags {
-				art.Tags = append(art.Tags, t.Name)
-			}
-			arts = append(arts, art)
+			arts = append(arts, a.artifact())
 		}
 		return len(page), nil
 	})
 	return arts, err
+}
+
+// apiArtifact is an artifact as the Harbor API returns it.
+type apiArtifact struct {
+	Digest string `json:"digest"`
+	Tags   []struct {
+		Name string `json:"name"`
+	} `json:"tags"`
+	Annotations map[string]string `json:"annotations"`
+}
+
+func (a apiArtifact) artifact() Artifact {
+	art := Artifact{Digest: a.Digest, Annotations: a.Annotations}
+	for _, t := range a.Tags {
+		art.Tags = append(art.Tags, t.Name)
+	}
+	return art
+}
+
+// GetArtifact implements Client.
+func (c *HTTPClient) GetArtifact(ctx context.Context, skill, digest string) (Artifact, error) {
+	status, body, err := c.do(ctx, http.MethodGet, c.artifactsPath(skill)+"/"+digest+"?with_tag=true", nil)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if status == http.StatusNotFound {
+		return Artifact{}, fmt.Errorf("%s@%s: %w", skill, digest, ErrNotFound)
+	}
+	if err := statusError(status, "reading "+skill+"@"+digest); err != nil {
+		return Artifact{}, err
+	}
+	var a apiArtifact
+	if err := json.Unmarshal(body, &a); err != nil {
+		return Artifact{}, fmt.Errorf("decoding artifact %s@%s: %w", skill, digest, err)
+	}
+	return a.artifact(), nil
 }
 
 // AddTag implements Client.

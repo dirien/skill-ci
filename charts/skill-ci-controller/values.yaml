@@ -91,12 +91,57 @@ controller:
   maxRetries: 1
   # Create SkillEvals in phase Planned and no Jobs.
   dryRun: false
+  # --default-sandbox-profile: the SandboxProfile of a model list entry without sandboxProfile.
+  # When it does not exist, runs start a bare Sandbox per trial. Needs controller image 0.9.0
+  # or newer, as do all values under network.
+  defaultSandboxProfile: default
+  # Network modes of the trial sandboxes (CONTRACT.md "Network modes"). A skill declares
+  # skillci.dev/network (none, allowlist, full) and skillci.dev/network-allow in its SKILL.md
+  # metadata, which become OCI manifest annotations of the pushed digest.
+  network:
+    # --network-default: the mode of a skill that declares none.
+    default: full
+    # --network-modes: the modes a skill may declare; another mode fails the run.
+    modes: [none, allowlist, full]
+    # --network-enforcement: auto (CiliumNetworkPolicies when the ciliumnetworkpolicies.cilium.io
+    # CRD exists), cilium (require it) or off (no policies, every mode unenforced).
+    enforcement: auto
+    # --network-always-allow: hosts added to none and allowlist, for example a proxy.
+    alwaysAllow: []
+    # --network-bundles: host bundles a skill names as @<name>. A map, so values merge with
+    # these defaults; set a bundle to null to drop it.
+    bundles:
+      apt: [deb.debian.org, security.debian.org]
+      github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
+      node: [registry.npmjs.org]
+      python: [pypi.org, files.pythonhosted.org]
+    # --preinstalled-agents: agent@version pins in the sandbox image. An entry on another
+    # agentVersion installs the CLI with npm, so --agent-install-hosts are added to none and allowlist.
+    preinstalledAgents: [claude-code@2.1.292, codex@0.161.0, opencode@1.19.1]
+    # --agent-install-hosts.
+    agentInstallHosts: [registry.npmjs.org]
   leaderElect: false
   # controller-runtime zap logging flags. Empty means the controller default.
   logging:
     level: ""
     encoder: ""
     development: false
+
+# SandboxProfiles the chart creates in the controller namespace, name -> spec (CONTRACT.md
+# "SandboxProfile"). The controller keeps a SandboxTemplate and a SandboxWarmPool (Agent Sandbox
+# extensions) for each. Rendered only with a chart that ships the SandboxProfile CRD. Set a
+# profile to null to drop it; more profiles can be added here or with kubectl.
+sandboxProfiles:
+  default:
+    # Empty: the controller's --sandbox-image (controller.sandboxImage).
+    image: ""
+    # Memory is request and limit, CPU a request only.
+    resources:
+      cpu: "1"
+      memory: 2Gi
+    # Warm trial pods kept running and unclaimed; 0 cold-starts every trial (about 1 s).
+    warmPool:
+      replicas: 2
 
 # Container and Service ports. They also set --webhook-addr and --metrics-addr.
 ports:

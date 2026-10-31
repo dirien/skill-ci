@@ -35,6 +35,7 @@ models:
     agentVersion: "2.1.292"         # optional: the release of the agent CLI
     model: claude-opus-5-5
     required: true                  # gates promotion
+    sandboxProfile: default         # optional: the SandboxProfile of the trials (default --default-sandbox-profile)
   - agent: codex
     agentVersion: "0.161.0"
     model: openai/gpt-6.1-sol
@@ -48,6 +49,8 @@ models:
 `agent` is a SkillEvaluator/Harbor agent (`claude-code`, `codex`, `opencode`), the harness. `agentVersion` is the release of its CLI (letters, digits, `.`, `_`, `-`; at most 63 characters; it ends up in `npm install -g <package>@<version>` in the trial sandbox when it is not the default pin, so anything else is refused). **The identity of an entry is agent + agentVersion + model.** A changed `agentVersion` is a different entry, so the model-change trigger evaluates every `beta` and `stable` digest on it (the "harness changed" beat), and the old entry's runs stay as they are.
 
 Without `agentVersion` the runner pins its default for the agent (see "Agent versions"), the SkillEval has no `spec.agentVersion` and the controller records the version that ran in `status.agentVersion`. An unpinned entry and a pinned one are different entries even when they end up on the same release; pin every entry to keep runs comparable.
+
+`sandboxProfile` names the SandboxProfile (see "SandboxProfile") whose warm pool the entry's trials run in. It is not part of the identity: the controller copies it (or `--default-sandbox-profile`, default `default`) into `spec.sandboxProfile` of every new SkillEval, and a change applies to new runs only.
 
 `required` is the gating knob, per entry. Changing it on an existing entry (not a new one) updates `spec.required` of that entry's existing SkillEvals, which re-runs the tag policy for them: make an entry required and its results gate promotion of the versions already evaluated; make it optional and they stop gating. The runs of removed entries stay and keep gating while they are `required`, so delete them (or `make reset`) when you retire a required entry.
 
@@ -76,6 +79,11 @@ spec:
   required: true
   attempts: 3                       # trials per arm (deployed default; one attempt is too noisy for the regression gate)
   trigger: push                     # push | model-change | manual
+  sandboxProfile: default           # optional: copied from the model list entry; empty is the default profile
+  network:                          # filled in by the controller before the run starts (see "Network modes")
+    mode: allowlist                 # none | allowlist | full
+    allow: ["@python", dl.k8s.io]   # optional: as declared, used only with allowlist
+    source: skill                   # skill (declared) | default (--network-default)
 status:
   phase: Pending                    # Pending | Running | Succeeded | Failed | Planned (dry run)
   jobName: ...                      # <skilleval name>, or <name>-r1, <name>-r2 for a retry
@@ -93,11 +101,18 @@ status:
     withoutSkill: ["0.36", "0.38", "0.35"]
   verdict: Helps                    # Helps | Neutral | Hurts | Obsolete | Regressed | Inconclusive | Rejected
   reportDigest: sha256:...          # optional: the eval report attached to the skill digest in Harbor
+  network:                          # optional: absent for runs made before network modes (they ran with full)
+    mode: allowlist                 # the effective mode
+    policy: skillci-net-<name>      # the CiliumNetworkPolicy, empty when nothing enforces the mode
+    enforced: true
+    hosts: [api.anthropic.com, dl.k8s.io, files.pythonhosted.org, pypi.org]   # TCP 443, bundles expanded, sorted
+  sandboxProfile: default           # optional: the profile the run used; empty for a bare Sandbox per trial
+  warmPool: default                 # optional: SANDBOX_WARM_POOL of the Job; empty for a bare Sandbox per trial
   message: ...
   completedAt: ...
 ```
 
-Printer columns: Skill, Version, Agent (`spec.agent`), AgentVer (`status.agentVersion`), Model, Phase, With, Without, Lift, Verdict, Tier1, Age; Lift CI (`status.liftCI`), N (`status.n`), Publication and Report (`status.reportDigest`) at priority 1 (`-o wide`).
+Printer columns: Skill, Version, Agent (`spec.agent`), AgentVer (`status.agentVersion`), Model, Phase, With, Without, Lift, Verdict, Tier1, Network (`status.network.mode`), Age; Lift CI (`status.liftCI`), N (`status.n`), Publication and Report (`status.reportDigest`) at priority 1 (`-o wide`).
 
 The statistics fields are present only when the runner sent trial scores (see "Statistics"). The controller recomputes them from `status.samples` whenever it reconciles a finished run, so a changed `--confidence` shows in `liftCI` without a new run. `samples` holds two decimals as strings (CRDs have no floats), up to 50 per arm.
 
@@ -123,6 +138,8 @@ The controller creates one `batch/v1` Job per SkillEval attempt, named like the 
 | `NVIDIA_API_KEY` | from secret `llm-keys` key `nvidia` (optional) |
 | `OLLAMA_API_KEY` | from secret `llm-keys` key `ollama` (optional) |
 | `OPENROUTER_API_KEY` | from secret `llm-keys` key `openrouter` (optional). Must be an API key: before any work the runner asks OpenRouter (`GET /api/v1/key`) and fails the run when it is a provisioning key, which answers every chat call with 401 "User not found." |
+| `SKILLEVAL_NAME` | `acme-release-notes-v1-1-0-claude-code-2-1-292-claude-opus-5-5`: always set, the SkillEval's `metadata.name` (also on a retry Job `<name>-r1`, whose name differs). The runner labels every trial pod `sandbox.users.io/skillci-eval=<SKILLEVAL_NAME>` and `sandbox.users.io/skillci-role=trial`, which the eval's CiliumNetworkPolicy selects |
+| `SANDBOX_WARM_POOL` | `default`: the SandboxWarmPool of the run's SandboxProfile (`status.warmPool`). The runner claims one warm trial pod per trial (SandboxClaim with `warmPoolRef`) and ignores `SANDBOX_CPUS`/`SANDBOX_MEMORY_MB`, which the profile decides. Absent when the run has no profile or the profile has no warm pool (Agent Sandbox extensions not installed): the runner then starts a bare `Sandbox` per trial as before |
 
 Pods and Jobs carry the labels `skillci.dev/skill`, `/digest`, `/agent`, `/model` and, for a pinned entry, `/agent-version`.
 
@@ -160,7 +177,7 @@ The runner reads them from SkillEvaluator's `result.json`: `agents.<agent>.pass_
 
 `report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds.
 
-If no score was produced it writes `{"error": "<reason>"}` and exits 1. A skill without a Tier 3 source (none of `evals/evals.json`, `evals.jsonl`, `evals.yaml`, `evals.yml`, `dataset.json`, `dataset.jsonl`, and no `evals/harbor/` tasks) gets the Tier 1 + 2 gate only; when the gate passes, the runner starts no Tier 3 run and writes ``{"error": "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. Draft them with `make draft-evals SKILL=<skill>` (skillevaluator create-eval-dataset), review them, and push again"}`` (the gate's tiers and findings go to the container log). A Tier 1 or 2 failure is reported as Rejected, as for any skill. The runner never generates or rewrites a dataset (`validate --no-autopilot`): the gate runs the test cases the author committed.
+If no score was produced it writes `{"error": "<reason>"}` and exits 1. When the error comes after the Tier 1 + 2 gate ran, the payload keeps the gate: `{"error": "...", "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "skipped"}, "findings": [...]}` (`tier3` is `skipped` when the live trials never started, `incomplete` when they started and failed; `publication` may be present too; findings at most 5, redacted). Both fields are optional; the controller stores them in `status.tiers`, `status.publication` and `status.findings` of the `Failed` run, so the reporting site shows the gate. A skill without a Tier 3 source (none of `evals/evals.json`, `evals.jsonl`, `evals.yaml`, `evals.yml`, `dataset.json`, `dataset.jsonl`, and no `evals/harbor/` tasks) gets the Tier 1 + 2 gate only; when the gate passes, the runner starts no Tier 3 run and writes ``{"error": "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. Draft them with `make draft-evals SKILL=<skill>` (skillevaluator create-eval-dataset), review them, and push again"}`` (the gate's tiers and findings go to the container log). A Tier 1 or 2 failure is reported as Rejected, as for any skill. The runner never generates or rewrites a dataset (`validate --no-autopilot`): the gate runs the test cases the author committed.
 
 The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; the controller manifests own them from now on.
 
@@ -185,6 +202,88 @@ Only `anthropic` is required: it is the judge (`SKILL_EVAL_LLM_PROVIDER=anthropi
 - **Codex** needs `OPENAI_API_KEY` and `OPENAI_BASE_URL` together (SkillEvaluator refuses a partial pair under an Anthropic judge). The runner sets `OPENAI_BASE_URL=https://api.openai.com/v1` when only the key is present. The model is passed as given (`--agent-model codex=openai/<id>`) and must be one the key can use; SkillEvaluator checks it against `<base url>/models`.
 - **OpenCode** with an Anthropic judge accepts only `anthropic/<model>` in stock SkillEvaluator 0.6.0. For `ollama-cloud/...`, `openrouter/...`, `nvidia/...` and `openai/...` models the runner uses the OpenAI-compatible gateway route that `skillevaluator-patch/` hunks 6 and 8 to 12 open: it presents the provider's key as `OPENAI_API_KEY` and its endpoint (`https://ollama.com/v1`, `https://openrouter.ai/api/v1`, `https://integrate.api.nvidia.com/v1`, `OPENAI_BASE_URL` or `https://api.openai.com/v1`) as `OPENAI_BASE_URL` to the agent only, runs the model as `openai/<id>` with SkillEvaluator's `SkillEvaluatorGatewayOpenCode` (Chat Completions through `@ai-sdk/openai-compatible`; hunk 6 allows that wrapper on the `ack` backend and hunk 12 forwards the key into the sandbox, which Harbor does not do for the wrapper's `skillevaluator-gateway/` model namespace), and keeps the real OpenAI or NVIDIA key for Tier 2 embeddings through `SKILL_EVAL_EMBEDDING_PROVIDER=openai-compatible` (or `nv_build`). A missing key for the provider fails the run before any work with `opencode model ... needs <KEY>`.
 - A termination message and a log never contain a key: the runner redacts the values of all of the keys above.
+
+## SandboxProfile (`skillci.dev/v1alpha1`, plural `sandboxprofiles`, short name `sbp`)
+
+The kind of trial sandbox a model list entry runs in. Namespaced, in the controller namespace. Printer columns: Image, CPU, Memory, Warm (`spec.warmPool.replicas`), Ready (`status.readyReplicas`), Age.
+
+```yaml
+apiVersion: skillci.dev/v1alpha1
+kind: SandboxProfile
+metadata:
+  name: default
+spec:
+  image: ""                         # optional: empty is the controller's --sandbox-image
+  resources:
+    cpu: "1"                        # request only (default 1)
+    memory: 2Gi                     # request and limit (default 2Gi)
+  warmPool:
+    replicas: 2                     # warm, unclaimed trial pods (default 2, minimum 0; 0 cold-starts each trial in about 1 s)
+  runtimeClassName: gvisor          # optional
+  nodeSelector: {pool: trials}      # optional
+  tolerations: []                   # optional
+status:
+  templateName: default             # the SandboxTemplate
+  warmPoolName: default             # the SandboxWarmPool, SANDBOX_WARM_POOL of the runner Job
+  readyReplicas: 2
+  conditions:                       # Ready: WarmPoolReady | WarmPoolStarting | AgentSandboxExtensionsMissing
+    - {type: Ready, status: "True", reason: WarmPoolReady, message: 2 of 2 warm trial pods ready}
+```
+
+The controller reconciles every profile into two objects of the same name, owned by the profile (`extensions.agents.x-k8s.io/v1beta1`, Agent Sandbox extensions):
+
+- **SandboxTemplate**: `podTemplate.metadata.labels` `skillci.dev/component: trial-sandbox` and `skillci.dev/profile: <name>`, annotation `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`; pod `automountServiceAccountToken: false`, `terminationGracePeriodSeconds: 1`, one container `main` with the image, `command: ["sleep", "infinity"]`, `securityContext {runAsUser: 0, allowPrivilegeEscalation: false}` (the same container as the bare Sandbox of `harbor_agent_sandbox`), `imagePullPolicy` `IfNotPresent` (`Always` for `latest` or no tag), the resources, `runtimeClassName`/`nodeSelector`/`tolerations` when set and `imagePullSecrets` from `--image-pull-secrets`. `networkPolicyManagement` is `Unmanaged` when Cilium enforces network modes (skill-ci's policies own egress) and `Managed` otherwise (Agent Sandbox's default: the internet, not the cluster).
+- **SandboxWarmPool**: `{replicas, sandboxTemplateRef: {name}, updateStrategy: {type: Recreate}}`, so a template change (a new image after a release upgrade) replaces stale warm pods.
+
+`status.readyReplicas` comes from the warm pool's status; Ready is `True` when every warm pod is ready. The controller watches the owned objects when their CRDs exist at start and re-checks every profile every 5 minutes (every 30 s when not watching). Without the Agent Sandbox extensions CRDs the profile reports Ready `False`, reason `AgentSandboxExtensionsMissing`, and runs start a bare `Sandbox` per trial (no `SANDBOX_WARM_POOL`).
+
+The chart creates `default` from Helm `sandboxProfiles.default` (`warmPool.replicas: 2`, `resources: {cpu: "1", memory: 2Gi}`, empty image); more profiles via `sandboxProfiles: {<name>: <spec>}` or kubectl. A SkillEval that names a profile (`spec.sandboxProfile`, copied from the model list) that does not exist ends `Failed` with `sandbox profile "<name>" not found` and no Job. A SkillEval without `spec.sandboxProfile`, or one on `--default-sandbox-profile` while that profile does not exist (an install without it), runs a bare `Sandbox` per trial.
+
+## Network modes
+
+| Mode | Trials may reach |
+| --- | --- |
+| `full` | the internet, not the cluster |
+| `allowlist` | the model API host(s), the hosts the skill declares and the `--network-always-allow` hosts, TCP 443 |
+| `none` | the model API host(s) and the `--network-always-allow` hosts, TCP 443 |
+
+**Declaration.** In `SKILL.md` frontmatter `metadata`: `skillci.dev/network: none | allowlist | full` and, for `allowlist`, `skillci.dev/network-allow: "@python,@github,dl.k8s.io"`. A host is a lowercase RFC 1123 hostname with an optional leading `*.`; entries are comma separated; `@<name>` is a bundle; at most 20 hosts after bundle expansion. `demo/push-skill.sh` copies both keys into OCI manifest annotations with the same names; without it, push with `oras push --annotation skillci.dev/network=allowlist --annotation skillci.dev/network-allow=@python ...`. Before a SkillEval's first Job the controller reads the annotations of its digest from the Harbor REST API (`GET /api/v2.0/projects/<project>/repositories/<skill>/artifacts/<digest>`, field `annotations`) into `spec.network`; a spec that already has `network` is not looked up. **A digest without a `skillci.dev/network` annotation gets mode `full` (`source: default`), because `--network-default` defaults to `full`.** `network-allow` next to `none` or `full` is ignored, and the NetworkPolicy condition message says so.
+
+**Bundles** (`--network-bundles`, Helm `controller.network.bundles`): `python: pypi.org, files.pythonhosted.org`; `node: registry.npmjs.org`; `github: github.com, api.github.com, codeload.github.com, objects.githubusercontent.com`; `apt: deb.debian.org, security.debian.org`. Flag format `name=host,host;name=host`.
+
+**Model API hosts** (always allowed with `none` and `allowlist`, the table of `runner/skill_eval.py` `GATEWAY_PROVIDERS`): `claude-code`, and `opencode` `anthropic/...`: `api.anthropic.com`; `codex`, and `opencode` `openai/...`: the host of `llm-keys` `openai-base-url` when set, else `api.openai.com`; `opencode` `openrouter/...`: `openrouter.ai`, `ollama-cloud/...`: `ollama.com`, `nvidia/...`: `integrate.api.nvidia.com`. An entry whose agent version is not in `--preinstalled-agents` also gets `--agent-install-hosts` (Harbor installs the CLI with npm). An entry without `agentVersion` runs the preinstalled default pin.
+
+**Flags** (Helm `controller.network.*`):
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--network-default` | `full` | Mode of a skill that declares none |
+| `--network-modes` | `none,allowlist,full` | Modes a skill may declare |
+| `--network-enforcement` | `auto` | `auto`: CiliumNetworkPolicies when the CRD `ciliumnetworkpolicies.cilium.io` exists (looked up through the API, cached for a minute); `cilium`: require it; `off`: no policies, every mode runs unenforced |
+| `--network-always-allow` | empty | Hosts added to `none` and `allowlist` |
+| `--network-bundles` | the bundles above | Bundles a skill names as `@<name>` |
+| `--preinstalled-agents` | `claude-code@2.1.292,codex@0.161.0,opencode@1.19.1` | Agent pins in the sandbox image |
+| `--agent-install-hosts` | `registry.npmjs.org` | Hosts an agent install needs |
+| `--default-sandbox-profile` | `default` | SandboxProfile of an entry without `sandboxProfile` |
+
+**Runs that cannot start** end `Failed` before any Job, with condition `NetworkPolicy` `False` and the reason:
+
+| Reason | Message |
+| --- | --- |
+| `NotAllowed` | `network mode "<m>" is not allowed on this platform (allowed: <list>)` (also for a value that is no mode) |
+| `NoCilium` | `network mode "<m>" needs Cilium (CiliumNetworkPolicy CRD not found); this cluster can only run full` (enforcement `auto`); `network enforcement is cilium, but the CiliumNetworkPolicy CRD was not found` (enforcement `cilium`, every mode) |
+| `UnknownBundle` | `unknown network bundle "@<name>" (defined: @apt, @github, @node, @python)` |
+| `InvalidAllowlist` | `invalid network host "<h>": must be a lowercase RFC 1123 hostname, optionally starting with "*."`, or `network allowlist has <n> hosts after bundle expansion, at most 20 are allowed` |
+| `UnknownModelHost` | `no model API host is known for agent "<a>" with model "<m>", so it cannot run with network none or allowlist` |
+
+A run that starts gets `NetworkPolicy` `True`, reason `Enforced` (a policy enforces the mode), or `False`, reason `NotEnforced` (no Cilium with `auto` and mode `full`, or `--network-enforcement=off`), and `status.network`. With `auto` and no Cilium only `full` runs (a warm pool template is `Managed`: Agent Sandbox's internet-not-cluster default). SkillEvals made before network modes have no `spec.network` once they are past `Pending`; they ran with `full` and no policy, and the reporting site says so.
+
+**Policies** (`cilium.io/v2` `CiliumNetworkPolicy`, only when Cilium enforces):
+
+- **Baseline**, one per namespace, created at controller start and on every SandboxProfile reconcile: `skillci-trial-baseline`, `endpointSelector` `skillci.dev/component: trial-sandbox` (every warm or claimed trial pod of a profile), egress DNS only. A warm pod that is not claimed yet, or a trial pod without an eval policy, has no egress (fail closed). Kubernetes NetworkPolicies and CiliumNetworkPolicies selecting a pod add up, so the eval policy opens what its mode allows.
+- **Per SkillEval**, created or updated before its Job, owned by the SkillEval: `skillci-net-<SkillEval name>` (over 63 characters: the first 52, `-` and 10 hex characters of the SHA-256 of the full name), labels `app.kubernetes.io/managed-by: skill-ci`, `skillci.dev/eval: <name>`, `endpointSelector` `{sandbox.users.io/skillci-eval: <name>, sandbox.users.io/skillci-role: trial}`. Egress: DNS to `kube-system/kube-dns` (`k8s-app: kube-dns`) on port 53 `ANY` with `rules.dns: [{matchPattern: "*"}]`; `full` adds `toEntities: [world]`; `none` and `allowlist` add `toFQDNs` (`matchName`, `*.x` as `matchPattern`) on TCP 443.
+
+Trial pod labels use the `sandbox.users.io` domain because Agent Sandbox lets a SandboxClaim put only that domain on a claimed pod (`additionalPodMetadata.labels`); the bare Sandbox path puts them into the Sandbox pod template.
 
 ## Eval reports
 
@@ -318,7 +417,7 @@ Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEva
 | --- | --- |
 | `/` | Counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Agent (`agent@version`), Model, Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `agent` (`agent@version`), `model`, `verdict`, `phase`, `publication` |
 | `/skills/{skill}` | Versions x entries (one column per `agent@version` and model: with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
-| `/runs/{name}` | One SkillEval (title with model and `agent@version`, an Agent version row that says when the trials ran another release than the spec pins): scores, the SkillEvaluator tiers with findings, conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
+| `/runs/{name}` | One SkillEval (title with model and `agent@version`, an Agent version row that says when the trials ran another release than the spec pins): scores, the SkillEvaluator tiers with findings (also for a `Failed` run whose error came after the gate), the sandbox (profile and warm pool, or a bare Sandbox), the network (mode and its source, what the trials could reach, the declared entries, the allowed hosts, the enforcing CiliumNetworkPolicy or why none, the `NetworkPolicy` message), conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
 | `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
 | `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
 | `/healthz` | `ok` |
@@ -352,7 +451,7 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 - `runner/Dockerfile`, build context repo root. Build arg `SKILL_CI_VERSION` sets the runner's default `SANDBOX_IMAGE` tag.
 - `sandbox/Dockerfile`, build context `sandbox/`.
 - Nothing is built in the cluster. A `vX.Y.Z` tag runs `.github/workflows/release.yaml`: GoReleaser publishes the controller image and binaries, the workflow builds and Cosign-signs the runner and sandbox images (with SBOM and provenance) and the Helm chart, all as `ghcr.io/dirien/...:X.Y.Z`. The chart's default image tags are its appVersion. `make deploy` installs the working-tree chart with the tags of the newest release (`TAG=...` overrides).
-- All controller-side manifests (CRD, controller Deployment and Service, RBAC, runner ServiceAccount and Role) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/`.
+- All controller-side manifests (CRDs `SkillEval` and `SandboxProfile`, controller Deployment and Service, RBAC, runner ServiceAccount and Role, the `default` SandboxProfile) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/` (on a new cluster apply twice: the SandboxProfile needs its CRD established first). The controller Role covers SkillEvals, SandboxProfiles (and status), Jobs, pods, the model list ConfigMap, events, leases, `extensions.agents.x-k8s.io` SandboxTemplates and SandboxWarmPools (and warm pool status), `cilium.io` CiliumNetworkPolicies and `get` on the Secret `llm-keys` (for `openai-base-url`); a ClusterRole `skill-ci-controller-crds-<namespace>` reads CustomResourceDefinitions to detect Cilium and the Agent Sandbox extensions. The runner Role covers `agents.x-k8s.io` Sandboxes, `extensions.agents.x-k8s.io` SandboxClaims, pods and `pods/exec`.
 - Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`, port `8082` named `reports` (the reporting site, flag `--reports-addr`, empty disables it; Helm `reports.enabled`); pod label `app.kubernetes.io/name: skill-ci-controller`.
 
 ## Cost guard
