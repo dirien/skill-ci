@@ -3,7 +3,8 @@ name: DCO
 # Every commit of a pull request needs a Signed-off-by line whose name and email match the commit
 # author (git commit -s). See CONTRIBUTING.md, "Developer Certificate of Origin". Bot authors such
 # as dependabot[bot] sign off with another email than their author address, so for an author whose
-# name ends in [bot] the name alone has to match.
+# name ends in [bot] the name alone has to match. The check runs on pull requests only, never on
+# pushes, and skips pull requests the maintainer opens (dirien), who may also push to main directly.
 on:
   pull_request:
     branches: [main]
@@ -18,6 +19,7 @@ concurrency:
 jobs:
   dco:
     name: Signed-off-by
+    if: github.event.pull_request.user.login != 'dirien'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

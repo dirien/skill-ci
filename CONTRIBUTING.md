@@ -136,7 +136,7 @@ This adds a line with the name and email from your Git configuration:
 Signed-off-by: Your Name <you@example.com>
 ```
 
-The name and email must match the commit author. The DCO workflow (`.github/workflows/dco.yaml`) checks every commit of a pull request and fails when a sign-off is missing or does not match. To sign off commits you already made, run `git rebase --signoff main` and force-push the branch.
+The name and email must match the commit author. The DCO workflow (`.github/workflows/dco.yaml`) checks every commit of a pull request and fails when a sign-off is missing or does not match. It does not run on pushes to `main` or on pull requests the maintainer opens. To sign off commits you already made, run `git rebase --signoff main` and force-push the branch.
 
 Commits made before the DCO check was added to the repository have no `Signed-off-by` line. Apart from the Dependabot dependency updates, which are signed off, all of them are the work of the project's sole author, Engin Diri, who released them under the Apache License 2.0 by adding the [LICENSE](LICENSE) file.
 
