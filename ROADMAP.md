@@ -2,21 +2,17 @@
 
 This roadmap lists the work the maintainers plan next. It has no dates; items move when someone works on them. To discuss an item or propose a new one, open an issue.
 
-## In progress
+## Done recently
 
-### Trial session viewer
-
-The reporting site shows each SkillEval and its SkillEvaluator report. The next step is a viewer for the session of every trial: what the agent did, step by step, with and without the skill. Secrets are redacted before anything is shown.
+- Trial session viewer (0.11.0): the reporting UI shows what the agent did in every trial, with and without the skill, with secrets redacted before anything is stored.
+- Configurable judge (0.11.0): `SkillCIConfig` `spec.judge` sets the provider, model and endpoint; Anthropic stays the default.
+- Retries per trial for rate limits (0.11.1): Harbor retries a rate-limited trial with a backoff before the whole run is retried.
 
 ## Planned
 
-### Configurable judge
+### Distribution to developer machines
 
-Today Anthropic is the judge of every run: the `llm-keys` Secret needs the key `anthropic`, and the network modes `none` and `allowlist` always allow `api.anthropic.com`. SkillEvaluator already supports other providers (OpenAI, Bedrock, NVIDIA Build and OpenAI-compatible endpoints). The plan is to set the judge provider, model and host in `SkillCIConfig`, derive the allowed judge host from it, and document a setup that uses only a self-hosted, OpenAI-compatible endpoint. The same applies to the embeddings that Tier 2 uses.
-
-### Retries per trial for rate limits
-
-A run that failed only because a provider rate-limited it is retried as a whole. Retrying only the trials that hit the limit would save time and tokens.
+Today developers pull a channel with ORAS, for example `oras pull <registry>/skills/<skill>:stable -o ~/.claude/skills/<skill>`. Two directions are open. A small skill-ci CLI could resolve a channel to a digest, install only a digest that has a passing eval report attached, and keep a lock file. The other is to follow the packaging the Agent Skills project settles on: an open proposal under the Agentic AI Foundation describes skills as OCI artifacts with media types, lock files and signatures (agentskills/agentskills discussion 292). skill-ci would push that format and keep reading its current one, and installers built for the format could then read any skill-ci registry.
 
 ### End-to-end tests on kind
 

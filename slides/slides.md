@@ -1007,6 +1007,61 @@ Tags from README.md "Sample skills" and DEMO.md "Expected tags in Harbor".
 
 ---
 
+# Developers follow a channel, not a file
+
+<div class="grid grid-cols-[1.15fr_1fr] gap-10 mt-4 items-start zm">
+  <div class="dist" v-click>
+    <div class="gpu-caption gpu-caption--accent">Today: plain ORAS</div>
+
+```bash
+oras pull harbor.example.com/skills/acme-release-notes:stable \
+  -o ~/.claude/skills/acme-release-notes
+```
+
+  <p class="dist__note">Same registry, same access control, any agent that reads a skills folder.</p>
+  </div>
+  <div class="next">
+    <div class="gpu-caption">Next</div>
+    <div class="next__item" v-click><strong>A skill-ci CLI</strong><span>Resolve <code>stable</code> to a digest, install only with a passing report, write a lock file</span></div>
+    <div class="next__item" v-click><strong>The Agent Skills OCI draft</strong><span>Open proposal under the AAIF for media types, lock files and signatures</span></div>
+    <div class="next__item" v-click><strong>Whatever tooling follows it</strong><span>One format, so any installer can read any registry</span></div>
+  </div>
+</div>
+
+<style scoped>
+.dist :deep(pre), .dist :deep(code) { font-size: 0.9rem !important; line-height: 1.55 !important; }
+.dist__note { margin: 0.8rem 0 0 !important; font-size: 1.05rem !important; color: var(--p-fg-muted); }
+.next { display: flex; flex-direction: column; gap: 0.8rem; }
+.next__item { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.8rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.05rem; line-height: 1.35; }
+.next__item strong { font-size: 1.15rem; color: var(--p-fg); }
+.next__item span { color: var(--p-fg-muted); }
+</style>
+
+<!--
+[cut if short on time, about 40 seconds]
+
+So stable is decided. How does it reach a laptop? [click] Today it is one ORAS
+command against the same registry. The developer pulls the channel, not a
+file someone mailed around, and the registry's access control decides who
+gets which skill.
+
+This is the part of the story that is still open, for everyone. [click] One
+next step is a small skill-ci CLI that resolves stable to a digest, installs
+only a digest that has a passing eval report attached, and writes a lock
+file. [click] The other is alignment: the Agent Skills spec moved to the
+Agentic AI Foundation in October, and there is an open proposal there for
+skills as OCI artifacts, with media types, lock files and signatures. [click]
+Once that settles, installers can read any registry, and skill-ci only has to
+push the agreed format.
+
+Sources: agentskills.io/specification (format only, nothing on distribution);
+github.com/agentskills/agentskills discussion 292 (open, no maintainer
+decision as of 2026-10-31); github.com/ThomasVitale/agents-skills-oci-artifacts-spec
+(draft v0.1.0); Agent Skills donated to the AAIF on 2026-10-22.
+-->
+
+---
+
 <div class="statement">
   <h1>Let's push some <em>skills</em>.</h1>
 </div>
