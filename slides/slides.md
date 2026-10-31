@@ -632,24 +632,25 @@ scanners in the runner".
 
 <div class="lift mt-6">
   <div class="lift__row" v-for="m in [
-    { name: 'claude-haiku-5-5', without: 0.35, withSkill: 0.95, lift: '+0.60' },
-    { name: 'claude-sonnet-5-5', without: 0.32, withSkill: 0.95, lift: '+0.63' },
-    { name: 'claude-opus-5-5', without: 0.36, withSkill: 0.95, lift: '+0.59' },
+    { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.36, withSkill: 0.95, lift: '+0.59', ci: '[+0.58, +0.60]' },
+    { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.47, withSkill: 0.72, lift: '+0.25', ci: '[+0.24, +0.27]' },
   ]" :key="m.name" v-click>
-    <div class="lift__name">{{ m.name }}</div>
+    <div class="lift__name"><div class="lift__agent">{{ m.agent }}</div>{{ m.name }}</div>
     <div class="lift__bars">
       <div class="lift__bar lift__bar--without" :style="{ width: m.without * 100 + '%' }"><span>without {{ m.without.toFixed(2) }}</span></div>
       <div class="lift__bar lift__bar--with" :style="{ width: m.withSkill * 100 + '%' }"><span>with {{ m.withSkill.toFixed(2) }}</span></div>
     </div>
-    <div class="lift__val">{{ m.lift }}</div>
+    <div class="lift__val">{{ m.lift }}<div class="lift__ci">95% CI {{ m.ci }}</div></div>
   </div>
 </div>
-<div class="src mt-6">acme-release-notes v1.0.0, 3 eval cases, one attempt per arm. Recorded 2026-10-30.</div>
+<div class="src mt-6">acme-release-notes v1.0.0, 3 eval cases × 3 attempts per arm (9 trials each). Recorded 2026-10-31.</div>
 
 <style scoped>
 .lift { display: flex; flex-direction: column; gap: 1.6rem; }
-.lift__row { display: grid; grid-template-columns: 13rem 1fr 6rem; align-items: center; gap: 1.5rem; }
+.lift__row { display: grid; grid-template-columns: 13rem 1fr 12rem; align-items: center; gap: 1.5rem; }
 .lift__name { font-family: var(--slidev-font-mono); font-size: 1.05rem; color: var(--p-fg-muted); }
+.lift__agent { font-family: var(--slidev-font-sans); font-size: 1.15rem; font-weight: 600; color: var(--p-fg); }
+.lift__ci { white-space: nowrap; font-family: var(--slidev-font-mono); font-size: 0.85rem; font-weight: 400; letter-spacing: 0; color: var(--p-fg-muted); }
 .lift__bars { display: flex; flex-direction: column; gap: 0.5rem; }
 .lift__bar { height: 2.1rem; border-radius: 6px; display: flex; align-items: center; padding-left: 0.8rem; font-family: var(--slidev-font-mono); font-size: 0.95rem; white-space: nowrap; }
 .lift__bar--without { background: var(--p-border); color: var(--p-fg); }
@@ -661,24 +662,24 @@ scanners in the runner".
 [12:40 to 13:40]
 
 This is the core measurement. Same skill, acme-release-notes, which teaches a
-made-up release note format called ACME-RN/2. Three models. Without the skill
-nobody gets the house format right, about 0.35. With it, 0.95 on all three.
-The difference is the lift: plus 0.60, 0.63, 0.59.
+made-up release note format called ACME-RN/2. Two agents, each with its own
+model. Claude Code with Opus 5.5 goes from 0.36 to 0.95, plus 0.59. Codex with
+gpt-6.1-sol goes from 0.47 to 0.72, plus 0.25. Both intervals sit well above
+zero: nine trials per arm, and the scores barely move between trials.
+
+The same skill helps both agents, by very different amounts. That is why the
+lift is measured per agent and model, never once for the skill.
 
 I picked the format on purpose. No model can know it, so the lift is large and
 easy to read. Real skills have smaller lifts, and sometimes none. Be upfront
 about that.
 
-Numbers: DEMO.md pre-run results, read from the cluster on 2026-10-30
-(claude-code with haiku, sonnet, opus 5.5). They were recorded before the
-statistical gate, with one attempt per arm, so they carry no interval. Say
-that if someone asks about the sample size.
+Numbers: SkillEvals on the DOKS cluster, release 0.7.1, completed
+2026-10-31 (claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
+openai/gpt-6.1-sol), 3 cases × 3 attempts per arm.
 
-TODO: these rows come from the earlier model list (haiku, sonnet, opus). The
-current demo list is Claude Code 2.1.292 with Opus 5.5 (required), Codex
-0.161.0 with gpt-6.1-sol, OpenCode 1.19.1 with Qwen 3.8 Flash. When the
-cluster state is rebuilt, replace this slide with the three current entries.
-At the time of writing, kubectl returned no SkillEvals in skill-ci.
+TODO: add the OpenCode 1.19.1 + Qwen 3.8 Flash row once the OpenRouter API key
+is in llm-keys and its run has finished.
 -->
 
 ---
