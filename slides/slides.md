@@ -634,6 +634,7 @@ scanners in the runner".
   <div class="lift__row" v-for="m in [
     { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.36, withSkill: 0.95, lift: '+0.59', ci: '[+0.58, +0.60]' },
     { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.47, withSkill: 0.72, lift: '+0.25', ci: '[+0.24, +0.27]' },
+    { agent: 'OpenCode 1.19.1', name: 'qwen3.8-flash', without: 0.39, withSkill: 0.96, lift: '+0.57', ci: '[+0.55, +0.58]' },
   ]" :key="m.name" v-click>
     <div class="lift__name"><div class="lift__agent">{{ m.agent }}</div>{{ m.name }}</div>
     <div class="lift__bars">
@@ -662,24 +663,25 @@ scanners in the runner".
 [12:40 to 13:40]
 
 This is the core measurement. Same skill, acme-release-notes, which teaches a
-made-up release note format called ACME-RN/2. Two agents, each with its own
+made-up release note format called ACME-RN/2. Three agents, each with its own
 model. Claude Code with Opus 5.5 goes from 0.36 to 0.95, plus 0.59. Codex with
-gpt-6.1-sol goes from 0.47 to 0.72, plus 0.25. Both intervals sit well above
-zero: nine trials per arm, and the scores barely move between trials.
+gpt-6.1-sol goes from 0.47 to 0.72, plus 0.25. OpenCode with Qwen 3.8 Flash
+through OpenRouter, a small and cheap model, goes from 0.39 to 0.96, plus 0.57.
+All three intervals sit well above zero: nine trials per arm, and the scores
+barely move between trials.
 
-The same skill helps both agents, by very different amounts. That is why the
-lift is measured per agent and model, never once for the skill.
+The same skill helps all three, by very different amounts, and the small model
+with the skill matches the big one. That is why the lift is measured per agent
+and model, never once for the skill.
 
 I picked the format on purpose. No model can know it, so the lift is large and
 easy to read. Real skills have smaller lifts, and sometimes none. Be upfront
 about that.
 
-Numbers: SkillEvals on the DOKS cluster, release 0.7.1, completed
-2026-10-31 (claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
-openai/gpt-6.1-sol), 3 cases × 3 attempts per arm.
-
-TODO: add the OpenCode 1.19.1 + Qwen 3.8 Flash row once the OpenRouter API key
-is in llm-keys and its run has finished.
+Numbers: SkillEvals on the DOKS cluster, completed 2026-10-31
+(release 0.7.1: claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
+openai/gpt-6.1-sol; opencode 1.19.1 with openrouter/qwen/qwen3.8-flash on
+release 0.7.2), 3 cases × 3 attempts per arm.
 -->
 
 ---
