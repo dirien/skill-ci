@@ -109,7 +109,7 @@ sandbox-image: ## Build the generic sandbox image locally (needs docker; the rel
 lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
 	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh sandbox/*.sh
 	$(YAMLLINT) -c .yamllint.yaml infra demo .github .goreleaser.yaml .yamllint.yaml .markdownlint.yaml
-	$(MARKDOWNLINT) README.md DEMO.md "docs/*.md" deploy/README.md ui/README.md "testdata/*/README.md" "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
+	$(MARKDOWNLINT) README.md DEMO.md ADOPTERS.md CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md GOVERNANCE.md MAINTAINERS.md ROADMAP.md SECURITY.md .github/PULL_REQUEST_TEMPLATE.md "docs/*.md" deploy/README.md ui/README.md "testdata/*/README.md" "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
 
