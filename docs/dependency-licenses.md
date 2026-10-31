@@ -2,7 +2,7 @@
 
 skill-ci is licensed under the [Apache License 2.0](../LICENSE). This page lists the third-party components that skill-ci ships or installs, their licenses, and which of them fall outside the [CNCF allowlist](https://github.com/cncf/foundation/blob/main/policies-guidance/allowed-third-party-license-policy.md). A CNCF project may use Apache-2.0 components and allowlisted components without review. Every other license needs an exception from the CNCF Governing Board, requested with the [license exception issue template](https://github.com/cncf/foundation/issues/new?template=license-exception-request.yaml) when the project applies.
 
-The list describes release 0.10.1 and was checked on 2026-10-31. Update it when a dependency, a pin or an image changes. The trial session viewer adds a web UI to the controller; its npm dependencies are not covered yet and must be added here when it ships.
+The list describes release 0.10.1 and was checked on 2026-10-31. Update it when a dependency, a pin or an image changes. The reporting UI embedded in the controller is listed under "Reporting UI (npm)".
 
 ## How the licenses were checked
 
@@ -59,6 +59,50 @@ The notable ones:
 - ISC: `github.com/davecgh/go-spew`.
 
 The Go standard library compiled into the binary is BSD-3-Clause. The base image is built by the [distroless](https://github.com/GoogleContainerTools/distroless) project (Apache-2.0) and contains the Debian packages base-files (GPL-2+), ca-certificates (GPL-2+ and MPL-2.0), media-types, netbase (GPL-2) and tzdata (public domain).
+
+## Reporting UI (npm)
+
+The reporting site's single page app is built from `ui/` with Vite and embedded in the controller binary (`controller/internal/reportsite/web/dist/`). Checked on 2026-10-31 from the `license` field of each `node_modules/*/package.json` after `make ui-install` (`npm ci` from `ui/package-lock.json`). The lockfile has 211 entries; 186 were installed on linux/arm64. The other 25 are optional native binaries for other platforms, and their license comes from the lockfile: MIT for the 14 `@rolldown/binding-*` packages and `fsevents`, MPL-2.0 for the 10 `lightningcss-*` packages.
+
+What ships: the built JavaScript holds only the runtime dependencies and their own dependencies, all MIT. Nothing else from `node_modules` reaches the controller image.
+
+| Package | Version | License |
+| --- | --- | --- |
+| react | 19.3.1 | MIT |
+| react-dom | 19.3.1 | MIT |
+| react-router | 8.4.0 | MIT |
+| scheduler (dependency of react-dom) | 0.28.0 | MIT |
+| @remix-run/route-pattern (dependency of react-router) | 0.22.1 | MIT |
+| cookie-es (dependency of react-router) | 3.1.1 | MIT |
+
+Build and test tools (direct development dependencies; they run in CI and on a developer machine, they are not shipped):
+
+| Package | Version | License |
+| --- | --- | --- |
+| vite | 8.3.4 | MIT |
+| @vitejs/plugin-react | 6.1.2 | MIT |
+| typescript | 6.0.3 | Apache-2.0 |
+| vitest | 5.0.5 | MIT |
+| jsdom | 30.1.3 | MIT |
+| @testing-library/react | 16.3.3 | MIT |
+| @testing-library/dom | 10.4.2 | MIT |
+| eslint | 10.13.0 | MIT |
+| @eslint/js | 10.0.1 | MIT |
+| typescript-eslint | 8.71.2 | MIT |
+| @types/react | 19.3.0 | MIT |
+| @types/react-dom | 19.3.0 | MIT |
+
+All 186 installed packages by license: MIT 144, Apache-2.0 17, BSD-2-Clause 8, ISC 7, BSD-3-Clause 3, MIT-0 2, MPL-2.0 2, BlueOak-1.0.0 2, CC0-1.0 1. The ones outside MIT, Apache-2.0, BSD and ISC are all transitive development dependencies:
+
+| Package | Version | License | Pulled in by |
+| --- | --- | --- | --- |
+| lightningcss, lightningcss-linux-arm64-gnu (and the other platform binaries) | 1.33.0 | MPL-2.0 | vite (CSS minifier at build time) |
+| lru-cache | 11.5.3 | BlueOak-1.0.0 | jsdom (test DOM) |
+| minimatch | 10.2.6 | BlueOak-1.0.0 | eslint, typescript-eslint |
+| mdn-data | 2.27.1 | CC0-1.0 | jsdom, through css-tree (CSS data) |
+| @csstools/color-helpers, @csstools/css-syntax-patches-for-csstree | 6.1.2, 1.1.15 | MIT-0 | jsdom |
+
+None of them is in the controller binary or any image. MPL-2.0 and CC0-1.0 are outside the CNCF allowlist (see the summary); check MIT-0 and BlueOak-1.0.0 against the allowlist before an application, in case the build tool chain counts.
 
 ## Runner image
 

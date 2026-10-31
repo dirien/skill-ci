@@ -25,17 +25,24 @@ Without a build the controller serves `web/ui-placeholder.html`, so `go build` a
 | `src/api/fixtures/` | API responses the UI is built and tested against, and `fixtureFor`, which maps a request path to one. The Go test `TestFixturesMatchTypes` decodes each file into its Go type, so a fixture is always a valid response |
 | `mock/fixtures.ts` | The Vite plugin that serves the fixtures in `make ui-dev` |
 | `src/routes.tsx` | The routes and their breadcrumbs |
-| `src/components/`, `src/pages/` | The app shell and one component per page |
-| `src/styles/tokens.css` | Design tokens: light, dark (`prefers-color-scheme`) and the explicit toggle (`data-theme` on `<html>`) |
-| `src/test/` | Test setup: a `fetch` that answers from the fixtures |
+| `src/pages/` | One component per page, each with its test (`*.test.tsx`) |
+| `src/session/` | The trial session: the log (chips, Focus and All, jumps), one log entry, findings and eval criteria |
+| `src/components/` | The app shell and the shared parts: page head, sections, metadata strip, prompt box (`Page.tsx`), status pills and badges (`Status.tsx`), the runs table, the lift with its interval, and the SVG charts (`Charts.tsx`) |
+| `src/format.ts`, `src/keyboard.ts`, `src/theme.ts` | Number, time and size formats; the keyboard shortcuts; the theme choice |
+| `src/styles/` | `tokens.css` (design tokens: light, dark under `prefers-color-scheme`, and the explicit toggle with `data-theme` on `<html>`), `base.css` (shell, type, tables, controls), `components.css`, `session.css` |
+| `src/test/` | Test setup: a `fetch` that answers from the fixtures, and `renderAt` for page tests |
 
 ## Rules
 
 - The controller's CSP is `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`. No inline scripts, no `<style>` tags, no CDN, no web fonts. Dynamic styles go through React's `style` prop (the DOM), never a `style` attribute in static markup.
-- Agent output is untrusted. Render it as text, never as HTML: eslint forbids `dangerouslySetInnerHTML`.
+- Agent output is untrusted. Render it as text, never as HTML: eslint forbids `dangerouslySetInnerHTML`, and a test feeds markup through a session to check it stays text.
 - `/runs/{name}/report`, `/runs/{name}/result.json` and the `/api/v1/.../output/{k}` and `trajectory.json` downloads are server responses, not app routes: link to them with a full page load (`<a href>` or `reloadDocument`).
 - Every `localStorage` access is wrapped in `try`/`catch`; the app works without storage.
-- Status never relies on color alone: an icon and a word go with it.
+- Status never relies on color alone: an icon and a word go with it (`Status.tsx`). Text uses the ink tokens; a status color only repeats what the word says.
+- Colors come from `tokens.css` only. The ink and status tokens clear WCAG AA (4.5:1) on their surfaces in both themes, control outlines 3:1. Change a token only after checking both themes.
+- Charts are hand-written SVG, no chart library. With skill and without skill are the categorical slots 1 and 2 (blue, orange); phases use a one-hue ordinal ramp; a lift is one series on a fixed -1 to +1 scale. Thin marks with a rounded data end, a 2px gap between touching fills, solid hairline grids, one axis, a legend for two series, an SVG `<title>` per mark, and the numbers always in text next to or under the chart. Check a new palette with the dataviz validator against the panel surface of both themes.
+- Keyboard: `j` and `k` move between log entries, `/` focuses the filter (the chips, or the name field on /runs), `g g` and `G` jump to the first and last entry. Shortcuts never fire while typing or with a modifier.
+- No em or en dashes in UI text; a missing value is `-`.
 
 ## Pinned versions
 

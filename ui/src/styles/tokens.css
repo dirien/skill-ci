@@ -1,131 +1,183 @@
-/* Design tokens. Light by default, dark when the system asks for it, and either
-   one when the viewer picks it (data-theme on <html>, set by src/theme.ts).
-   Status colors never carry meaning alone: pair them with an icon and text. */
+/* Design tokens. The theme follows the system (prefers-color-scheme) unless the
+   viewer picks light or dark (data-theme on <html>, set by src/theme.ts). The
+   dark values are declared twice: under the media query, guarded so a light
+   pick wins over a dark system, and under [data-theme="dark"], so a dark pick
+   wins over a light system.
+
+   Contrast (WCAG): fg, fg-muted, fg-subtle and accent clear 4.5:1 on bg, panel
+   and code in both themes; every status ink clears 4.5:1 on its own -bg tint;
+   border-strong (control outlines) clears 3:1. Status colors never carry
+   meaning alone: an icon and a word go with them.
+
+   Chart colors (viz-*) were checked with the dataviz validator against the
+   panel surface: with-skill and without-skill are categorical slots 1 and 2
+   (blue, orange), the phase ramp is a one-hue ordinal ramp. */
 :root {
   color-scheme: light;
+
+  /* Type. System stacks only: no web fonts (CSP font-src 'self', airgapped). */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-md: 0.875rem;
-  --text-lg: 1rem;
-  --text-xl: 1.25rem;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --text-2xs: 0.6875rem; /* 11px: uppercase labels, badges */
+  --text-xs: 0.75rem; /* 12px: secondary text, table meta */
+  --text-sm: 0.8125rem; /* 13px: tables, log, code */
+  --text-md: 0.875rem; /* 14px: body */
+  --text-lg: 1rem; /* 16px: section headings */
+  --text-xl: 1.25rem; /* 20px: page title */
+  --text-2xl: 1.75rem; /* 28px: stat values */
   --line: 1.45;
+  --line-tight: 1.25;
+  --tracking-label: 0.06em;
+
+  /* Spacing: a 4px grid. */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
-  --space-6: 1.5rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
   --radius: 4px;
+  --radius-pill: 999px;
   --focus-width: 2px;
+  --aside-width: 22rem;
 
-  --bg: #ffffff;
-  --bg-subtle: #f6f8fa;
+  /* Surfaces and ink. */
+  --bg: #f6f7f9;
+  --panel: #ffffff;
   --bg-raised: #ffffff;
-  --bg-code: #f3f4f6;
-  --fg: #1f2328;
-  --fg-muted: #59636e;
-  --border: #d1d9e0;
-  --border-strong: #8c959f;
-  --accent: #0969da;
+  --bg-code: #f2f4f7;
+  --bg-hover: #eef1f5;
+  --bg-target: #fff7d6;
+  --fg: #15181d;
+  --fg-muted: #545c68;
+  --fg-subtle: #636b77;
+  --border: #dde1e6;
+  --border-strong: #868e99;
+  --accent: #1a63d6;
   --accent-fg: #ffffff;
-  --focus: #0969da;
+  --focus: #1a63d6;
 
-  --ok: #1a7f37;
-  --ok-bg: #dafbe1;
-  --bad: #cf222e;
-  --bad-bg: #ffebe9;
-  --warn: #9a6700;
-  --warn-bg: #fff8c5;
-  --info: #0969da;
-  --info-bg: #ddf4ff;
-  --neutral: #59636e;
-  --neutral-bg: #eff2f5;
+  /* Status: ink on its tint. */
+  --ok: #17733a;
+  --ok-bg: #e3f4e8;
+  --bad: #c4232f;
+  --bad-bg: #fdecec;
+  --warn: #8a5a00;
+  --warn-bg: #fdf3d7;
+  --info: #1a63d6;
+  --info-bg: #e6effc;
+  --neutral: #545c68;
+  --neutral-bg: #eef0f3;
+  --opp: #6a3fc2;
+  --opp-bg: #f0eafb;
 
-  /* Log categories. */
-  --cat-msg: #0969da;
-  --cat-user: #8250df;
-  --cat-think: #59636e;
-  --cat-tools: #1a7f37;
-  --cat-web: #bc4c00;
-  --cat-pkg: #9a6700;
-  --cat-skill: #bf3989;
-  --cat-net: #cf222e;
-  --cat-judge: #1f6feb;
-  --cat-usage: #59636e;
-  --cat-meta: #8c959f;
+  /* Charts. */
+  --viz-with: #2a78d6;
+  --viz-without: #eb6834;
+  --viz-point: #2a78d6;
+  --viz-interval: #86b6ef;
+  --viz-grid: #e6e8ec;
+  --viz-axis: #a9b0ba;
+  --viz-surface: #ffffff;
+  --viz-track: #dbe7f8;
+  --viz-phase-1: #86b6ef;
+  --viz-phase-2: #5598e7;
+  --viz-phase-3: #256abf;
+  --viz-phase-4: #104281;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0d1117;
-    --bg-subtle: #151b23;
-    --bg-raised: #161b22;
-    --bg-code: #1c2128;
-    --fg: #e6edf3;
-    --fg-muted: #9198a1;
-    --border: #3d444d;
-    --border-strong: #656c76;
-    --accent: #4493f8;
-    --accent-fg: #0d1117;
-    --focus: #4493f8;
-    --ok: #3fb950;
-    --ok-bg: #12261e;
-    --bad: #f85149;
-    --bad-bg: #2d1416;
-    --warn: #d29922;
-    --warn-bg: #2b2111;
-    --info: #4493f8;
-    --info-bg: #121d2f;
-    --neutral: #9198a1;
-    --neutral-bg: #1c2128;
-    --cat-msg: #4493f8;
-    --cat-user: #ab7df8;
-    --cat-think: #9198a1;
-    --cat-tools: #3fb950;
-    --cat-web: #f0883e;
-    --cat-pkg: #d29922;
-    --cat-skill: #f778ba;
-    --cat-net: #f85149;
-    --cat-judge: #58a6ff;
-    --cat-usage: #9198a1;
-    --cat-meta: #656c76;
+    --bg: #0e1014;
+    --panel: #14171c;
+    --bg-raised: #1a1e25;
+    --bg-code: #101318;
+    --bg-hover: #1b2028;
+    --bg-target: #2a2612;
+    --fg: #e5e8ec;
+    --fg-muted: #a0a9b4;
+    --fg-subtle: #808a96;
+    --border: #262b33;
+    --border-strong: #5f6a7a;
+    --accent: #7cb0ff;
+    --accent-fg: #0e1014;
+    --focus: #7cb0ff;
+    --ok: #56d07c;
+    --ok-bg: #11281a;
+    --bad: #ff7b72;
+    --bad-bg: #2e1517;
+    --warn: #e3b341;
+    --warn-bg: #2a2110;
+    --info: #7cb0ff;
+    --info-bg: #132036;
+    --neutral: #a0a9b4;
+    --neutral-bg: #1c2027;
+    --opp: #b99cff;
+    --opp-bg: #221a36;
+    --viz-with: #3987e5;
+    --viz-without: #d95926;
+    --viz-point: #86b6ef;
+    --viz-interval: #2a78d6;
+    --viz-grid: #232830;
+    --viz-axis: #465060;
+    --viz-surface: #14171c;
+    --viz-track: #1f2f47;
+    --viz-phase-1: #9ec5f4;
+    --viz-phase-2: #5598e7;
+    --viz-phase-3: #2a78d6;
+    --viz-phase-4: #184f95;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0d1117;
-  --bg-subtle: #151b23;
-  --bg-raised: #161b22;
-  --bg-code: #1c2128;
-  --fg: #e6edf3;
-  --fg-muted: #9198a1;
-  --border: #3d444d;
-  --border-strong: #656c76;
-  --accent: #4493f8;
-  --accent-fg: #0d1117;
-  --focus: #4493f8;
-  --ok: #3fb950;
-  --ok-bg: #12261e;
-  --bad: #f85149;
-  --bad-bg: #2d1416;
-  --warn: #d29922;
-  --warn-bg: #2b2111;
-  --info: #4493f8;
-  --info-bg: #121d2f;
-  --neutral: #9198a1;
-  --neutral-bg: #1c2128;
-  --cat-msg: #4493f8;
-  --cat-user: #ab7df8;
-  --cat-think: #9198a1;
-  --cat-tools: #3fb950;
-  --cat-web: #f0883e;
-  --cat-pkg: #d29922;
-  --cat-skill: #f778ba;
-  --cat-net: #f85149;
-  --cat-judge: #58a6ff;
-  --cat-usage: #9198a1;
-  --cat-meta: #656c76;
+  --bg: #0e1014;
+  --panel: #14171c;
+  --bg-raised: #1a1e25;
+  --bg-code: #101318;
+  --bg-hover: #1b2028;
+  --bg-target: #2a2612;
+  --fg: #e5e8ec;
+  --fg-muted: #a0a9b4;
+  --fg-subtle: #808a96;
+  --border: #262b33;
+  --border-strong: #5f6a7a;
+  --accent: #7cb0ff;
+  --accent-fg: #0e1014;
+  --focus: #7cb0ff;
+  --ok: #56d07c;
+  --ok-bg: #11281a;
+  --bad: #ff7b72;
+  --bad-bg: #2e1517;
+  --warn: #e3b341;
+  --warn-bg: #2a2110;
+  --info: #7cb0ff;
+  --info-bg: #132036;
+  --neutral: #a0a9b4;
+  --neutral-bg: #1c2027;
+  --opp: #b99cff;
+  --opp-bg: #221a36;
+  --viz-with: #3987e5;
+  --viz-without: #d95926;
+  --viz-point: #86b6ef;
+  --viz-interval: #2a78d6;
+  --viz-grid: #232830;
+  --viz-axis: #465060;
+  --viz-surface: #14171c;
+  --viz-track: #1f2f47;
+  --viz-phase-1: #9ec5f4;
+  --viz-phase-2: #5598e7;
+  --viz-phase-3: #2a78d6;
+  --viz-phase-4: #184f95;
+}
+
+@media (forced-colors: active) {
+  :root {
+    --viz-with: CanvasText;
+    --viz-without: GrayText;
+    --viz-point: CanvasText;
+    --viz-interval: GrayText;
+  }
 }

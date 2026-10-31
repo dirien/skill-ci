@@ -61,7 +61,7 @@ export function ThemeToggle() {
         setChoice(next);
       }}
     >
-      Theme: {choice}
+      <span aria-hidden="true">{choice === "dark" ? "◐" : choice === "light" ? "○" : "◑"}</span> Theme: {choice}
     </button>
   );
 }
@@ -74,7 +74,10 @@ export function AppShell() {
         Skip to content
       </a>
       <header className="topbar">
-        <NavLink className="brand" to="/" end>
+        <NavLink className="brand" to="/" end aria-label="skill-ci overview">
+          <span className="brand-mark" aria-hidden="true">
+            ▸
+          </span>{" "}
           skill-ci
         </NavLink>
         <nav aria-label="Main">
@@ -91,7 +94,8 @@ export function AppShell() {
         <span className="meta">
           {site.status === "ok" ? (
             <>
-              namespace <code>{site.data.namespace}</code> · Harbor project <code>{site.data.project}</code>
+              namespace <code>{site.data.namespace}</code> · Harbor project <code>{site.data.project}</code> · controller{" "}
+              <code>{site.data.version}</code>
             </>
           ) : null}
         </span>

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
@@ -31,7 +31,7 @@ describe("app shell", () => {
     const crumbs = await screen.findByRole("navigation", { name: "Breadcrumb" });
     expect(within(crumbs).getByRole("link", { name: RUN.claudeCode }).getAttribute("href")).toBe(`/runs/${RUN.claudeCode}`);
     expect(within(crumbs).getByText("rn-basic__sryqofs").getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Files" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: /^Files/ }).getAttribute("aria-current")).toBe("page");
   });
 
   it("answers unknown paths with the not found page", async () => {
@@ -52,6 +52,19 @@ describe("api client", () => {
 });
 
 describe("theme", () => {
+  it("toggles from the top bar: system, light, dark, and back", async () => {
+    renderAt("/");
+    const button = await screen.findByRole("button", { name: "Theme: system. Switch to light." });
+    fireEvent.click(button);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+    fireEvent.click(screen.getByRole("button", { name: "Theme: light. Switch to dark." }));
+    expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
+    expect(window.localStorage.getItem("skillci.theme")).toBe("dark");
+    fireEvent.click(screen.getByRole("button", { name: "Theme: dark. Switch to system." }));
+    expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+    expect(window.localStorage.getItem("skillci.theme")).toBeNull();
+  });
+
   it("cycles and survives storage that throws", () => {
     expect(nextTheme("system")).toBe("light");
     saveTheme("dark");

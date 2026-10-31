@@ -6,6 +6,8 @@ import { RouterProvider } from "react-router/dom";
 import { routes } from "./routes.tsx";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/session.css";
 import { applyTheme, readTheme } from "./theme.ts";
 
 applyTheme(readTheme());
