@@ -137,12 +137,38 @@ keys are rejected.
 | `service.annotations`, `service.labels` | `{}` | |
 | `serviceMonitor.enabled` | `false` | Prometheus Operator ServiceMonitor |
 | `serviceMonitor.namespace`, `.labels`, `.interval`, `.scrapeTimeout`, `.path`, `.relabelings`, `.metricRelabelings` | `""`, `{}`, `15s`, `""`, `/metrics`, `[]`, `[]` | Set `labels.release` for kube-prometheus-stack |
+| `otlp.endpoint` | `""` | Push the `skillci_*` metrics over OTLP as well (off when empty): `host:port` or a URL (`http://` turns TLS off). Needs controller image 0.8.0 or newer |
+| `otlp.protocol` | `http/protobuf` | `http/protobuf` or `grpc` |
+| `otlp.urlPath` | `""` | Full OTLP/HTTP metrics path, `/api/v1/otlp/v1/metrics` for the Prometheus OTLP receiver; empty is `/v1/metrics` |
+| `otlp.insecure`, `otlp.interval` | `false`, `""` | No TLS; time between exports (empty: 60s) |
+| `otlp.headers` | `""` | `key=value` pairs sent with every export. For keys use `otlp.headersSecret` |
+| `otlp.headersSecret.name`, `.key` | `""`, `headers` | Secret key with the headers (`OTEL_EXPORTER_OTLP_HEADERS`); replaces `otlp.headers` when `name` is set |
+| `otlp.resourceAttributes` | `{}` | Added to `k8s.pod.name` and `k8s.namespace.name` (`OTEL_RESOURCE_ATTRIBUTES`) |
 | `podAnnotations`, `podLabels`, `priorityClassName` | `{}`, `{}`, `""` | |
 | `podSecurityContext` | non-root, `RuntimeDefault` seccomp | |
 | `securityContext` | no privilege escalation, read-only root, drop `ALL` | |
 | `livenessProbe`, `readinessProbe` | `/healthz`, `/readyz` on port `webhook` | |
 | `resources` | requests 50m / 64Mi, limit 256Mi memory | |
 | `nodeSelector`, `tolerations`, `affinity` | empty | |
+
+### OpenTelemetry (OTLP)
+
+The controller can push its `skillci_*` metrics over OTLP, next to the `/metrics` endpoint (same names, labels and
+values; see CONTRACT.md "OpenTelemetry export"). Three common targets:
+
+```bash
+# An OpenTelemetry Collector or Grafana Alloy in the cluster
+--set otlp.endpoint=otel-collector.monitoring:4318 --set otlp.insecure=true
+
+# The Prometheus OTLP receiver (Prometheus 3, or kube-prometheus-stack with
+# prometheus.prometheusSpec.enableOTLPReceiver=true); then drop the ServiceMonitor, or every series is stored twice
+--set otlp.endpoint=kps-kube-prometheus-stack-prometheus.monitoring:9090 \
+  --set otlp.urlPath=/api/v1/otlp/v1/metrics --set otlp.insecure=true
+
+# A vendor endpoint with an ingest key kept in a Secret
+kubectl -n skill-ci create secret generic otlp-headers --from-literal=headers='x-honeycomb-team=<ingest key>'
+--set otlp.endpoint=api.honeycomb.io:443 --set otlp.protocol=grpc --set otlp.headersSecret.name=otlp-headers
+```
 
 ### LLM keys
 

@@ -95,3 +95,14 @@ Usage: include "skill-ci-controller.image" (dict "image" .Values.image "defaultT
 {{- .image.repository -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+OTEL_RESOURCE_ATTRIBUTES: the pod and namespace (from the downward API env), then otlp.resourceAttributes.
+*/}}
+{{- define "skill-ci-controller.otlpResourceAttributes" -}}
+{{- $attrs := list "k8s.pod.name=$(POD_NAME)" "k8s.namespace.name=$(POD_NAMESPACE)" -}}
+{{- range $k, $v := .Values.otlp.resourceAttributes -}}
+{{- $attrs = append $attrs (printf "%s=%s" $k $v) -}}
+{{- end -}}
+{{- join "," $attrs -}}
+{{- end }}

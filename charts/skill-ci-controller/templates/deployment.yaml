@@ -82,6 +82,22 @@ spec:
             {{- if $ctl.logging.development }}
             - --zap-devel=true
             {{- end }}
+            {{- with .Values.otlp }}
+            {{- if .endpoint }}
+            - --otlp-endpoint={{ .endpoint }}
+            - --otlp-protocol={{ .protocol }}
+            {{- with .urlPath }}
+            - --otlp-url-path={{ . }}
+            {{- end }}
+            - --otlp-insecure={{ .insecure }}
+            {{- with .interval }}
+            - --otlp-interval={{ . }}
+            {{- end }}
+            {{- if and .headers (not .headersSecret.name) }}
+            - --otlp-headers={{ .headers }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- range .Values.extraArgs }}
             - {{ . | quote }}
             {{- end }}
@@ -106,6 +122,27 @@ spec:
                   name: {{ .existingSecret }}
                   key: {{ .tokenKey }}
                   optional: {{ .optional }}
+            {{- end }}
+            {{- if .Values.otlp.endpoint }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ include "skill-ci-controller.otlpResourceAttributes" . | quote }}
+            {{- with .Values.otlp.headersSecret }}
+            {{- if .name }}
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- end }}
             {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}

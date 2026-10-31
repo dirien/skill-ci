@@ -611,6 +611,56 @@
     },
     "affinity": {
       "type": "object"
+    },
+    "otlp": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "pattern": "^([^/\\s]+|https?://\\S+)?$"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "http/protobuf",
+            "grpc"
+          ]
+        },
+        "urlPath": {
+          "type": "string",
+          "pattern": "^(/\\S*)?$"
+        },
+        "insecure": {
+          "type": "boolean"
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^([0-9]+(ms|s|m|h))?$"
+        },
+        "headers": {
+          "type": "string"
+        },
+        "headersSecret": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "resourceAttributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   }
 }
