@@ -10,7 +10,8 @@ SkillEvaluator's own publication assessment. A skill without a Tier 3 source (no
 eval dataset, no native Harbor tasks) gets the gate only and then ends with an
 error that says how to draft the dataset. On completion the runner writes one
 JSON object to the container termination log and exits 0, or ``{"error": ...}``
-and exits 1.
+and exits 1. An error after the gate ran keeps the gate's ``tiers`` and ``findings``
+next to ``error``.
 """
 
 from __future__ import annotations
@@ -121,6 +122,10 @@ DEFAULTS = {
     # size reaches the sandbox as HARBOR_SANDBOX_CPUS / HARBOR_SANDBOX_MEMORY_MB (tool_env).
     "SANDBOX_CPUS": "1",
     "SANDBOX_MEMORY_MB": "2048",
+    # The SandboxWarmPool of the eval's sandbox profile (set by the controller). With it the
+    # trials claim pods from that pool and the profile, not SANDBOX_CPUS/SANDBOX_MEMORY_MB,
+    # sizes them. Without it every trial creates its own Sandbox.
+    "SANDBOX_WARM_POOL": "",
     # Trials running at once per eval; the controller caps how many evals run at once.
     "TRIAL_CONCURRENCY": "2",
     # The sandbox image has the agent CLIs at the default pins, so a trial does not install
@@ -134,7 +139,21 @@ REQUIRED = ("SKILL_REF", "SKILL_NAME", "AGENT", "MODEL")
 
 
 class EvalError(Exception):
-    """A failure that ends the run with an ``{"error": ...}`` termination message."""
+    """A failure that ends the run with an ``{"error": ...}`` termination message.
+
+    ``tiers`` and ``findings`` are the gate's outcome when the failure came after the Tier 1 + 2
+    gate ran; the termination message then carries them next to the error.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        tiers: Mapping[str, str] | None = None,
+        findings: Iterable[str] = (),
+    ) -> None:
+        super().__init__(message)
+        self.tiers = dict(tiers) if tiers is not None else None
+        self.findings = list(findings)
 
 
 def load_config(environ: Mapping[str, str]) -> dict[str, str]:
@@ -159,6 +178,12 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
         if bad := [n for n in secrets if not SECRET_NAME.match(n)]:
             raise EvalError(f"SANDBOX_PULL_SECRETS must list Secret names, got {bad[0]!r}")
         config["SANDBOX_PULL_SECRETS"] = ",".join(secrets)
+        config["SANDBOX_WARM_POOL"] = config["SANDBOX_WARM_POOL"].strip()
+        if config["SANDBOX_WARM_POOL"] and not SECRET_NAME.match(config["SANDBOX_WARM_POOL"]):
+            raise EvalError(
+                "SANDBOX_WARM_POOL must be a SandboxWarmPool name, "
+                f"got {config['SANDBOX_WARM_POOL']!r}"
+            )
     config["AGENT_MODEL"] = agent_route(config["AGENT"], config["MODEL"], environ).model
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
@@ -362,6 +387,9 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     A value already in the environment wins. The sandbox size travels the same way:
     ``validate`` has no ``--override-cpus``, so the harbor_agent_sandbox environment reads
     ``HARBOR_SANDBOX_CPUS`` and ``HARBOR_SANDBOX_MEMORY_MB`` (patch hunk 4 lets them through).
+    With a warm pool (``SANDBOX_WARM_POOL``, passed on as ``HARBOR_SANDBOX_WARM_POOL``) the sandbox
+    profile sizes the pods and the size variables are not set. ``SKILLEVAL_NAME`` (set by the
+    controller) goes through as it is; the environment labels the trial pods with it.
 
     The judge stays on Anthropic whatever agent runs: ``SKILL_EVAL_LLM_PROVIDER`` is
     ``anthropic`` whenever the Job has an Anthropic key. Codex needs ``OPENAI_API_KEY`` together
@@ -394,18 +422,26 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
         env["OPENAI_BASE_URL"] = OPENAI_DEFAULT_BASE_URL
     if version := agent_version(env):
         env["SKILLEVALUATOR_AGENT_VERSION"] = version
-    for name, source in (
-        ("HARBOR_SANDBOX_CPUS", "SANDBOX_CPUS"),
-        ("HARBOR_SANDBOX_MEMORY_MB", "SANDBOX_MEMORY_MB"),
-    ):
-        if not env.get(name):
-            env[name] = env.get(source) or DEFAULTS[source]
     # The generic sandbox image is what the environment runs, unless the Job brings a registry
     # to build task images in. HARBOR_SANDBOX_IMAGE is the variable the environment reads.
+    # A warm pool runs its profile's image, so building task images rules it out too. The Job's
+    # SANDBOX_WARM_POOL decides, not a HARBOR_SANDBOX_WARM_POOL left in the environment.
+    warm_pool = (env.get("SANDBOX_WARM_POOL") or "").strip()
     if builds_task_images(env):
         env.pop("HARBOR_SANDBOX_IMAGE", None)
+        warm_pool = ""
     else:
         env["HARBOR_SANDBOX_IMAGE"] = env.get("SANDBOX_IMAGE") or DEFAULTS["SANDBOX_IMAGE"]
+    if warm_pool:
+        env["HARBOR_SANDBOX_WARM_POOL"] = warm_pool
+    else:
+        env.pop("HARBOR_SANDBOX_WARM_POOL", None)
+        for name, source in (
+            ("HARBOR_SANDBOX_CPUS", "SANDBOX_CPUS"),
+            ("HARBOR_SANDBOX_MEMORY_MB", "SANDBOX_MEMORY_MB"),
+        ):
+            if not env.get(name):
+                env[name] = env.get(source) or DEFAULTS[source]
     if not env.get("SKILL_EVAL_LLM_PROVIDER"):
         if env.get("ANTHROPIC_API_KEY"):
             env["SKILL_EVAL_LLM_PROVIDER"] = "anthropic"
@@ -901,6 +937,13 @@ def final_publication(report: ValidateReport, tiers: Mapping[str, str]) -> str:
     return report.publication
 
 
+def gate_findings(findings: list[str], notes: list[str], tier2: bool) -> list[str]:
+    """Return ``findings`` as reported: without Tier 2 the catalog notes replace its findings."""
+    if tier2:
+        return findings
+    return notes + [f for f in findings if not f.startswith("tier2/")]
+
+
 def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
     """Pull the skill, run Tiers 1 to 3 and return the termination payload."""
     config = load_config(environ)
@@ -924,39 +967,50 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         run_dir: Path | None = None
         tiers = {**report.tiers, "tier3": "skipped"}
         findings = report.findings
-        if "failed" in (report.tiers["tier1"], report.tiers["tier2"]):
-            print("skill-eval: Tier 1 or Tier 2 failed, skipping Tier 3", flush=True)
-        elif not has_tier3_source(skill_dir):
-            # Nothing for Tier 3 to run: no sandboxes, no tokens. The error message has room
-            # for the reason only, so the gate's outcome goes to the container log.
-            print(f"skill-eval: gate {report.tiers}, findings {report.findings}", flush=True)
-            raise EvalError(NO_DATASET_ERROR.format(skill=config["SKILL_NAME"]))
-        else:
-            # One validate run over every tier: its report carries SkillEvaluator's own
-            # publication assessment. Output streams straight to the container log. A non-zero
-            # exit is not fatal: a failed trial can still leave scores for the other arm.
-            results = work / "results"
-            out = work / "validate"
-            cmd = validate_command(
-                config, skill_dir, out, tiers=f"{static},3", catalog=catalog, results=results
-            )
-            proc = subprocess.run(cmd, check=False, env=env)
-            try:
-                payload = read_scores(results, config["AGENT"])
-            except EvalError as err:
-                raise EvalError(f"skillevaluator exited {proc.returncode}: {err}") from err
-            run_dir = newest_result(results).parent
-            payload["model"] = config["MODEL"]  # not the gateway form SkillEvaluator ran with
-            agent_ver = used_agent_version(run_dir) or agent_ver
-            full = read_validate(out, proc)
-            if full.json_path is None:  # Tier 3 left scores but no combined report
-                full = ValidateReport(report.tiers, full.findings, "incomplete", None, None, None)
-            report = full
-            tier3 = tier3_tier(results)
-            tiers = {**report.tiers, "tier3": tier3.status}
-            findings = report.findings + tier3.findings
-        if not tier2:
-            findings = notes + [f for f in findings if not f.startswith("tier2/")]
+        try:
+            if "failed" in (report.tiers["tier1"], report.tiers["tier2"]):
+                print("skill-eval: Tier 1 or Tier 2 failed, skipping Tier 3", flush=True)
+            elif not has_tier3_source(skill_dir):
+                # Nothing for Tier 3 to run: no sandboxes, no tokens.
+                print(f"skill-eval: gate {report.tiers}, findings {report.findings}", flush=True)
+                raise EvalError(NO_DATASET_ERROR.format(skill=config["SKILL_NAME"]))
+            else:
+                # One validate run over every tier: its report carries SkillEvaluator's own
+                # publication assessment. Output streams straight to the container log. A
+                # non-zero exit is not fatal: a failed trial can still leave scores for the
+                # other arm.
+                tiers = {**report.tiers, "tier3": "incomplete"}  # until Tier 3 reports
+                results = work / "results"
+                out = work / "validate"
+                cmd = validate_command(
+                    config, skill_dir, out, tiers=f"{static},3", catalog=catalog, results=results
+                )
+                proc = subprocess.run(cmd, check=False, env=env)
+                try:
+                    payload = read_scores(results, config["AGENT"])
+                except EvalError as err:
+                    raise EvalError(f"skillevaluator exited {proc.returncode}: {err}") from err
+                run_dir = newest_result(results).parent
+                payload["model"] = config["MODEL"]  # not the gateway form SkillEvaluator ran
+                agent_ver = used_agent_version(run_dir) or agent_ver
+                full = read_validate(out, proc)
+                if full.json_path is None:  # Tier 3 left scores but no combined report
+                    full = ValidateReport(
+                        report.tiers, full.findings, "incomplete", None, None, None
+                    )
+                report = full
+                tier3 = tier3_tier(results)
+                tiers = {**report.tiers, "tier3": tier3.status}
+                findings = report.findings + tier3.findings
+        except Exception as err:
+            # The gate ran, so the error keeps its tiers and findings (CONTRACT.md, Job contract).
+            gate = gate_findings(findings, notes, tier2)[:MAX_FINDINGS]
+            if not isinstance(err, EvalError):
+                raise EvalError(str(err) or type(err).__name__, tiers, gate) from err
+            if err.tiers is None:
+                err.tiers, err.findings = dict(tiers), gate
+            raise
+        findings = gate_findings(findings, notes, tier2)
         publication = final_publication(report, tiers)
         annotations = {"skillci.dev/model": config["MODEL"], "skillci.dev/agent": config["AGENT"]}
         if agent_ver:
@@ -976,18 +1030,32 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
 def write_termination(payload: dict[str, Any], path: str | None = None) -> None:
     """Write ``payload`` as JSON to the termination log, within the size limit.
 
-    An oversized message loses findings first, then the tail of the last finding;
-    an oversized error is cut in half until it fits.
+    An oversized message loses findings first, from the last one; an oversized error is then
+    cut in half until it fits. The tiers always stay.
     """
     path = path or os.environ.get("TERMINATION_LOG", TERMINATION_LOG)
     text = json.dumps(payload)
-    while len(text.encode()) > MAX_MESSAGE_BYTES and "error" in payload:
-        payload = {"error": payload["error"][: len(payload["error"]) // 2] + "..."}
-        text = json.dumps(payload)
     while len(text.encode()) > MAX_MESSAGE_BYTES and payload.get("findings"):
         payload = {**payload, "findings": payload["findings"][:-1]}
         text = json.dumps(payload)
+    while len(text.encode()) > MAX_MESSAGE_BYTES and "error" in payload:
+        payload = {**payload, "error": payload["error"][: len(payload["error"]) // 2] + "..."}
+        text = json.dumps(payload)
     Path(path).write_text(text)
+
+
+def error_payload(err: Exception) -> dict[str, Any]:
+    """Return the termination payload of a failed run: the error and, after the gate, its tiers.
+
+    ``{"error": ...}`` alone when the run failed before the Tier 1 + 2 gate; otherwise also
+    ``tiers`` (Tier 3 ``skipped``, or ``incomplete`` when it started) and the gate's
+    ``findings``, so the controller can still show the gate's outcome.
+    """
+    payload: dict[str, Any] = {"error": redact(str(err))}
+    if isinstance(err, EvalError) and err.tiers is not None:
+        payload["tiers"] = err.tiers
+        payload["findings"] = [redact(f) for f in err.findings[:MAX_FINDINGS]]
+    return payload
 
 
 def redact(text: str) -> str:
@@ -1003,9 +1071,9 @@ def main() -> int:
     try:
         payload = evaluate(os.environ)
     except Exception as err:
-        message = redact(str(err))
-        print(f"skill-eval: {message}", file=sys.stderr)
-        write_termination({"error": message})
+        failure = error_payload(err)
+        print(f"skill-eval: {failure['error']}", file=sys.stderr)
+        write_termination(failure)
         return 1
     payload["findings"] = [redact(f) for f in payload.get("findings", [])]
     print(f"skill-eval: {payload}", flush=True)

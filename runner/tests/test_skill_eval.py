@@ -301,6 +301,9 @@ def termination(tmp_path, monkeypatch):
         "TASK_IMAGE_REGISTRY",
         "TASK_IMAGE_PULL_SECRET",
         "HARBOR_SANDBOX_IMAGE",
+        "SANDBOX_WARM_POOL",
+        "HARBOR_SANDBOX_WARM_POOL",
+        "SKILLEVAL_NAME",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
@@ -356,15 +359,23 @@ def termination(tmp_path, monkeypatch):
     ],
 )
 def test_main(name, fake, code, expected, termination, monkeypatch):
-    """main() writes the contract's termination message and exit code."""
+    """main() writes the contract's termination message and exit code.
+
+    A failure before the gate is the error alone; one in Tier 3 keeps the gate's tiers.
+    """
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == code, name
     written = termination()
     if code == 0:
         assert written == expected
-    else:
+    elif name in ("oras pull fails", "artifact lacks skill directory"):
         assert expected in written["error"]
         assert set(written) == {"error"}
+    else:
+        assert expected in written["error"]
+        assert written["tiers"] == {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"}
+        assert written["findings"] == []
+        assert set(written) == {"error", "tiers", "findings"}
 
 
 @pytest.mark.parametrize(
@@ -486,7 +497,11 @@ def test_no_eval_dataset_runs_the_gate_only(termination, monkeypatch):
     fake = FakeRun(GOOD, evals=None)
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 1
-    assert termination() == {"error": NO_DATASET}
+    assert termination() == {
+        "error": NO_DATASET,
+        "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "skipped"},
+        "findings": [],
+    }
     (gate,) = fake.validates()
     assert gate[gate.index("--tiers") + 1] == "1,2"
     assert not fake.tier3_ran()
@@ -791,6 +806,44 @@ def test_defaults_do_not_need_a_registry_or_a_builder():
     assert config["SANDBOX_IMAGE"] == skill_eval.DEFAULT_SANDBOX_IMAGE
 
 
+def test_warm_pool_and_eval_name_reach_harbor(termination, monkeypatch):
+    """SANDBOX_WARM_POOL becomes HARBOR_SANDBOX_WARM_POOL; the profile sizes the sandbox."""
+    _, env = run_validate(
+        monkeypatch,
+        SANDBOX_WARM_POOL=" default ",
+        SKILLEVAL_NAME="acme-v1-0-0-claude-code-claude-haiku-5-5",
+        SANDBOX_CPUS="2",
+    )
+    assert env["HARBOR_SANDBOX_WARM_POOL"] == "default"
+    assert env["SKILLEVAL_NAME"] == "acme-v1-0-0-claude-code-claude-haiku-5-5"
+    assert "HARBOR_SANDBOX_CPUS" not in env and "HARBOR_SANDBOX_MEMORY_MB" not in env
+    assert env["HARBOR_SANDBOX_IMAGE"] == skill_eval.DEFAULT_SANDBOX_IMAGE
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        ({}, None),  # no profile: a bare Sandbox per trial
+        ({"HARBOR_SANDBOX_WARM_POOL": "stray"}, None),  # the Job's SANDBOX_WARM_POOL decides
+        (
+            {"SANDBOX_WARM_POOL": "default", "TASK_IMAGE_REGISTRY": "registry.example.com/x"},
+            None,  # task images are built: a warm pool cannot run them
+        ),
+    ],
+)
+def test_no_warm_pool(settings, expected):
+    """Without a usable warm pool the size variables are set as before."""
+    env = skill_eval.tool_env({**ENV, **settings})
+    assert env.get("HARBOR_SANDBOX_WARM_POOL") == expected
+    assert (env["HARBOR_SANDBOX_CPUS"], env["HARBOR_SANDBOX_MEMORY_MB"]) == ("1", "2048")
+
+
+def test_bad_warm_pool_name():
+    """A warm pool that cannot be an object name fails before anything runs."""
+    with pytest.raises(skill_eval.EvalError, match="SANDBOX_WARM_POOL must be"):
+        skill_eval.load_config({**ENV, "SANDBOX_WARM_POOL": "Not_A_Name"})
+
+
 def test_sandbox_size_follows_the_job_env(termination, monkeypatch):
     """SANDBOX_CPUS and SANDBOX_MEMORY_MB from the Job become the sandbox size variables."""
     monkeypatch.setenv("SANDBOX_CPUS", "2")
@@ -981,6 +1034,53 @@ def test_secrets_are_redacted(termination, monkeypatch):
     monkeypatch.setattr(skill_eval.subprocess, "run", boom)
     assert skill_eval.main() == 1
     assert "sk-secret-value" not in json.dumps(termination())
+
+
+def test_no_eval_dataset_keeps_the_gate_findings(termination, monkeypatch):
+    """The error after the gate carries its tiers and its (redacted) findings."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-leak-123")
+    gate = report(
+        validator("security", "incomplete", errors=["scan saw sk-leak-123"], incomplete=["x"]),
+        validator("similarity", tier=2),
+        publication="incomplete",
+    )
+    monkeypatch.setattr(skill_eval.subprocess, "run", FakeRun(GOOD, gate=gate, evals=None))
+    assert skill_eval.main() == 1
+    written = termination()
+    assert written["error"] == NO_DATASET
+    assert written["tiers"] == {"tier1": "incomplete", "tier2": "passed", "tier3": "skipped"}
+    assert written["findings"] == ["tier1/security: scan saw [redacted]"]
+
+
+def test_unexpected_error_after_the_gate_keeps_the_tiers(termination, monkeypatch):
+    """Any exception once Tier 3 started still reports the gate, with Tier 3 incomplete."""
+    fake = FakeRun(GOOD)
+
+    def run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+        if cmd[:2] == ["skillevaluator", "validate"] and "--results-dir" in cmd:
+            raise OSError("no space left on device")
+        return fake(cmd, **kwargs)
+
+    monkeypatch.setattr(skill_eval.subprocess, "run", run)
+    assert skill_eval.main() == 1
+    assert termination() == {
+        "error": "no space left on device",
+        "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"},
+        "findings": [],
+    }
+
+
+def test_oversized_error_keeps_the_tiers(tmp_path):
+    """A long error after the gate loses findings, then error text, never the tiers."""
+    tiers = {"tier1": "passed", "tier2": "passed", "tier3": "skipped"}
+    path = tmp_path / "log"
+    payload = {"error": "e" * 10_000, "tiers": tiers, "findings": ["tier1/x: " + "y" * 190] * 5}
+    skill_eval.write_termination(payload, str(path))
+    written = json.loads(path.read_text())
+    assert len(path.read_text().encode()) <= skill_eval.MAX_MESSAGE_BYTES
+    assert written["tiers"] == tiers
+    assert written["findings"] == []
+    assert written["error"].endswith("...")
 
 
 def test_secrets_are_redacted_from_findings(termination, monkeypatch):

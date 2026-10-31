@@ -17,6 +17,19 @@ Task images come from one of two places:
   a registry you control: ``--ek registry=registry.example.com/evals``, a builder
   (a ``docker:dind`` Job, or BuildKit through ``HARBOR_BUILDKIT_ADDRESS``) and push rights.
 
+Where the sandbox comes from:
+
+* **Warm pool.** ``HARBOR_SANDBOX_WARM_POOL`` names a ``SandboxWarmPool`` (a skill-ci
+  ``SandboxProfile``). The trial claims a pod from it with an ``extensions.agents.x-k8s.io``
+  ``SandboxClaim``: image, CPU and memory come from the profile's template. The claim cannot
+  change the container, so the task's ``ENV`` and ``WORKDIR`` are applied to every command
+  instead, and a ``USER`` other than root fails the trial.
+* **Bare Sandbox.** Without it, the trial creates its own ``Sandbox`` with the task's size.
+
+Both paths label the trial pod ``sandbox.users.io/skillci-eval: <SkillEval>`` (from
+``SKILLEVAL_NAME``, else the runner pod's Job name) and ``sandbox.users.io/skillci-role: trial``,
+which is what the SkillEval's network policy selects.
+
 Usage::
 
     HARBOR_SANDBOX_IMAGE=ghcr.io/dirien/skill-ci-sandbox:0.7.0 \\
@@ -30,12 +43,15 @@ import io
 import logging
 import os
 import posixpath
+import re
 import shlex
 import tarfile
+import time
 from pathlib import Path
 from typing import Any, cast, override
 
 from harbor.environments.ack import ACKEnvironment
+from harbor.environments.base import ExecResult
 from harbor.models.trial.paths import EnvironmentPaths
 from kubernetes import client as k8s_client
 from kubernetes.client.rest import ApiException
@@ -51,9 +67,35 @@ PLURAL = "sandboxes"
 SANDBOX_IMAGE_ENV = "HARBOR_SANDBOX_IMAGE"
 SAFE_TO_EVICT = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 
+# The warm-pool path: a SandboxClaim on a SandboxWarmPool (the skill-ci SandboxProfile).
+WARM_POOL_ENV = "HARBOR_SANDBOX_WARM_POOL"
+CLAIM_GROUP = "extensions.agents.x-k8s.io"
+CLAIM_PLURAL = "sandboxclaims"
+CLAIM_POLL_SEC = 0.5
+# Ready=False reasons that will not resolve by waiting; the condition message says why.
+CLAIM_FAILURES = frozenset({"InvalidMetadata", "EnvVarsInjectionRejected"})
+
+# Trial pod labels. Agent Sandbox applies claim labels only in its allowed domain, which is
+# sandbox.users.io by default; the SkillEval's network policy selects both.
+SKILLEVAL_NAME_ENV = "SKILLEVAL_NAME"
+EVAL_LABEL = "sandbox.users.io/skillci-eval"
+ROLE_LABEL = "sandbox.users.io/skillci-role"
+JOB_NAME_LABEL = "batch.kubernetes.io/job-name"
+LABEL_VALUE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$")
+
 # Where a pod finds its own namespace and name.
 SA_NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 HOSTNAME_FILE = Path("/etc/hostname")
+
+# Notices logged once per process, not once per trial.
+_logged_once: set[str] = set()
+
+
+def _log_once(key: str, message: str, *args: Any) -> None:
+    """Log ``message`` at info level the first time ``key`` is seen in this process."""
+    if key not in _logged_once:
+        _logged_once.add(key)
+        logger.info(message, *args)
 
 
 def _positive_int(name: str, value: str) -> int:
@@ -88,6 +130,9 @@ class AgentSandboxEnvironment(ACKEnvironment):
 
     With ``HARBOR_SANDBOX_IMAGE`` (or ``prebuilt_image``) the sandbox runs that generic image and
     nothing is built; otherwise the task image is built and pushed by Harbor's ``ack`` backend.
+    With ``HARBOR_SANDBOX_WARM_POOL`` (or ``warm_pool``) the trial claims a pod from that warm pool
+    instead; its template decides image, size, runtime class, scheduling and pull secrets, and
+    nothing is built either.
     """
 
     def __init__(
@@ -96,6 +141,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
         runtime_class: str | None = None,
         ready_timeout_sec: int = 600,
         prebuilt_image: str | None = None,
+        warm_pool: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -106,6 +152,13 @@ class AgentSandboxEnvironment(ACKEnvironment):
         # SkillEvaluator reserve. The keyword argument is for direct use and tests.
         configured = prebuilt_image or os.environ.get(SANDBOX_IMAGE_ENV) or ""
         self.prebuilt_image: str | None = configured.strip() or None
+        # The warm pool and the SkillEval name come from the environment for the same reason.
+        pool = warm_pool or os.environ.get(WARM_POOL_ENV) or ""
+        self.warm_pool: str | None = pool.strip() or None
+        self.skilleval_name: str | None = (os.environ.get(SKILLEVAL_NAME_ENV) or "").strip() or None
+        self._claim_name: str | None = None  # set once the SandboxClaim is created
+        self._runner_pod_read = False
+        self._runner_pod_object: Any = None
         self._plan: dockerfile.Plan | None = None
         self._transfers: list[dockerfile.Transfer] = []
         # Only the build path uses BuildKit. Taking its address from the environment keeps it
@@ -122,7 +175,17 @@ class AgentSandboxEnvironment(ACKEnvironment):
         a skill task asks for 2 CPU and 4 GiB, which starves a small cluster. Like the BuildKit
         address, the size comes from the environment, so it stays out of the per-run kwargs.
         A memory limit set through ``memory_limit_multiplier`` keeps its ratio to the request.
+        On the warm-pool path the profile sizes the pod and both variables are ignored.
         """
+        if self.warm_pool:
+            if os.environ.get("HARBOR_SANDBOX_CPUS") or os.environ.get("HARBOR_SANDBOX_MEMORY_MB"):
+                _log_once(
+                    "size",
+                    "HARBOR_SANDBOX_CPUS and HARBOR_SANDBOX_MEMORY_MB are ignored: warm pool %s "
+                    "(its sandbox profile) sizes the sandbox",
+                    self.warm_pool,
+                )
+            return
         if cpus := os.environ.get("HARBOR_SANDBOX_CPUS"):
             self.cpu_request = str(_positive_int("HARBOR_SANDBOX_CPUS", cpus))
         if memory := os.environ.get("HARBOR_SANDBOX_MEMORY_MB"):
@@ -153,7 +216,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
 
         Raises :class:`dockerfile.DockerfileError` before any cluster call when it cannot:
         a ``RUN`` or ``FROM`` the image does not cover, a ``COPY`` source that is missing, or
-        a ``USER`` that is not root or a uid.
+        a ``USER`` that is not root or a uid (not root at all on the warm-pool path).
         """
         if self._plan is not None:
             return self._plan
@@ -165,13 +228,34 @@ class AgentSandboxEnvironment(ACKEnvironment):
                 for copy in plan.copies
                 for transfer in dockerfile.resolve_copy(copy, self.environment_dir)
             ]
-            _run_as_user(plan)
+            if _run_as_user(plan) != 0 and self.warm_pool:
+                raise dockerfile.DockerfileError(
+                    f"USER {plan.user} is not supported with a warm pool: the sandbox profile's "
+                    "pod runs as root and a claim cannot change that; drop the USER step"
+                )
         except dockerfile.DockerfileError as e:
             raise dockerfile.DockerfileError(
-                f"task {self.environment_name} cannot run on {self.prebuilt_image}: {e}"
+                f"task {self.environment_name} cannot run on {self._sandbox_source()}: {e}"
             ) from e
         self._plan, self._transfers = plan, transfers
         return plan
+
+    def _replays_dockerfile(self) -> bool:
+        """Return True when nothing is built and the task Dockerfile is replayed at start."""
+        return bool(self.prebuilt_image or self.warm_pool)
+
+    def _sandbox_source(self) -> str:
+        """Describe what the trial runs on, for error messages."""
+        if self.warm_pool:
+            return f"warm pool {self.warm_pool}"
+        return self.prebuilt_image or self._get_image_url()
+
+    def _trial_labels(self) -> dict[str, str]:
+        """Return the labels of every trial pod; the eval label only when the name is known."""
+        labels = {ROLE_LABEL: "trial"}
+        if self.skilleval_name:
+            labels[EVAL_LABEL] = self.skilleval_name
+        return labels
 
     def _image_ref(self) -> str:
         """Return the image the sandbox runs: the prebuilt one, else the task image."""
@@ -222,7 +306,7 @@ class AgentSandboxEnvironment(ACKEnvironment):
         if self.tolerations:
             pod_spec["tolerations"] = self.tolerations
 
-        labels = {"app.kubernetes.io/managed-by": "harbor", "harbor/session": self.session_id[:63]}
+        labels = self._object_labels()
         return {
             "apiVersion": f"{GROUP}/{VERSION}",
             "kind": "Sandbox",
@@ -230,9 +314,36 @@ class AgentSandboxEnvironment(ACKEnvironment):
             "spec": {
                 "podTemplate": {
                     # A cluster scale-down must not kill a running trial.
-                    "metadata": {"labels": labels, "annotations": {SAFE_TO_EVICT: "false"}},
+                    "metadata": {
+                        "labels": {**labels, **self._trial_labels()},
+                        "annotations": {SAFE_TO_EVICT: "false"},
+                    },
                     "spec": pod_spec,
                 }
+            },
+        }
+
+    def _object_labels(self) -> dict[str, str]:
+        """Return the labels of the Sandbox or SandboxClaim object itself."""
+        return {"app.kubernetes.io/managed-by": "harbor", "harbor/session": self.session_id[:63]}
+
+    def _claim_manifest(self) -> dict[str, Any]:
+        """Return the SandboxClaim that takes a pod from the warm pool.
+
+        It sets no ``env``: claim env forces a cold start and Agent Sandbox rejects it by
+        default. The task's ENV and WORKDIR are applied per command instead (see ``exec``).
+        """
+        return {
+            "apiVersion": f"{CLAIM_GROUP}/{VERSION}",
+            "kind": "SandboxClaim",
+            "metadata": {
+                "name": self.pod_name,
+                "namespace": self.namespace,
+                "labels": self._object_labels(),
+            },
+            "spec": {
+                "warmPoolRef": {"name": self.warm_pool},
+                "additionalPodMetadata": {"labels": self._trial_labels()},
             },
         }
 
@@ -242,12 +353,13 @@ class AgentSandboxEnvironment(ACKEnvironment):
                 raise ValueError("Building a task image needs --ek registry=<registry>.")
             await self._build_and_push_image()
 
-    async def _owner_reference(self) -> dict[str, Any] | None:
-        """Return an owner reference to the pod running Harbor, if it runs next to the sandboxes.
+    async def _runner_pod(self) -> Any:
+        """Return the pod running Harbor when it runs next to the sandboxes, else None.
 
-        With it, Kubernetes deletes the sandboxes of a cancelled or crashed run
-        together with the run's pod instead of leaving them to hold capacity.
+        Read once per environment: the owner reference and the SkillEval name both use it.
         """
+        if self._runner_pod_read:
+            return self._runner_pod_object
         try:
             if SA_NAMESPACE_FILE.read_text().strip() != self.namespace:
                 return None
@@ -256,14 +368,49 @@ class AgentSandboxEnvironment(ACKEnvironment):
             return None  # not running in a pod
         if self._core_api is None:
             return None
+        self._runner_pod_read = True
         try:
-            pod = await asyncio.to_thread(
+            self._runner_pod_object = await asyncio.to_thread(
                 self._core_api.read_namespaced_pod, pod_name, self.namespace
             )
         except ApiException as e:
             logger.warning(
                 "Sandbox %s gets no owner: reading pod %s failed: %s", self.pod_name, pod_name, e
             )
+        return self._runner_pod_object
+
+    async def _resolve_skilleval_name(self) -> None:
+        """Fill in the SkillEval name from the runner pod's Job when ``SKILLEVAL_NAME`` is unset.
+
+        The Job is named like the SkillEval (a retry adds ``-r<n>``, so the variable is the
+        reliable source). A name that cannot be a label value is dropped with a warning: the
+        trial then runs without the eval label and no eval network policy selects it.
+        """
+        if not self.skilleval_name and (pod := await self._runner_pod()) is not None:
+            labels = getattr(pod.metadata, "labels", None) or {}
+            self.skilleval_name = labels.get(JOB_NAME_LABEL) or None
+        if self.skilleval_name and not LABEL_VALUE.match(self.skilleval_name):
+            logger.warning(
+                "SkillEval name %r is not a label value; sandbox %s has no %s label",
+                self.skilleval_name,
+                self.pod_name,
+                EVAL_LABEL,
+            )
+            self.skilleval_name = None
+        if not self.skilleval_name:
+            # Only a warm-pool trial is behind an eval network policy that needs the label.
+            (logger.warning if self.warm_pool else logger.debug)(
+                "Sandbox %s has no %s label: the SkillEval is unknown", self.pod_name, EVAL_LABEL
+            )
+
+    async def _owner_reference(self) -> dict[str, Any] | None:
+        """Return an owner reference to the pod running Harbor, if it runs next to the sandboxes.
+
+        With it, Kubernetes deletes the sandboxes of a cancelled or crashed run
+        together with the run's pod instead of leaving them to hold capacity.
+        """
+        pod = await self._runner_pod()
+        if pod is None:
             return None
         return {
             "apiVersion": "v1",
@@ -287,6 +434,65 @@ class AgentSandboxEnvironment(ACKEnvironment):
                     return
             await asyncio.sleep(2)
         raise RuntimeError(f"Sandbox {self.pod_name} was not ready after {self.ready_timeout_sec}s")
+
+    async def _wait_for_claim_ready(self, claim_name: str) -> str:
+        """Wait until the claim is Ready and its pod carries the trial labels; return the pod name.
+
+        The pod is ``status.sandbox.name`` of the claim. Agent Sandbox patches the claim's labels
+        onto a running warm pod, and the eval network policy selects the pod by them, so the
+        trial does not start before they are there. Ready=False with a reason in
+        ``CLAIM_FAILURES`` fails at once with the condition's message.
+        """
+        api = self._custom_api()
+        core = self._core_api
+        if core is None:
+            raise RuntimeError("Kubernetes client is not initialized; call start() first.")
+        wanted = self._trial_labels()
+        deadline = time.monotonic() + self.ready_timeout_sec
+        pod_name: str | None = None
+        waiting_for = "Ready"
+        while True:
+            if pod_name is None:
+                claim = cast(
+                    "dict[str, Any]",
+                    await asyncio.to_thread(
+                        api.get_namespaced_custom_object,
+                        CLAIM_GROUP, VERSION, self.namespace, CLAIM_PLURAL, claim_name,
+                    ),
+                )  # fmt: skip
+                status = claim.get("status") or {}
+                for cond in status.get("conditions") or []:
+                    if cond.get("type") != "Ready":
+                        continue
+                    if cond.get("status") == "True":
+                        pod_name = (status.get("sandbox") or {}).get("name") or None
+                        waiting_for = "status.sandbox.name"
+                    elif cond.get("reason") in CLAIM_FAILURES:
+                        raise RuntimeError(
+                            f"SandboxClaim {claim_name} on warm pool {self.warm_pool} failed: "
+                            f"{cond['reason']}: {cond.get('message', '')}"
+                        )
+                    else:
+                        waiting_for = f"Ready ({cond.get('reason')}: {cond.get('message', '')})"
+            if pod_name is not None:
+                waiting_for = f"labels {wanted} on pod {pod_name}"
+                try:
+                    pod = await asyncio.to_thread(
+                        core.read_namespaced_pod, pod_name, self.namespace
+                    )
+                except ApiException as e:
+                    if e.status != 404:
+                        raise
+                else:
+                    labels = pod.metadata.labels or {}
+                    if all(labels.get(key) == value for key, value in wanted.items()):
+                        return pod_name
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"SandboxClaim {claim_name} on warm pool {self.warm_pool} was not ready "
+                    f"after {self.ready_timeout_sec}s, waiting for {waiting_for}"
+                )
+            await asyncio.sleep(CLAIM_POLL_SEC)
 
     async def _exec_checked(self, command: str, what: str) -> None:
         """Run a command in the sandbox and raise with its output when it fails."""
@@ -328,17 +534,12 @@ class AgentSandboxEnvironment(ACKEnvironment):
             command += f" && chmod -R {quote(transfer.chmod)} -- {paths}"
         await self._exec_checked(command, f"setting owner and mode of {transfer.target}")
 
-    @override
-    async def start(self, force_build: bool) -> None:
-        if self.prebuilt_image:
-            # Fail on a Dockerfile the image cannot stand in for before any cluster call.
-            self._load_plan()
-            if force_build:
-                logger.debug("force_build is ignored: %s is prebuilt", self.prebuilt_image)
-        await self._ensure_client()
-        if not self.prebuilt_image:
-            await self._ensure_image(force_build)
+    async def _start_sandbox(self) -> None:
+        """Create a bare Sandbox for the trial and wait until it is ready.
 
+        Agent Sandbox names the pod after the Sandbox, so the inherited exec and file transfer
+        code finds it through self.pod_name.
+        """
         manifest = self._sandbox_manifest()
         if owner := await self._owner_reference():
             manifest["metadata"]["ownerReferences"] = [owner]
@@ -352,10 +553,78 @@ class AgentSandboxEnvironment(ACKEnvironment):
         )
         await self._wait_for_sandbox_ready()
 
-        # Agent Sandbox names the pod after the Sandbox, so the inherited exec and
-        # file transfer code finds it through self.pod_name.
+    async def _start_claim(self) -> None:
+        """Claim a pod from the warm pool and point self.pod_name at it.
+
+        The claim is owned by the runner pod like a bare Sandbox, so a cancelled run releases
+        it; deleting the claim deletes its Sandbox and pod.
+        """
+        manifest = self._claim_manifest()
+        if owner := await self._owner_reference():
+            manifest["metadata"]["ownerReferences"] = [owner]
+        claim_name = manifest["metadata"]["name"]
+        await asyncio.to_thread(
+            self._custom_api().create_namespaced_custom_object,
+            CLAIM_GROUP,
+            VERSION,
+            self.namespace,
+            CLAIM_PLURAL,
+            manifest,
+        )
+        self._claim_name = claim_name
+        self.pod_name = await self._wait_for_claim_ready(claim_name)
+        logger.debug("SandboxClaim %s runs in pod %s", claim_name, self.pod_name)
+
+    @override
+    def _merge_env(self, env: dict[str, str] | None) -> dict[str, str] | None:
+        # On the warm-pool path the container env is the profile's: the task's ENV goes first
+        # into every command, below anything the command or Harbor sets itself.
+        merged = super()._merge_env(env)
+        if self.warm_pool and self._plan is not None and self._plan.env:
+            return {**self._plan.env, **(merged or {})}
+        return merged
+
+    @override
+    async def exec(
+        self,
+        command: str,
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        timeout_sec: int | None = None,
+        user: str | int | None = None,
+    ) -> ExecResult:
+        # On the warm-pool path the container's workingDir is the profile's: commands without
+        # a directory of their own start in the task's WORKDIR, as in a built image.
+        if self.warm_pool and self._plan is not None and not cwd:
+            cwd = self.task_env_config.workdir or shlex.quote(self._plan.workdir)
+        return await super().exec(command, cwd=cwd, env=env, timeout_sec=timeout_sec, user=user)
+
+    @override
+    async def start(self, force_build: bool) -> None:
+        if self._replays_dockerfile():
+            # Fail on a Dockerfile the image cannot stand in for before any cluster call.
+            self._load_plan()
+            if force_build:
+                logger.debug("force_build is ignored: %s is prebuilt", self._sandbox_source())
+        await self._ensure_client()
+        if not self._replays_dockerfile():
+            await self._ensure_image(force_build)
+
+        await self._resolve_skilleval_name()
+        if self.warm_pool:
+            await self._start_claim()
+        else:
+            await self._start_sandbox()
+
         dirs = f"{EnvironmentPaths.agent_dir} {EnvironmentPaths.verifier_dir}"
-        result = await self.exec(f"mkdir -p {dirs} && chmod 777 {dirs}")
+        command = f"mkdir -p {dirs} && chmod 777 {dirs}"
+        if self.warm_pool and self._plan is not None:
+            # WORKDIR creates its directory in a build; every later command starts in it.
+            result = await self.exec(
+                f"{command} && mkdir -p {shlex.quote(self._plan.workdir)}", "/"
+            )
+        else:
+            result = await self.exec(command)
         if result.return_code != 0:
             raise RuntimeError(f"Failed to prepare sandbox {self.pod_name}: {result.stderr}")
 
@@ -371,7 +640,19 @@ class AgentSandboxEnvironment(ACKEnvironment):
             return
         await self._ensure_client()
         try:
-            if delete:
+            if delete and self.warm_pool:
+                if self._claim_name:
+                    # Deleting the claim deletes its Sandbox and pod. Nothing waits for the pod.
+                    await asyncio.to_thread(
+                        self._custom_api().delete_namespaced_custom_object,
+                        CLAIM_GROUP,
+                        VERSION,
+                        self.namespace,
+                        CLAIM_PLURAL,
+                        self._claim_name,
+                        body=k8s_client.V1DeleteOptions(propagation_policy="Background"),
+                    )
+            elif delete:
                 await asyncio.to_thread(
                     self._custom_api().delete_namespaced_custom_object,
                     GROUP,
@@ -382,7 +663,12 @@ class AgentSandboxEnvironment(ACKEnvironment):
                 )
         except ApiException as e:
             if e.status != 404:
-                raise RuntimeError(f"Failed to delete sandbox {self.pod_name}: {e}") from e
+                what = (
+                    f"sandbox claim {self._claim_name}"
+                    if self.warm_pool
+                    else f"sandbox {self.pod_name}"
+                )
+                raise RuntimeError(f"Failed to delete {what}: {e}") from e
         finally:
             try:
                 await self._client_manager.release_client()

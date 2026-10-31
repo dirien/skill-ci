@@ -39,6 +39,9 @@ RUN NVM_VERSION="${NVM_VERSION}" NODE_RELEASE="${NODE_RELEASE}" \
 
 # Claude Code must keep the pinned release for the whole trial.
 ENV DISABLE_AUTOUPDATER=1
+# No telemetry, error reporting or other calls Claude Code does not need: a trial under the
+# none or allowlist network mode reaches the model API only, so they would fail anyway.
+ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 
 LABEL org.opencontainers.image.title="skill-ci-sandbox" \
       org.opencontainers.image.description="Generic trial sandbox of skill-ci: Python 3.12, the verifier packages and the Claude Code, Codex and OpenCode CLIs" \

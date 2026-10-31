@@ -16,10 +16,12 @@ cli.py
 tier3/harbor/runner.py
   4. Environment allowlist for `--env-mode ack`: lets HARBOR_SANDBOX_IMAGE (the prebuilt sandbox
      image that replaces per-task image builds), HARBOR_SANDBOX_CPUS and HARBOR_SANDBOX_MEMORY_MB
-     (sandbox size) reach Harbor, where harbor_agent_sandbox.AgentSandboxEnvironment reads them.
-     HARBOR_BUILDKIT_ADDRESS (a BuildKit of your own, for the optional image build) goes through
-     too. `validate` has no --override-cpus/--override-memory-mb, so the size travels in the
-     environment.
+     (sandbox size), HARBOR_SANDBOX_WARM_POOL (the SandboxWarmPool of the eval's sandbox
+     profile: trials claim their pods from it) and SKILLEVAL_NAME (the trial pod label the
+     eval's network policy selects) reach Harbor, where
+     harbor_agent_sandbox.AgentSandboxEnvironment reads them. HARBOR_BUILDKIT_ADDRESS (a BuildKit
+     of your own, for the optional image build) goes through too. `validate` has no
+     --override-cpus/--override-memory-mb, so the size travels in the environment.
   5. Command builder: SKILLEVALUATOR_ACK_ENV_IMPORT_PATH replaces the `ack` environment type with
      an import path, e.g. harbor_agent_sandbox:AgentSandboxEnvironment (Agent Sandbox instead of
      bare pods).
@@ -109,7 +111,7 @@ tier3/harbor/local_agents.py
          *CONTAINER_AGENT_IMPORT_PATHS.values(),
      }
  )
-@@ -1012,6 +1020,10 @@
+@@ -1012,9 +1020,15 @@
      ),
      "ack": _DOCKER_HOST_ENV_VARS
      | {
@@ -117,10 +119,15 @@ tier3/harbor/local_agents.py
 +        "HARBOR_SANDBOX_CPUS",
 +        "HARBOR_SANDBOX_IMAGE",
 +        "HARBOR_SANDBOX_MEMORY_MB",
++        "HARBOR_SANDBOX_WARM_POOL",
          "KUBECONFIG",
          "KUBERNETES_SERVICE_HOST",
          "KUBERNETES_SERVICE_PORT",
-@@ -1609,6 +1621,11 @@
++        "SKILLEVAL_NAME",
+     },
+     "openshift": frozenset({"KUBECONFIG"}),
+     "novita": frozenset(
+@@ -1609,6 +1623,11 @@
          kwargs.pop("version", None)
      if agent == "claude-code" and model and is_claude_5_5_or_later(model):
          kwargs["reasoning_effort"] = _CLAUDE_CODE_REASONING_EFFORT
@@ -132,7 +139,7 @@ tier3/harbor/local_agents.py
      return kwargs
  
  
-@@ -1710,7 +1727,12 @@
+@@ -1710,7 +1729,12 @@
              env_import_path = SECURE_DOCKER_ENV_IMPORT_PATH
          command.extend(["--env", env_import_path])
      else:
@@ -146,7 +153,7 @@ tier3/harbor/local_agents.py
      for name, value in sorted(_harbor_agent_kwargs(agent, model, env_mode).items()):
          command.extend(["--ak", encode_environment_kwarg(name, value)])
      for name, value in sorted(validated_environment_kwargs.items()):
-@@ -1833,6 +1855,7 @@
+@@ -1833,6 +1857,7 @@
          and opencode_model
          and expected_opencode_provider
          and "/" in opencode_model
@@ -154,7 +161,7 @@ tier3/harbor/local_agents.py
          and opencode_model.split("/", maxsplit=1)[0].casefold() != expected_opencode_provider
      ):
          return [
-@@ -2793,7 +2816,7 @@
+@@ -2793,7 +2818,7 @@
          return _gateway_anthropic_agent_credentials(provider, env_mode=env_mode, environment_kwargs=environment_kwargs)
      if provider.provider == "openai" and agent == "claude-code":
          return _independent_anthropic_agent_credentials(env_mode=env_mode, environment_kwargs=environment_kwargs)
@@ -163,7 +170,7 @@ tier3/harbor/local_agents.py
          return {
              name: os.environ.get(name, "") for name in ("OPENAI_API_KEY", "OPENAI_BASE_URL") if os.environ.get(name)
          }
-@@ -2856,7 +2879,7 @@
+@@ -2856,7 +2881,7 @@
              base_url=credentials.get("ANTHROPIC_BASE_URL"),
              litellm_model=f"anthropic/{resolved_model}",
          )
@@ -172,7 +179,7 @@ tier3/harbor/local_agents.py
          resolved_model = model.removeprefix("openai/")
          return ProviderConfig(
              provider="openai-compatible",
-@@ -3158,6 +3181,8 @@
+@@ -3158,6 +3183,8 @@
  
  def _agent_import_path(provider: ProviderConfig, agent: str, env_mode: str) -> str | None:
      """Select only the provider-specific wrappers required for this environment."""
