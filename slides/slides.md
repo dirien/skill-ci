@@ -79,31 +79,59 @@ likely that every team ships agent skills by now.
 
 <div class="statement statement--long">
   <ph-hand-waving class="statement__icon" />
-  <h1>Hands up if you have a skills <em>repo</em>.</h1>
+  <h1>Hands up if you use <em>skills</em>.</h1>
 </div>
 
 <!--
-[0:45 to 1:15]
+[0:45 to 1:00]
 
-Show of hands. Who has a skills repo, at team level or company level? Keep
-them up. Look around, that's most of the room.
+Show of hands. Who uses skills, in Claude Code, Codex, Cursor, anywhere?
+Keep them up. That's most of the room.
 -->
 
 ---
 
 <div class="statement statement--long">
   <ph-hand-waving class="statement__icon" />
-  <h1>Hands up if you re-ran <em>evals</em> when the model changed.</h1>
+  <h1>Hands up if you have a central skills <em>repo</em>.</h1>
 </div>
 
 <!--
-[1:15 to 1:50]
+[1:00 to 1:15]
 
-Second one. Keep your hand up if you re-ran evals on those skills the last
-time the model changed. Or the agent got a new release.
+Keep your hand up if your team or company has a central skills repo, one
+place the skills come from.
+-->
 
-Count what you see and say it out loud ("about three hands"). That is the
-gap this talk is about.
+---
+
+<div class="statement statement--long">
+  <ph-hand-waving class="statement__icon" />
+  <h1>Hands up if you created <em>evals</em> for them.</h1>
+</div>
+
+<!--
+[1:15 to 1:30]
+
+Keep it up if you created evals for those skills. Test cases you can run, not
+a feeling.
+-->
+
+---
+
+<div class="statement statement--long">
+  <ph-hand-waving class="statement__icon" />
+  <h1>Hands up if you <span class="whitespace-nowrap">re-run</span> evals when the <em>model changes</em>.</h1>
+</div>
+
+<!--
+[1:30 to 1:50]
+
+And keep it up if you re-run those evals when the model changes. Or the agent
+gets a new release.
+
+Count what you see and say it out loud ("about three hands"). The drop from
+the first question to the last is the gap this talk is about.
 -->
 
 ---
@@ -1793,29 +1821,34 @@ TODO: add the session feedback QR if KubeAuto Day provides one.
 <!--
 Backup after the closing slide, outside the talk. Show it when Grafana is
 unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-10-31
-(release 0.7.3, every run of DEMO.md "The state the beats rely on").
+(release 0.11.1), filtered with the dashboard's Skill variable to the three
+demo skills of DEMO.md "The state the beats rely on". The phase panels count
+every SkillEval in the namespace.
 -->
 
 ---
 
 # Backup: why v1.2.0 is held back
 
-<img src="/fallback/skill-acme-release-notes.png" class="fallback" alt="Reporting site page for acme-release-notes with v1.1.0 on stable and v1.2.0 held back" />
+<img src="/fallback/skill-acme-release-notes.png" class="fallback" alt="Reporting UI skill page for acme-release-notes: v1.1.0 on stable, v1.2.0 held back as Regressed on both required Claude Code entries" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
 </style>
 
 <!--
-Backup for the reporting site (/skills/acme-release-notes, make
-reports-ui). Same state as the Grafana backup.
+Backup for the reporting UI (/skills/acme-release-notes, make reports-ui),
+release 0.11.1, 2026-10-31. Every version by every model list entry: verdict,
+scores with and without the skill, lift with its 95% interval, tiers, and the
+decision in words. v1.2.0 is held back because it is worse than stable v1.1.0
+beyond noise on both required entries.
 -->
 
 ---
 
 # Backup: the Rejected run
 
-<img src="/fallback/run-rejected.png" class="fallback" alt="Reporting site page for k8s-resource-naming v1.1.0, Rejected by Tier 1" />
+<img src="/fallback/run-rejected.png" class="fallback" alt="Reporting UI run page for k8s-resource-naming v1.1.0, Rejected by Tier 1 with the security findings" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
@@ -1823,5 +1856,45 @@ reports-ui). Same state as the Grafana backup.
 
 <!--
 Backup for Demo 2: k8s-resource-naming v1.1.0 on Claude Code, Tier 1
-failed on scripts/bootstrap.sh line 5, Tier 3 skipped.
+failed on scripts/bootstrap.sh line 5, Tier 3 skipped, no live trials spent.
+Reporting UI, release 0.11.1, 2026-10-31.
+-->
+
+---
+
+# Backup: one trial, step by step
+
+<img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session: prompt, metadata, phase bar, dimension scores, a log with filter chips, session findings and eval criteria with step links" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup for the trial session viewer (new in 0.11.0): net-pypi-check v1.2.0,
+Claude Code with Opus 5.5, with the skill, attempt 1. The prompt, who ran it,
+tokens and cost, the phases, the six dimensions, then the log with filter
+chips (messages, tools, packages, skill, network, judge) and on the right the
+findings and the eval criteria with links to the steps that back them. The
+session comes from the trial bundle attached to the skill digest, redacted by
+the runner before upload. Release 0.11.1, 2026-10-31.
+-->
+
+---
+
+# Backup: with and without, side by side
+
+<img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page: the same case with the skill (0.94, used the art package) and without it (0.35, used pyfiglet)" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup for the lift: the same case, attempt 1, with and without the skill.
+With the skill the agent used the Python art package the skill asks for and
+scored 0.94; without it, it reached for pyfiglet and the judge failed the
+criterion, 0.35. Same tokens in, half the cost with the skill. This is what
+the lift number means, one trial at a time. net-pypi-check v1.2.0, Claude
+Code with Opus 5.5, release 0.11.1, 2026-10-31.
 -->
