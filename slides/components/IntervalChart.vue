@@ -1,22 +1,23 @@
 <script setup>
-// Two worked examples of the version-over-version gate, drawn as 95% intervals
-// of "candidate minus stable". Numbers are the worked example in CONTRACT.md.
-const lo = -0.3
+// The version-over-version gate, drawn as 95% intervals of "candidate minus stable".
+// Top row: the measured acme-release-notes v1.2.0 run on Claude Code (2026-10-31).
+// Bottom row: the worked Inconclusive example in CONTRACT.md.
+const lo = -0.4
 const hi = 0.1
 const w = 1000
 const x = (v) => ((v - lo) / (hi - lo)) * w
 const rows = [
   // side: where the numbers go, so they never cross the zero or tolerance lines
-  { label: 'v1.2.0, tight trials', mean: -0.25, a: -0.26, b: -0.24, verdict: 'Regressed', kind: 'bad', side: 'right' },
+  { label: 'v1.2.0, measured', mean: -0.29, a: -0.31, b: -0.27, verdict: 'Regressed', kind: 'bad', side: 'right' },
   { label: 'v1.2.0, spread-out trials', mean: -0.08, a: -0.18, b: 0.03, verdict: 'Inconclusive', kind: 'warn', side: 'left' },
 ]
-const ticks = [-0.3, -0.2, -0.1, 0, 0.1]
+const ticks = [-0.4, -0.3, -0.2, -0.1, 0, 0.1]
 const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
 </script>
 
 <template>
   <svg class="ci" viewBox="-140 0 1250 440" role="img" aria-label="Confidence intervals of the difference to the stable version">
-    <rect :x="x(-0.3)" y="40" :width="x(-0.05) - x(-0.3)" height="290" class="ci__zone" />
+    <rect :x="x(lo)" y="40" :width="x(-0.05) - x(lo)" height="290" class="ci__zone" />
     <line :x1="x(0)" y1="40" :x2="x(0)" y2="330" class="ci__zero" />
     <text :x="x(0)" y="26" class="ci__zero-label" text-anchor="middle">0 = same as stable</text>
     <line :x1="x(-0.05)" y1="40" :x2="x(-0.05)" y2="330" class="ci__tol" />

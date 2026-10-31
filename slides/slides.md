@@ -741,11 +741,12 @@ nine scores per arm. The controller puts a Welch confidence interval, 95
 percent by default, around the difference between the candidate and the
 stable version.
 
-[click] Chart: the difference to stable, from minus 0.30 to plus 0.10. The
+[click] Chart: the difference to stable, from minus 0.40 to plus 0.10. The
 dashed line is the 0.05 tolerance.
 [click] Nine trials per arm.
-[click] Top row: difference minus 0.25, interval from minus 0.26 to minus 0.24.
-The whole interval is below zero. The drop is real: Regressed.
+[click] Top row: the measured v1.2.0 run on Claude Code, difference minus 0.29,
+interval from minus 0.31 to minus 0.27. The whole interval is below zero. The
+drop is real: Regressed.
 [click] Bottom row: difference minus 0.08, interval from minus 0.18 to plus
 0.03. It is bigger than the tolerance, but noise could explain it:
 Inconclusive. Not promoted, stable stays, and the message to the author is
@@ -754,9 +755,10 @@ Inconclusive. Not promoted, stable stays, and the message to the author is
 The same rule guards promotion: a lift of plus 0.12 whose interval runs from
 minus 0.05 to plus 0.29 does not earn stable.
 
-These two rows are the worked example in CONTRACT.md and README.md ("Policy"),
-which come from the unit-test fixtures of the controller, not from a measured
-run. Say so if asked.
+The top row is measured (SkillEvals on the DOKS cluster, 2026-10-31, 9 trials
+per arm). The bottom row is the worked example in CONTRACT.md and README.md
+("Policy"), from the unit-test fixtures of the controller: no run on the
+current model list was Inconclusive. Say so if asked.
 -->
 
 ---
@@ -873,9 +875,10 @@ model list, for this digest.
 
 Do not wait: "that takes twelve minutes, here is one I prepared earlier."
 
-Source: DEMO.md beats 1 and 2, README.md "Run the demo".
-TODO: DEMO.md says the live trigger was not run while writing the runbook.
-Rehearse once with the current model list.
+Source: DEMO.md beats 1 and 2, README.md "Run the demo". The push path ran
+with the current model list on 2026-10-31 (make demo-push, three entries,
+about 12 minutes per round). Rehearse the live push of a copied directory once
+more before the talk.
 -->
 
 ---
@@ -910,9 +913,9 @@ Chaining Abuse, both at scripts/bootstrap.sh line 5. The runner reports Tier 1
 failed, skips Tier 3, and the controller marks the run Rejected. No sandboxes,
 no tokens. v1.0.0 of the same skill passes the same check.
 
-Source: demo/variants/README.md.
-TODO: this beat is not in DEMO.md. Rehearse it end to end with the current
-model list and keep a screenshot of the Rejected run as a fallback.
+Source: demo/variants/README.md. Ran on 2026-10-31 with all three entries:
+each one Rejected with Tier1Failed, the same two findings, no trials.
+TODO: keep a screenshot of the Rejected run as a fallback.
 -->
 
 ---
@@ -920,24 +923,24 @@ model list and keep a screenshot of the Rejected run as a fallback.
 # Demo 3: the regression is held back
 
 <div class="reg mt-4">
-  <div class="reg__head"><span>Model</span><span>Stable v1.1.0</span><span>v1.2.0</span><span>Lift</span><span>Verdict</span></div>
-  <div class="reg__row" v-click><span>claude-haiku-5-5</span><span>0.95</span><span class="reg__bad">0.69</span><span>+0.33</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>claude-sonnet-5-5</span><span>0.95</span><span class="reg__bad">0.70</span><span>+0.39</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>claude-opus-5-5 (optional)</span><span>0.95</span><span>0.71</span><span>+0.34</span><span>Helps</span></div>
+  <div class="reg__head"><span>Agent and model</span><span>Stable v1.1.0</span><span>v1.2.0</span><span>Lift</span><span>Verdict</span></div>
+  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.98</span><span class="reg__bad">0.69</span><span>+0.33</span><span class="reg__bad">Regressed</span></div>
+  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.72</span><span>0.47</span><span>+0.01</span><span>Neutral</span></div>
+  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.95</span><span>0.72</span><span>+0.35</span><span>Helps</span></div>
 </div>
 
 <div class="demo">
 
 ```bash
-kubectl -n skill-ci get skillevals -l skillci.dev/skill=acme-release-notes -o wide \
-  | grep v1-2-0
+kubectl -n skill-ci get skillevals -o wide \
+  -l skillci.dev/skill=acme-release-notes | grep v1-2-0
 ```
 
 </div>
 
 <style scoped>
 .reg { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1.6rem; }
-.reg__head, .reg__row { display: grid; grid-template-columns: 1.6fr 1fr 1fr 0.8fr 1fr; gap: 1rem; align-items: center; padding: 0.7rem 1.2rem; font-size: 1.35rem; }
+.reg__head, .reg__row { display: grid; grid-template-columns: 2.4fr 1fr 0.8fr 0.8fr 1fr; gap: 1rem; align-items: center; padding: 0.7rem 1.2rem; font-size: 1.35rem; }
 .reg__head { font-family: var(--slidev-font-mono); font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-fg-muted); padding-bottom: 0; }
 .reg__row { border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
 .reg__row span:first-child { font-family: var(--slidev-font-mono); font-size: 1.1rem; }
@@ -951,25 +954,23 @@ kubectl -n skill-ci get skillevals -l skillci.dev/skill=acme-release-notes -o wi
 This is the best moment of the talk. v1.2.0 of acme-release-notes is a
 deliberately worse rewrite whose rules contradict its own evals.
 
-Look at the lift column: plus 0.33, plus 0.39. A check against the no-skill
+Look at the lift on Claude Code: plus 0.33. A check against the no-skill
 baseline alone says this skill helps, and would have promoted it. But stable
-scores 0.95 and this version scores 0.69 and 0.70. The gate compares with the
-version you run today. Haiku and sonnet are marked Regressed, and v1.2.0 stays
-at beta.
+v1.1.0 scored 0.98 with the skill, and this version scores 0.69. The gate
+compares with the version you run today: a difference of minus 0.29, 95%
+interval minus 0.31 to minus 0.27, all of it below the tolerance. Regressed,
+and v1.2.0 stays at beta.
 
-[click] [click] [click] Point at the opus row. Opus is optional, so it never
-gates: Helps at 0.71. That is the policy working as written, not a missed
+[click] [click] [click] Point at the two optional rows. Codex drops to 0.47,
+Neutral, and OpenCode to 0.72, still Helps over no skill. Both are optional, so
+neither gates: that is the policy working as written, not a missed
 regression. Say it before someone asks.
 
 Be honest: v1.2.0 was written to fail. The real-world version is a well-meant
 edit that fixes one case and breaks two.
 
-Source: DEMO.md "The state the beats rely on", beat 5. The pre-baked runs
-come from a runner without trial scores, so the controller judged them with
-the fixed tolerance. A re-run on runner 0.5.1 or later gives the interval.
-
-TODO: numbers come from the 2026-10-30 state with haiku, sonnet and opus.
-Refresh once the current model list has results.
+Source: DEMO.md "The state the beats rely on" and beat 5; SkillEvals on the
+DOKS cluster, 2026-10-31, 9 trials per arm.
 -->
 
 ---
@@ -1042,10 +1043,10 @@ model) or in Grafana (the agent_version label).
 Source: demo/models.yaml, DEMO.md beats 7 and 8, README.md "Agents and their
 versions". The judge is always Anthropic, whatever agent runs.
 
-TODO: DEMO.md marks beats 7 and 8 as not verified end to end on the cluster
-(bump exercised in unit tests, not live; the OpenCode route through
-OpenRouter and the Codex model are checked against provider checks, not a
-full run). Rehearse before the talk and keep the fallback.
+Codex and OpenCode ran end to end on 2026-10-31 (every sample skill and
+variant). TODO: the harness bump (make demo-model-swap MODE=bump) is covered
+by unit tests, not yet run live. Rehearse it before the talk and keep the
+fallback.
 -->
 
 ---
@@ -1291,14 +1292,14 @@ infra, the Helm chart, the controller, the runner, the sample skills and the
 demo runbook. The three skills are demo material written for this talk, not
 production skills.
 
-[click] With Pulumi: make up builds the cluster, registry, Harbor, secrets,
-Agent Sandbox, and Prometheus with Grafana. [click] With plain Helm you only
+[click] With Pulumi: make up builds the cluster, Harbor, secrets, Agent
+Sandbox, and Prometheus with Grafana; make deploy installs a release from
+GHCR. [click] With plain Helm you only
 need the chart, and a Harbor you already run. [click] QR code for the repo.
 
 Source: README.md "Layout", "Helm chart", "Run the demo".
-TODO: README says the published chart and images live at ghcr.io/dirien under
-a release tag, and no vX.Y.Z tag exists in the repo yet. Cut a release, make
-the GHCR packages public, and confirm the repo is public before the talk.
+Releases are tagged (v0.7.3 on 2026-10-31) and the GHCR images and chart are
+public. TODO: make the GitHub repo public before the talk.
 -->
 
 ---
