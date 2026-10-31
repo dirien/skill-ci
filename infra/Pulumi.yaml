@@ -439,6 +439,8 @@ resources:
         skill-ci.json: ${skillCiDashboard}
     options:
       provider: ${k8s}
+      # A data change replaces a ConfigMap, and its fixed name would clash with the replacement.
+      deleteBeforeReplace: true
 
 outputs:
   kubeconfig:
