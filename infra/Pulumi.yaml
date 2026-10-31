@@ -472,6 +472,14 @@ resources:
     options:
       provider: ${k8s}
 
+  # SkillCIConfig: the platform settings (default profile, network policy), CONTRACT.md "SkillCIConfig".
+  skillCiConfigCrd:
+    type: kubernetes:yaml/v2:ConfigFile
+    properties:
+      file: ../charts/skill-ci-controller/crds/skillci.dev_skillciconfigs.yaml
+    options:
+      provider: ${k8s}
+
   # The controller, from the published OCI chart. deploy/helm/values/skill-ci-controller.yaml is shared
   # with the plain Helm path (deploy/install.sh); the image tags and OTLP settings come from config.
   skillCiController:
@@ -505,6 +513,7 @@ resources:
       dependsOn:
         - ${skillCiCrds}
         - ${sandboxProfileCrd}
+        - ${skillCiConfigCrd}
         - ${agentSandbox}
         - ${harborCredentialsSecret}
         - ${harborWebhookSecret}
