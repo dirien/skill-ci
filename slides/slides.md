@@ -915,7 +915,7 @@ no tokens. v1.0.0 of the same skill passes the same check.
 
 Source: demo/variants/README.md. Ran on 2026-10-31 with all three entries:
 each one Rejected with Tier1Failed, the same two findings, no trials.
-TODO: keep a screenshot of the Rejected run as a fallback.
+Fallback: the backup slide "the Rejected run" after the closing slide.
 -->
 
 ---
@@ -1086,8 +1086,8 @@ digest as an OCI referrer. It survives the pod and travels with the artifact.
 Source: DEMO.md beat 9. Only v1.1.0 has reports stored in Harbor for the
 pre-baked state; do not run make report on v1.0.0 or v1.2.0.
 
-TODO: keep a screenshot of the Grafana dashboard and of /skills/acme-release-notes
-as fallbacks; add them to the deck if the venue network is shaky.
+Fallbacks: the backup slides after the closing slide (Grafana, the
+acme-release-notes skill page), recorded 2026-10-31.
 -->
 
 ---
@@ -1354,4 +1354,50 @@ gate. Thank you, KubeAuto. The QR codes stay up for questions and for the
 repo.
 
 TODO: add the session feedback QR if KubeAuto Day provides one.
+-->
+
+---
+
+# Backup: the Grafana dashboard
+
+<img src="/fallback/grafana.png" class="fallback" alt="Grafana dashboard skill-ci with lift per skill version, agent and model" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup after the closing slide, outside the talk. Show it when Grafana is
+unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-10-31
+(release 0.7.3, every run of DEMO.md "The state the beats rely on").
+-->
+
+---
+
+# Backup: why v1.2.0 is held back
+
+<img src="/fallback/skill-acme-release-notes.png" class="fallback" alt="Reporting site page for acme-release-notes with v1.1.0 on stable and v1.2.0 held back" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup for the reporting site (/skills/acme-release-notes, make
+reports-ui). Same state as the Grafana backup.
+-->
+
+---
+
+# Backup: the Rejected run
+
+<img src="/fallback/run-rejected.png" class="fallback" alt="Reporting site page for k8s-resource-naming v1.1.0, Rejected by Tier 1" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup for Demo 2: k8s-resource-naming v1.1.0 on Claude Code, Tier 1
+failed on scripts/bootstrap.sh line 5, Tier 3 skipped.
 -->
