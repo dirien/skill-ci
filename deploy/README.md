@@ -71,7 +71,9 @@ upgrades what changed and never overwrites the model list. A first install takes
 and kube-prometheus-stack becoming ready); a re-run with nothing to change takes about a minute. Harbor is upgraded
 only when its chart version or `deploy/helm/values/harbor.yaml` changed, because the chart generates new internal
 secrets on every render and each upgrade restarts Harbor's core, jobservice and registry pods (`HARBOR_UPGRADE=1`
-upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana.
+upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana. To also push the controller's metrics
+over OpenTelemetry, set `OTLP_ENDPOINT` and the other `OTLP_*` variables of
+[OpenTelemetry export](#opentelemetry-export-optional) before the run, and on every later run.
 Then go to [Run the demo](#run-the-demo). Read on for what each step does and how to check it.
 
 ## Step 1: namespace
@@ -274,9 +276,11 @@ kubectl create -f deploy/manifests/seed/skill-ci-models.yaml
 kubectl -n skill-ci get configmap skill-ci-models
 ```
 
-The content comes from [`demo/models.yaml`](../demo/models.yaml). The demo list needs an `openai` key (Codex) and an
-`openrouter` key (OpenCode) for its optional entries. An optional entry whose key is missing fails that run before any work and,
-being optional, never gates, so with only an Anthropic key the Claude Code entry still decides.
+The content comes from [`demo/models.yaml`](../demo/models.yaml) (`deploy/generate.sh` writes the manifest). It has
+three entries: Claude Code with an Anthropic model (`required: true`, the gate), Codex with an OpenAI model and
+OpenCode with a Qwen model through OpenRouter (both `required: false`). The optional entries need the `openai` and
+`openrouter` keys. An optional entry whose key is missing fails that run before any work and, being optional, never
+gates, so with only an Anthropic key the Claude Code entry still decides.
 
 ## Step 8: the controller
 
@@ -311,6 +315,44 @@ kubectl -n skill-ci logs deployment/skill-ci-controller --tail=5
 
 You should see the manager starting and the webhook server listening on `:8080` without errors about `harbor-credentials`
 or `skill-ci-models`.
+
+### OpenTelemetry export (optional)
+
+The controller can also push its `skillci_*` metrics over OTLP to an OpenTelemetry Collector, Grafana Alloy, a
+Prometheus OTLP receiver or a vendor endpoint. It is off by default. `install.sh` (and `demo/deploy.sh` on the
+Pulumi path) read these variables and pass each one to the chart only when it is set:
+
+| Variable | Chart value | Example |
+| --- | --- | --- |
+| `OTLP_ENDPOINT` | `otlp.endpoint` (turns the export on) | `otel-collector.monitoring:4318` |
+| `OTLP_PROTOCOL` | `otlp.protocol` | `http/protobuf` (default) or `grpc` |
+| `OTLP_URL_PATH` | `otlp.urlPath` | `/api/v1/otlp/v1/metrics` for the Prometheus OTLP receiver |
+| `OTLP_INSECURE` | `otlp.insecure` | `true` for a receiver inside the cluster without TLS |
+| `OTLP_INTERVAL` | `otlp.interval` | `30s` (default 60s) |
+| `OTLP_HEADERS_SECRET` | `otlp.headersSecret.name` | `otlp-headers` |
+
+```bash
+OTLP_ENDPOINT=otel-collector.monitoring:4318 OTLP_INSECURE=true deploy/install.sh
+```
+
+By hand, add the same values to the `helm upgrade` above, for example
+`--set-string otlp.endpoint=otel-collector.monitoring:4318 --set otlp.insecure=true`. Helm does not keep values
+between upgrades here, so pass them on every run: a run without them turns the export off again.
+
+An API or ingest key goes into a Secret in `skill-ci`, never on the command line. The chart reads its key `headers`
+(comma separated `key=value` pairs) into `OTEL_EXPORTER_OTLP_HEADERS`:
+
+```bash
+kubectl -n skill-ci create secret generic otlp-headers --from-literal=headers='x-honeycomb-team=<ingest key>'
+OTLP_ENDPOINT=api.honeycomb.io:443 OTLP_PROTOCOL=grpc OTLP_HEADERS_SECRET=otlp-headers deploy/install.sh
+```
+
+`install.sh` stops before installing anything when that Secret does not exist.
+
+Do not scrape and push into the same Prometheus. With monitoring installed, the ServiceMonitor already scrapes the
+controller into `kps-kube-prometheus-stack-prometheus`; pushing there as well stores every series twice and the
+dashboard sums both. Point the export at another backend. The metric names and labels are in
+[CONTRACT.md, "OpenTelemetry export"](../CONTRACT.md#opentelemetry-export-optional-otlp).
 
 ## Step 9: Harbor project and webhook
 
@@ -365,10 +407,27 @@ Expected: each `SkillEval` goes `Pending`, `Running`, `Succeeded` over a few min
 verdict filled in, and `make status` shows the `beta` and `stable` tags appearing on skills that earn them. A first run
 is slower because every node pulls the sandbox image once.
 
+### Skills need test cases
+
+The live evaluation (Tier 3) runs the test cases in a skill's `evals/evals.json`; the sample skills ship with one. A
+skill pushed without it is checked by Tier 1 and Tier 2 only and then fails with
+`no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. ...`. Draft the cases before
+you push:
+
+```bash
+make draft-evals SKILL=my-skill                  # writes skills/my-skill/evals/evals.json
+make draft-evals SKILL=my-skill DIR=path/to/my-skill FORCE=1   # another directory; replace an existing file
+```
+
+It runs SkillEvaluator once in a short-lived pod from the runner image, with the `anthropic` key from `llm-keys`:
+one LLM request, about 20 seconds. The draft is a starting point, not a gate. Read and fix the cases before you push
+the skill.
+
 | Target | What it does |
 | --- | --- |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` |
 | `make demo-push SKILL=acme-release-notes VERSION=v1.1.0` | Pushes a new version (`v1.2.0` is a deliberate regression) |
+| `make draft-evals SKILL=...` | Drafts `evals/evals.json` for a skill, for you to review |
 | `make demo-model-swap MODE=add` | Changes the model list live (`add`, `swap`, `restore`, `bump`, `require`, `optional`) |
 | `make status` | SkillEvals and the tags per skill |
 | `make report SKILL=... VERSION=... OUT=reports/` | Downloads the eval reports stored in Harbor |
@@ -382,8 +441,8 @@ Grafana's password:
 kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 --decode; echo
 ```
 
-`make dashboard` prints a hint that mentions `pulumi stack output`. Ignore that line, the `kubectl` command above is
-the one for this setup. The [stage runbook](../DEMO.md) walks through the beats.
+`make dashboard` prints the same `kubectl` command and a `pulumi stack output` alternative. Ignore the Pulumi line,
+there is no stack in this setup. The [stage runbook](../DEMO.md) walks through the beats.
 
 ## Platform notes
 
@@ -434,6 +493,11 @@ After changing a source, run `deploy/generate.sh`. `deploy/generate.sh --check` 
 | Pushes work but no `SkillEval` appears | The webhook policy is missing (rerun step 9), or `harbor-webhook` differs from the token in the policy (rerun step 9 after fixing the Secret). `kubectl -n skill-ci logs deployment/skill-ci-controller` |
 | Runner Job pending | The cluster is full. Scale out, or lower `controller.maxConcurrentJobs`. |
 | Runner Job fails at once | Check `kubectl -n skill-ci logs job/<name>`: a missing or invalid `anthropic` key in `llm-keys` fails the run before any work. |
+| OpenCode runs fail with "provisioning key" | `openrouter` in `llm-keys` is an OpenRouter provisioning key. Replace it with an API key from openrouter.ai/settings/keys. |
+| A run fails with `no eval dataset` | The skill has no `evals/evals.json`. Draft one with `make draft-evals SKILL=<name>`, review it, push again ([Skills need test cases](#skills-need-test-cases)). |
+| Controller pod in `CreateContainerConfigError` | `otlp.headersSecret.name` names a Secret or key that does not exist in `skill-ci`. |
+| Dashboard numbers doubled | The OTLP export pushes into the Prometheus that also scrapes the controller. Point `OTLP_ENDPOINT` elsewhere. |
+| No OTLP data at the backend | `kubectl -n skill-ci logs deployment/skill-ci-controller \| grep otlp`: export errors are logged and never stop the controller. Check `OTLP_INSECURE` and `OTLP_URL_PATH`. |
 | `ImagePullBackOff` on ghcr.io | The release exists but its GHCR packages are still private. Make them public in the package settings. |
 
 ## Teardown

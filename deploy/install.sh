@@ -14,6 +14,18 @@
 #   CONTROLLER_CHART   chart to install (default oci://ghcr.io/dirien/charts/skill-ci-controller),
 #                      for example ./charts/skill-ci-controller to test an unreleased chart
 #   KUBECONFIG, KUBE_CONTEXT   as for kubectl (KUBE_CONTEXT selects a context for kubectl and helm)
+# Optional OpenTelemetry (OTLP) push of the controller's skillci_* metrics, off unless OTLP_ENDPOINT is set.
+# Each variable maps to one chart value and is passed only when set. Set them on every run: a run without
+# OTLP_ENDPOINT installs the chart without them, which turns the export off again.
+#   OTLP_ENDPOINT        otlp.endpoint                host:port or URL, e.g. otel-collector.monitoring:4318
+#   OTLP_PROTOCOL        otlp.protocol                http/protobuf (chart default) or grpc
+#   OTLP_URL_PATH        otlp.urlPath                 e.g. /api/v1/otlp/v1/metrics for the Prometheus OTLP receiver
+#   OTLP_INSECURE        otlp.insecure                true for a receiver without TLS inside the cluster
+#   OTLP_INTERVAL        otlp.interval                time between exports, e.g. 30s (default 60s)
+#   OTLP_HEADERS_SECRET  otlp.headersSecret.name      Secret in skill-ci whose key `headers` holds the ingest key:
+#                        kubectl -n skill-ci create secret generic otlp-headers --from-literal=headers='k=v'
+# Do not push into the Prometheus that already scrapes the controller (the ServiceMonitor of this install):
+# every series would be stored twice. See deploy/README.md "OpenTelemetry export".
 set -euo pipefail
 
 deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +45,32 @@ fi
 # ${arr[@]+...}: an empty array is fine under set -u on macOS bash 3.2 too.
 kc() { kubectl ${kctx[@]+"${kctx[@]}"} "$@"; }
 hm() { helm ${hctx[@]+"${hctx[@]}"} "$@"; }
+
+# otlp_set_args fills otlp_args with the chart values of the OTLP_* variables, nothing when OTLP_ENDPOINT
+# is empty. The same function is in demo/deploy.sh: keep both identical.
+otlp_args=()
+otlp_set_args() {
+  if [[ -z "${OTLP_ENDPOINT:-}" ]]; then
+    [[ -z "${OTLP_PROTOCOL:-}${OTLP_URL_PATH:-}${OTLP_INSECURE:-}${OTLP_INTERVAL:-}${OTLP_HEADERS_SECRET:-}" ]] ||
+      die "an OTLP_* variable is set but OTLP_ENDPOINT is empty"
+    return 0
+  fi
+  otlp_args=(--set-string "otlp.endpoint=${OTLP_ENDPOINT}")
+  case "${OTLP_PROTOCOL:-}" in
+    "") ;;
+    http/protobuf | grpc) otlp_args+=(--set-string "otlp.protocol=${OTLP_PROTOCOL}") ;;
+    *) die "OTLP_PROTOCOL must be http/protobuf or grpc, not ${OTLP_PROTOCOL}" ;;
+  esac
+  [[ -z "${OTLP_URL_PATH:-}" ]] || otlp_args+=(--set-string "otlp.urlPath=${OTLP_URL_PATH}")
+  case "${OTLP_INSECURE:-}" in
+    "") ;;
+    true | false) otlp_args+=(--set "otlp.insecure=${OTLP_INSECURE}") ;;
+    *) die "OTLP_INSECURE must be true or false, not ${OTLP_INSECURE}" ;;
+  esac
+  [[ -z "${OTLP_INTERVAL:-}" ]] || otlp_args+=(--set-string "otlp.interval=${OTLP_INTERVAL}")
+  [[ -z "${OTLP_HEADERS_SECRET:-}" ]] || otlp_args+=(--set-string "otlp.headersSecret.name=${OTLP_HEADERS_SECRET}")
+  return 0
+}
 
 step_no=0
 step() {
@@ -74,6 +112,15 @@ if ! kc get storageclass -o jsonpath='{range .items[*]}{.metadata.annotations.st
 fi
 if [[ -z "${ANTHROPIC_API_KEY:-}" && -z "$(secret_field "${ns}" llm-keys anthropic)" ]]; then
   die "ANTHROPIC_API_KEY is not set and the Secret llm-keys does not exist yet"
+fi
+otlp_set_args
+if [[ -n "${OTLP_HEADERS_SECRET:-}" ]] && ! kc -n "${ns}" get secret "${OTLP_HEADERS_SECRET}" >/dev/null 2>&1; then
+  die "OTLP_HEADERS_SECRET: Secret ${ns}/${OTLP_HEADERS_SECRET} does not exist. Create it first:
+  kubectl apply -f deploy/manifests/namespaces.yaml
+  kubectl -n ${ns} create secret generic ${OTLP_HEADERS_SECRET} --from-literal=headers='<key>=<value>'"
+fi
+if [[ "${OTLP_ENDPOINT:-}" == *kps-kube-prometheus-stack-prometheus* && "${SKIP_MONITORING:-0}" != 1 ]]; then
+  echo "warning: OTLP_ENDPOINT is the Prometheus that scrapes the controller already; every series would be stored twice" >&2
 fi
 
 step "Namespaces"
@@ -167,7 +214,7 @@ else
   kc create -f "${deploy_dir}/manifests/seed/skill-ci-models.yaml"
 fi
 
-step "skill-ci controller ${SKILL_CI_VERSION} (${controller_chart})"
+step "skill-ci controller ${SKILL_CI_VERSION} (${controller_chart})${OTLP_ENDPOINT:+, OTLP export to ${OTLP_ENDPOINT}}"
 chart_version=()
 [[ "${controller_chart}" != oci://* ]] || chart_version=(--version "${SKILL_CI_VERSION}")
 # Helm installs crds/ on the first install only and never upgrades them, so apply them on every run.
@@ -178,6 +225,7 @@ hm upgrade --install skill-ci "${controller_chart}" ${chart_version[@]+"${chart_
   --set-string "image.tag=${SKILL_CI_VERSION}" \
   --set-string "controller.runnerImage.tag=${SKILL_CI_VERSION}" \
   --set-string "controller.sandboxImage.tag=${SKILL_CI_VERSION}" \
+  ${otlp_args[@]+"${otlp_args[@]}"} \
   --wait --timeout 5m
 kc -n "${ns}" get deployment skill-ci-controller
 
