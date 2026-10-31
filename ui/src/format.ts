@@ -76,10 +76,12 @@ export function clock(iso: string | undefined): string {
   return Number.isNaN(d.getTime()) ? iso : d.toISOString().slice(11, 19);
 }
 
-/** offset writes a log offset from the first step, "+3.3s". */
+/** offset writes a log offset from the first step, "+3.3s", or "-0.5s" for an entry before it. */
 export function offset(sec: number | undefined): string {
   if (sec === undefined) return "";
-  return sec < 60 ? `+${sec.toFixed(1)}s` : `+${duration(sec)}`;
+  const sign = sec < 0 ? "-" : "+";
+  const abs = Math.abs(sec);
+  return abs < 60 ? `${sign}${abs.toFixed(1)}s` : `${sign}${duration(abs)}`;
 }
 
 /** armLabel writes "with skill" or "without skill". */
