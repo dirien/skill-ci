@@ -280,6 +280,7 @@ helm upgrade --install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller 
   -f deploy/helm/values/skill-ci-controller.yaml \
   --set-string image.tag="${SKILL_CI_VERSION}" \
   --set-string controller.runnerImage.tag="${SKILL_CI_VERSION}" \
+  --set-string controller.sandboxImage.tag="${SKILL_CI_VERSION}" \
   --wait --timeout 5m
 kubectl -n skill-ci get deployment skill-ci-controller
 ```

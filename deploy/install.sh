@@ -165,6 +165,7 @@ hm upgrade --install skill-ci "${controller_chart}" ${chart_version[@]+"${chart_
   -f "${deploy_dir}/helm/values/skill-ci-controller.yaml" \
   --set-string "image.tag=${SKILL_CI_VERSION}" \
   --set-string "controller.runnerImage.tag=${SKILL_CI_VERSION}" \
+  --set-string "controller.sandboxImage.tag=${SKILL_CI_VERSION}" \
   --wait --timeout 5m
 kc -n "${ns}" get deployment skill-ci-controller
 
