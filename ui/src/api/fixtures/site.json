@@ -1,0 +1,15 @@
+{
+  "namespace": "skill-ci",
+  "project": "skills",
+  "version": "0.11.0",
+  "thresholds": {
+    "helps": 0.05,
+    "hurts": -0.1,
+    "promote": 0.1,
+    "demote": -0.1,
+    "obsolete": 0.8,
+    "regression": 0.05,
+    "confidence": 0.95
+  },
+  "generatedAt": "2026-10-31T09:00:00Z"
+}

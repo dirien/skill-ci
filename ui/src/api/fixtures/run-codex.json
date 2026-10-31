@@ -1,0 +1,218 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+    "skill": "acme-release-notes",
+    "version": "v1.1.0",
+    "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+    "agent": "codex",
+    "agentVersion": "0.161.0",
+    "model": "openai/gpt-6.1-sol",
+    "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+    "required": false,
+    "attempts": 1,
+    "trigger": "push",
+    "phase": "Succeeded",
+    "tiers": {
+      "tier1": "passed",
+      "tier2": "passed",
+      "tier3": "passed"
+    },
+    "retries": 1,
+    "createdAt": "2026-10-30T14:08:02Z",
+    "hasReport": true,
+    "trials": "stored",
+    "ranVersion": "0.161.0",
+    "pushedBy": "release-bot",
+    "verdict": "Neutral",
+    "withSkill": 0.92,
+    "withoutSkill": 0.88,
+    "lift": 0.04,
+    "publication": "passed",
+    "networkMode": "allowlist",
+    "completedAt": "2026-10-30T15:03:40Z",
+    "durationSec": 3338.0
+  },
+  "specAgentVersion": "0.161.0",
+  "channels": [
+    "beta"
+  ],
+  "samples": {
+    "withSkill": [
+      0.92
+    ],
+    "withoutSkill": [
+      0.88
+    ]
+  },
+  "findings": [],
+  "conditions": [
+    {
+      "type": "Retried",
+      "status": "True",
+      "reason": "InfrastructureFailure",
+      "message": "EnvironmentStartTimeoutError: sandbox rn-basic__Hx3kLm9 did not become ready in 600s",
+      "changedAt": "2026-10-30T14:19:30Z"
+    },
+    {
+      "type": "NetworkPolicy",
+      "status": "True",
+      "reason": "Enforced",
+      "message": "network allowlist enforced by CiliumNetworkPolicy skillci-net-acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+      "changedAt": "2026-10-30T14:08:03Z"
+    }
+  ],
+  "network": {
+    "mode": "allowlist",
+    "source": "skill",
+    "declared": [
+      "@python"
+    ],
+    "hosts": [
+      "api.anthropic.com",
+      "api.openai.com",
+      "files.pythonhosted.org",
+      "pypi.org"
+    ],
+    "policy": "skillci-net-acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+    "enforced": true,
+    "reason": "Enforced",
+    "message": "network allowlist enforced by CiliumNetworkPolicy skillci-net-acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+    "legacy": false
+  },
+  "sandbox": {
+    "profile": "default",
+    "specProfile": "default",
+    "warmPool": "default"
+  },
+  "report": {
+    "state": "files",
+    "digest": "sha256:effa499cae50e035768d99c08b16c268d987316cf6f3ab0ab26b74dac33befcb",
+    "dimensions": [],
+    "files": [
+      {
+        "name": "report.html",
+        "href": "/runs/acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol/report"
+      },
+      {
+        "name": "result.json",
+        "href": "/runs/acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol/result.json"
+      }
+    ]
+  },
+  "trials": {
+    "state": "stored",
+    "job": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol-r1",
+    "bundleDigest": "sha256:b397d50c62b1a2f608990d862a21285d0782c0fd346de235895c84214fbdad2d",
+    "attemptsPerCase": 1,
+    "cases": [
+      {
+        "id": "rn-basic",
+        "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+        "expectedBehaviors": [
+          "RELEASE_NOTES.md exists",
+          "The first line is exactly 'ACME-RN/2 1.4.0'",
+          "There are exactly two sections, '## Added' then '## Fixed'",
+          "Each bullet ends with its ticket ID in square brackets"
+        ],
+        "withSkill": [
+          {
+            "id": "rn-basic__Cx7aQ1p",
+            "arm": "with-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "scored",
+            "score": 0.92,
+            "passed": true,
+            "durationSec": 192.4,
+            "agentSec": 48.1,
+            "steps": 5,
+            "toolCalls": 3,
+            "tokensIn": 37758,
+            "tokensOut": 299,
+            "tokensCached": 27904,
+            "costUsd": 0.0173,
+            "costEstimated": false,
+            "criteria": {
+              "passed": 4,
+              "total": 4
+            },
+            "skillInvoked": true,
+            "hasSession": true,
+            "dropped": 1
+          }
+        ],
+        "withoutSkill": [
+          {
+            "id": "rn-basic__Cx2nW9d",
+            "arm": "without-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "withheld",
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          }
+        ]
+      }
+    ],
+    "totals": {
+      "trials": 2,
+      "scored": 1,
+      "unscored": 0,
+      "withheld": 1,
+      "tokensIn": 37758,
+      "tokensOut": 299,
+      "tokensCached": 27904,
+      "costUsd": 0.0173,
+      "costEstimated": false,
+      "agentSec": 48.1,
+      "durationSec": 192.4
+    },
+    "credentials": [
+      {
+        "role": "agent",
+        "env": "OPENAI_API_KEY",
+        "host": "api.openai.com"
+      },
+      {
+        "role": "judge",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      }
+    ],
+    "withheld": [
+      {
+        "id": "rn-basic__Cx2nW9d",
+        "arm": "without-skill",
+        "case": "rn-basic",
+        "attempt": 1,
+        "reason": "secret-scan"
+      }
+    ],
+    "network": {
+      "state": "collected",
+      "forwarded": 2,
+      "dropped": 1
+    }
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "jobName": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+      "message": "EnvironmentStartTimeoutError: sandbox rn-basic__Hx3kLm9 did not become ready in 600s",
+      "current": false,
+      "trials": "none"
+    },
+    {
+      "number": 2,
+      "jobName": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol-r1",
+      "reportDigest": "sha256:effa499cae50e035768d99c08b16c268d987316cf6f3ab0ab26b74dac33befcb",
+      "current": true,
+      "trials": "stored"
+    }
+  ],
+  "refreshSeconds": 0,
+  "retried": "EnvironmentStartTimeoutError: sandbox rn-basic__Hx3kLm9 did not become ready in 600s"
+}

@@ -51,6 +51,18 @@ type Config struct {
 	Harbor harbor.Client
 	// Reports reads the stored reports.
 	Reports ReportStore
+	// Bundles reads trial bundles and report annotations; nil means no trial
+	// sessions (the API reports trials as unknown).
+	Bundles BundleStore
+	// SPA serves the single page app from web/dist for every page path instead
+	// of the server-rendered pages. The JSON API, /assets/, the stored report
+	// files and /healthz are served either way. Transitional: the server-rendered
+	// pages and this switch go away once the API handlers are built.
+	SPA bool
+	// Version is the controller release, shown by GET /api/v1/site.
+	Version string
+	// ModelsConfigMap names the model list ConfigMap, read by GET /api/v1/models.
+	ModelsConfigMap string
 	// Thresholds are the controller policy bands, shown and used for decisions.
 	Thresholds policy.Thresholds
 	// Platform supplies the network policy in force, shown on the runs page;
@@ -68,6 +80,7 @@ type Server struct {
 	channels *channelSource
 	tmpl     map[string]*template.Template
 	mux      *http.ServeMux
+	ui       *spa
 }
 
 // New parses the embedded templates and returns the server.
@@ -97,17 +110,28 @@ func New(cfg Config) (*Server, error) {
 		}
 		s.tmpl[name] = t
 	}
+	if s.ui, err = newSPA(); err != nil {
+		return nil, err
+	}
 	s.routes()
 	return s, nil
 }
 
 func (s *Server) routes() {
-	s.mux.HandleFunc("GET /{$}", s.index)
-	s.mux.HandleFunc("GET /skills/{skill}", s.skill)
-	s.mux.HandleFunc("GET /runs/{name}", s.run)
+	// Served in both modes: the stored report files, health, the JSON API and the UI assets.
 	s.mux.HandleFunc("GET /runs/{name}/report", s.reportHTML)
 	s.mux.HandleFunc("GET /runs/{name}/result.json", s.resultJSON)
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
+	s.apiRoutes()
+	s.mux.HandleFunc("GET /assets/{path...}", s.ui.asset)
+	if s.cfg.SPA {
+		// The app's router handles every other path (history routing).
+		s.mux.HandleFunc("GET /", s.ui.page)
+		return
+	}
+	s.mux.HandleFunc("GET /{$}", s.index)
+	s.mux.HandleFunc("GET /skills/{skill}", s.skill)
+	s.mux.HandleFunc("GET /runs/{name}", s.run)
 	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, "Page not found", "There is no page at "+r.URL.Path+".")
 	})

@@ -1,0 +1,341 @@
+{
+  "agents": {
+    "claude-code": {
+      "model": "claude-haiku-5-5",
+      "model_source": "CLI",
+      "model_resolution": {
+        "model": "claude-haiku-5-5",
+        "source": "CLI"
+      },
+      "with_skill": {},
+      "without_skill": {},
+      "overall_with_skill": null,
+      "overall_without_skill": null,
+      "metrics_with_skill": [
+        "security",
+        "skill_execution",
+        "skill_efficiency",
+        "accuracy",
+        "goal_accuracy",
+        "behavior_check"
+      ],
+      "metrics_without_skill": [
+        "security",
+        "skill_execution",
+        "skill_efficiency",
+        "accuracy",
+        "goal_accuracy",
+        "behavior_check"
+      ],
+      "score_policy_with_skill": "skill-evaluator-dimension-mean-v1",
+      "score_policy_without_skill": "skill-evaluator-dimension-mean-v1",
+      "custom_with_skill": {},
+      "custom_without_skill": {},
+      "dimensions_with_skill": {},
+      "dimensions_without_skill": {},
+      "skill_activation": {
+        "status": "unknown",
+        "positive_trials": 0,
+        "activated_trials": 0,
+        "unknown_trials": 0,
+        "reason": "Skill activation evidence is unavailable or incomplete"
+      },
+      "lift": {},
+      "custom_lift": {},
+      "pass_at_k": {
+        "with_skill": {},
+        "without_skill": {},
+        "lift": {}
+      },
+      "security_attribution": {},
+      "agent_runtime_failures": {
+        "with_skill": [],
+        "without_skill": []
+      },
+      "trial_failures": {
+        "with_skill": [
+          {
+            "trial": "rn-basic__CbK6FQ2",
+            "reason": "RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc"
+          }
+        ],
+        "without_skill": [
+          {
+            "trial": "rn-basic__59JHTSp",
+            "reason": "RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2"
+          }
+        ]
+      },
+      "failure_detail_metadata": {
+        "with_skill_runtime": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        },
+        "without_skill_runtime": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        },
+        "with_skill_trials": {
+          "details_total": 1,
+          "details_shown": 1,
+          "details_truncated": false
+        },
+        "without_skill_trials": {
+          "details_total": 1,
+          "details_shown": 1,
+          "details_truncated": false
+        }
+      },
+      "job_failures": {
+        "with_skill": "Harbor job did not complete successfully: 1 errored",
+        "without_skill": "Harbor job did not complete successfully: 1 errored"
+      },
+      "conditions": {
+        "with_skill": {
+          "execution_status": "failed",
+          "execution_errors": [
+            "Harbor job did not complete successfully: 1 errored",
+            "Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc",
+            "Missing scored attempts for cases: rn-basic",
+            "Scored attempt coverage is 0/1"
+          ],
+          "execution_error_details_total": 4,
+          "execution_error_details_shown": 4,
+          "execution_error_details_truncated": false,
+          "expected_attempts": 1,
+          "scored_attempts": 0,
+          "runtime_failure_details_total": 0,
+          "runtime_failure_details_shown": 0,
+          "runtime_failure_details_truncated": false,
+          "reward_failure_details_total": 1,
+          "reward_failure_details_shown": 1,
+          "reward_failure_details_truncated": false
+        },
+        "without_skill": {
+          "execution_status": "failed",
+          "execution_errors": [
+            "Harbor job did not complete successfully: 1 errored",
+            "Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2",
+            "Missing scored attempts for cases: rn-basic",
+            "Scored attempt coverage is 0/1"
+          ],
+          "execution_error_details_total": 4,
+          "execution_error_details_shown": 4,
+          "execution_error_details_truncated": false,
+          "expected_attempts": 1,
+          "scored_attempts": 0,
+          "runtime_failure_details_total": 0,
+          "runtime_failure_details_shown": 0,
+          "runtime_failure_details_truncated": false,
+          "reward_failure_details_total": 1,
+          "reward_failure_details_shown": 1,
+          "reward_failure_details_truncated": false
+        }
+      },
+      "execution_status": "failed",
+      "execution_errors": [
+        "Harbor job did not complete successfully: 1 errored",
+        "Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc",
+        "Missing scored attempts for cases: rn-basic",
+        "Scored attempt coverage is 0/1",
+        "Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2"
+      ],
+      "execution_error_details_total": 8,
+      "execution_error_details_shown": 5,
+      "execution_error_details_truncated": true,
+      "expected_attempts": 2,
+      "scored_attempts": 0,
+      "num_trials_with": 0,
+      "num_trials_without": 0,
+      "output_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5/claude-code"
+    }
+  },
+  "metric_set": "skill-evaluator-default-v2",
+  "metrics": [
+    "security",
+    "skill_execution",
+    "skill_efficiency",
+    "accuracy",
+    "goal_accuracy",
+    "behavior_check"
+  ],
+  "score_policy": "skill-evaluator-dimension-mean-v1",
+  "attempt_policy": {
+    "max_attempts": 1,
+    "pass_threshold": 0.5,
+    "stop_on_pass": false,
+    "score_definition": "overall = mean(Security, Correctness, Discoverability, Effectiveness, Efficiency) [skill-evaluator-dimension-mean-v1]",
+    "score_policy": "skill-evaluator-dimension-mean-v1"
+  },
+  "execution_status": "failed",
+  "execution_errors": [
+    "Harbor job did not complete successfully: 1 errored",
+    "Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc",
+    "Missing scored attempts for cases: rn-basic",
+    "Scored attempt coverage is 0/1",
+    "Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2",
+    "claude-code without-skill Harbor run failed: Harbor job did not complete successfully: 1 errored",
+    "claude-code with-skill Harbor run failed: Harbor job did not complete successfully: 1 errored"
+  ],
+  "execution_error_details_total": 10,
+  "execution_error_details_shown": 7,
+  "execution_error_details_truncated": true,
+  "expected_attempts": 2,
+  "scored_attempts": 0,
+  "error": [
+    "Harbor job did not complete successfully: 1 errored"
+  ],
+  "skill_name": "acme-release-notes",
+  "run_id": "20261030_141159_86801_702d14d01af5",
+  "publication_target": {
+    "skill_name": "acme-release-notes",
+    "skill_digest": "sha256:591ef3c27cf92eaf63653bd8bd88849a1f408ce1a2a03606fe8dcfdd7c7d303b",
+    "skill_digest_algorithm": "skill-evaluator-source-tree/2"
+  },
+  "run_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5",
+  "result_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5/result.json",
+  "harbor_jobs_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5/_harbor-jobs",
+  "harbor_jobs_retained": true,
+  "evaluated_at": "2026-10-30T14:13:01.244339+00:00",
+  "evaluator_version": "0.6.0",
+  "dataset_snapshot": {
+    "schema_version": "1.0",
+    "evaluator_version": "0.6.0",
+    "dataset_summary": {
+      "total_tasks": 1,
+      "positive_tasks": 1,
+      "negative_tasks": 0,
+      "unclassified_tasks": 0,
+      "source": "dataset"
+    },
+    "dataset_digest": "sha256:dafe740040c577222a4ac296450767191edd245c1fa3b4a032dfb20babc6a244",
+    "dataset_digest_algorithm": "skill-evaluator-dataset-snapshot/1"
+  },
+  "dataset_snapshot_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5/dataset_snapshot.json",
+  "dataset_summary": {
+    "total_tasks": 1,
+    "positive_tasks": 1,
+    "negative_tasks": 0,
+    "unclassified_tasks": 0,
+    "source": "dataset"
+  },
+  "dataset_digest": "sha256:dafe740040c577222a4ac296450767191edd245c1fa3b4a032dfb20babc6a244",
+  "dataset_digest_algorithm": "skill-evaluator-dataset-snapshot/1",
+  "run_config": {
+    "config_file": "none",
+    "harbor": {
+      "environment": {
+        "value": "ack",
+        "source": "CLI"
+      },
+      "environment_kwargs": {
+        "keys": [
+          "image_pull_secret",
+          "kubeconfig",
+          "namespace",
+          "registry",
+          "skip_image_check"
+        ],
+        "sources": {
+          "namespace": "CLI",
+          "registry": "CLI",
+          "image_pull_secret": "CLI",
+          "skip_image_check": "CLI",
+          "kubeconfig": "CLI"
+        }
+      },
+      "n_attempts": 1,
+      "stop_on_pass": false,
+      "n_concurrent": 4,
+      "timeout_multiplier": 1.0,
+      "base_image_mode": "disabled",
+      "jobs_retained": true
+    },
+    "provider": {
+      "name": "anthropic",
+      "model": "claude-opus-5-5"
+    },
+    "judge": {
+      "enabled": true,
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "source": "provider default",
+      "override_applied": false,
+      "reasoning_effort": "medium",
+      "catalog_verification": "verified"
+    },
+    "credential_validation": {
+      "status": "verified",
+      "targets": [
+        {
+          "labels": [
+            "claude-code"
+          ],
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "status": "verified",
+          "detail": "model claude-haiku-5-5 is available"
+        },
+        {
+          "labels": [
+            "standard grader"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "status": "verified",
+          "detail": "model claude-opus-5-5 is available"
+        }
+      ]
+    },
+    "task_source": "evals_json",
+    "grading": {
+      "mode": "default"
+    },
+    "agents": {
+      "claude-code": {
+        "agent": "claude-code",
+        "model": "claude-haiku-5-5",
+        "source": "CLI"
+      }
+    },
+    "evaluated_source": null
+  },
+  "harbor_jobs_retention_reason": "explicit_keep",
+  "tier3_feedback": {
+    "schema_version": "1.0",
+    "conclusions": [
+      {
+        "severity": "fail",
+        "title": "Evaluation incomplete",
+        "message": "Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Missing scored attempts for cases: rn-basic; Scored attempt coverage is 0/1; With skill aggregate job: Harbor job did not complete successfully: 1 errored; With skill trial rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2; Without skill aggregate job: Harbor job did not complete successfully: 1 errored; Without skill trial rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2"
+      }
+    ],
+    "recommendations": [
+      {
+        "title": "Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6F",
+        "message": "Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Missing scored attempts for cases: rn-basic; Scored attempt coverage is 0/1; With skill aggregate job: Harbor job did not complete successfully: 1 errored; With skill trial rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2; Without skill aggregate job: Harbor job did not complete successfully: 1 errored; Without skill trial rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2",
+        "category": "Action",
+        "severity": "warn",
+        "source": "deterministic"
+      }
+    ],
+    "suggestions": [
+      "Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Missing scored attempts for cases: rn-basic; Scored attempt coverage is 0/1; With skill aggregate job: Harbor job did not complete successfully: 1 errored; With skill trial rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs: #26 [16/27] COPY skills/ /root/.claude/skills/ #26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #27 [25/27] COPY skills/ /root/.agents/skills/ #27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found  #28 [24/27] COPY skills/ /root/.claude/skills/ #28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olc; Unscoreable reward in rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2; Without skill aggregate job: Harbor job did not complete successfully: 1 errored; Without skill trial rn-basic__59JHTSp: RuntimeError: Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs: #25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #26 [26/27] COPY skills/ /root/.config/opencode/skills/ #26 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #27 [24/27] COPY skills/ /root/.claude/skills/ #27 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found  #28 [18/2"
+    ],
+    "suggestions_v2": []
+  },
+  "report_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141159_86801_702d14d01af5/report.html",
+  "report_status": "complete",
+  "duration_seconds": 63.225,
+  "result_projection": {
+    "schema_version": "1.0",
+    "mode": "inline",
+    "returned_result": "full",
+    "persisted_result": "inline",
+    "agents": {},
+    "omitted_detail_fields": {},
+    "omitted_root_detail_fields": []
+  }
+}

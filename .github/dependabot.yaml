@@ -53,6 +53,22 @@ updates:
           - "minor"
           - "patch"
 
+  # The reporting UI. Versions must be at least two weeks old when pinned (ui/README.md).
+  - package-ecosystem: "npm"
+    directory: "/ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 14
+    labels:
+      - "dependencies"
+    groups:
+      npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
   - package-ecosystem: "docker"
     directory: "/controller"
     schedule:

@@ -1,0 +1,9 @@
+{
+  "copied": [],
+  "skipped": [
+    {
+      "name": "trajectory.json",
+      "reason": "missing_single_step_trajectory"
+    }
+  ]
+}

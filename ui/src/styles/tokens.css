@@ -1,0 +1,131 @@
+/* Design tokens. Light by default, dark when the system asks for it, and either
+   one when the viewer picks it (data-theme on <html>, set by src/theme.ts).
+   Status colors never carry meaning alone: pair them with an icon and text. */
+:root {
+  color-scheme: light;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --line: 1.45;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --radius: 4px;
+  --focus-width: 2px;
+
+  --bg: #ffffff;
+  --bg-subtle: #f6f8fa;
+  --bg-raised: #ffffff;
+  --bg-code: #f3f4f6;
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --border: #d1d9e0;
+  --border-strong: #8c959f;
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --focus: #0969da;
+
+  --ok: #1a7f37;
+  --ok-bg: #dafbe1;
+  --bad: #cf222e;
+  --bad-bg: #ffebe9;
+  --warn: #9a6700;
+  --warn-bg: #fff8c5;
+  --info: #0969da;
+  --info-bg: #ddf4ff;
+  --neutral: #59636e;
+  --neutral-bg: #eff2f5;
+
+  /* Log categories. */
+  --cat-msg: #0969da;
+  --cat-user: #8250df;
+  --cat-think: #59636e;
+  --cat-tools: #1a7f37;
+  --cat-web: #bc4c00;
+  --cat-pkg: #9a6700;
+  --cat-skill: #bf3989;
+  --cat-net: #cf222e;
+  --cat-judge: #1f6feb;
+  --cat-usage: #59636e;
+  --cat-meta: #8c959f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0d1117;
+    --bg-subtle: #151b23;
+    --bg-raised: #161b22;
+    --bg-code: #1c2128;
+    --fg: #e6edf3;
+    --fg-muted: #9198a1;
+    --border: #3d444d;
+    --border-strong: #656c76;
+    --accent: #4493f8;
+    --accent-fg: #0d1117;
+    --focus: #4493f8;
+    --ok: #3fb950;
+    --ok-bg: #12261e;
+    --bad: #f85149;
+    --bad-bg: #2d1416;
+    --warn: #d29922;
+    --warn-bg: #2b2111;
+    --info: #4493f8;
+    --info-bg: #121d2f;
+    --neutral: #9198a1;
+    --neutral-bg: #1c2128;
+    --cat-msg: #4493f8;
+    --cat-user: #ab7df8;
+    --cat-think: #9198a1;
+    --cat-tools: #3fb950;
+    --cat-web: #f0883e;
+    --cat-pkg: #d29922;
+    --cat-skill: #f778ba;
+    --cat-net: #f85149;
+    --cat-judge: #58a6ff;
+    --cat-usage: #9198a1;
+    --cat-meta: #656c76;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --bg-subtle: #151b23;
+  --bg-raised: #161b22;
+  --bg-code: #1c2128;
+  --fg: #e6edf3;
+  --fg-muted: #9198a1;
+  --border: #3d444d;
+  --border-strong: #656c76;
+  --accent: #4493f8;
+  --accent-fg: #0d1117;
+  --focus: #4493f8;
+  --ok: #3fb950;
+  --ok-bg: #12261e;
+  --bad: #f85149;
+  --bad-bg: #2d1416;
+  --warn: #d29922;
+  --warn-bg: #2b2111;
+  --info: #4493f8;
+  --info-bg: #121d2f;
+  --neutral: #9198a1;
+  --neutral-bg: #1c2128;
+  --cat-msg: #4493f8;
+  --cat-user: #ab7df8;
+  --cat-think: #9198a1;
+  --cat-tools: #3fb950;
+  --cat-web: #f0883e;
+  --cat-pkg: #d29922;
+  --cat-skill: #f778ba;
+  --cat-net: #f85149;
+  --cat-judge: #58a6ff;
+  --cat-usage: #9198a1;
+  --cat-meta: #656c76;
+}

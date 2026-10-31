@@ -30,6 +30,11 @@ MARKDOWNLINT ?= npx --yes markdownlint-cli2@0.24.0
 ACTIONLINT ?= actionlint
 GORELEASER ?= goreleaser
 
+# Reporting UI (ui/): Node at the release in ui/.nvmrc. SKILLCI_API=http://localhost:8082 makes
+# ui-dev proxy a port-forwarded controller (make reports-ui) instead of serving the fixtures.
+NPM ?= npm
+SKILLCI_API ?=
+
 .PHONY: help
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -104,13 +109,29 @@ sandbox-image: ## Build the generic sandbox image locally (needs docker; the rel
 lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
 	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh sandbox/*.sh
 	$(YAMLLINT) -c .yamllint.yaml infra demo .github .goreleaser.yaml .yamllint.yaml .markdownlint.yaml
-	$(MARKDOWNLINT) README.md DEMO.md "docs/*.md" deploy/README.md "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
+	$(MARKDOWNLINT) README.md DEMO.md "docs/*.md" deploy/README.md ui/README.md "testdata/*/README.md" "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
 
 .PHONY: lint-workflows
 lint-workflows: ## actionlint on .github/workflows (needs actionlint)
 	$(ACTIONLINT)
+
+.PHONY: ui-install
+ui-install: ## Install the UI dependencies from ui/package-lock.json (npm ci)
+	cd ui && $(NPM) ci
+
+.PHONY: ui-build
+ui-build: ## Build the UI into controller/internal/reportsite/web/dist, which go build embeds
+	cd ui && $(NPM) run build
+
+.PHONY: ui-test
+ui-test: ## UI lint, typecheck and tests (eslint, tsc --noEmit, vitest)
+	cd ui && $(NPM) run lint && $(NPM) run typecheck && $(NPM) run test
+
+.PHONY: ui-dev
+ui-dev: ## UI dev server on :5173 with the fixture API (SKILLCI_API=http://localhost:8082 proxies a controller)
+	cd ui && SKILLCI_API="$(SKILLCI_API)" $(NPM) run dev
 
 .PHONY: release-snapshot
 release-snapshot: ## Dry-run the release: controller binaries, archives and image, no publish or signing (needs goreleaser, docker)

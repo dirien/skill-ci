@@ -1,0 +1,88 @@
+{
+  "schema": "skillci.trials.index.v1",
+  "skill": "acme-release-notes",
+  "version": "v1.1.0",
+  "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+  "eval": "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+  "agent": "opencode",
+  "agentVersion": "1.19.1",
+  "model": "ollama-cloud/gpt-oss:120b",
+  "entry": "opencode@1.19.1/ollama-cloud/gpt-oss:120b",
+  "runId": "synthetic-opencode-0001",
+  "evaluatedAt": "2026-10-30T16:10:39.600Z",
+  "evaluator": {
+    "version": "0.6.0",
+    "metricSet": "skill-evaluator-default-v2",
+    "scorePolicy": "skill-evaluator-dimension-mean-v1"
+  },
+  "attemptsPerCase": 1,
+  "redaction": "v1",
+  "credentials": [
+    {
+      "role": "agent",
+      "env": "OPENAI_API_KEY",
+      "host": "ollama.com"
+    },
+    {
+      "role": "judge",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    }
+  ],
+  "limits": {
+    "stringBytes": 32768,
+    "outputBytes": 8192,
+    "logTailBytes": 65536,
+    "exceptionBytes": 8192,
+    "trialBytes": 1048576,
+    "bundleBytes": 25165824,
+    "trialsPerArm": 50,
+    "flowRows": 200
+  },
+  "cases": [
+    {
+      "id": "rn-basic",
+      "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+      "expectedBehaviors": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "There are exactly two sections, '## Added' then '## Fixed'",
+        "Each bullet ends with its ticket ID in square brackets"
+      ],
+      "expectedSkill": "acme-release-notes"
+    }
+  ],
+  "trials": [
+    {
+      "id": "rn-basic__Op4mZ8e",
+      "layer": "trial-rn-basic__Op4mZ8e.json.gz",
+      "arm": "with-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "scored",
+      "score": 0.92,
+      "passed": true,
+      "startedAt": "2026-10-30T16:08:40.001Z",
+      "durationSec": 119.1,
+      "agentSec": 20.5,
+      "steps": 6,
+      "toolCalls": 4,
+      "tokensIn": 32043,
+      "tokensOut": 330,
+      "tokensCached": 24960,
+      "criteria": {
+        "passed": 4,
+        "total": 4
+      },
+      "skillInvoked": true,
+      "bytes": 4220,
+      "rawBytes": 43975,
+      "truncated": true
+    }
+  ],
+  "withheld": [],
+  "network": {
+    "state": "unavailable",
+    "reason": "Hubble Relay hubble-relay.kube-system.svc.cluster.local:80 did not answer within 10s"
+  }
+}

@@ -195,7 +195,7 @@ func main() {
 
 // newReportSite builds the read-only reporting website over the manager's
 // cached client, the Harbor API and the report referrers in the registry.
-func newReportSite(mgr ctrl.Manager, addr, harborURL string, cfg controller.Config, registry harbor.Client) (*reportsite.Server, error) {
+func newReportSite(mgr ctrl.Manager, addr, harborURL, modelsCM string, spa bool, cfg controller.Config, registry harbor.Client) (*reportsite.Server, error) {
 	reports, err := reportstore.New(reportstore.Options{
 		RegistryURL: harborURL, Project: cfg.Project,
 		Username: os.Getenv("HARBOR_USERNAME"), Password: os.Getenv("HARBOR_PASSWORD"),
@@ -205,7 +205,8 @@ func newReportSite(mgr ctrl.Manager, addr, harborURL string, cfg controller.Conf
 	}
 	site, err := reportsite.New(reportsite.Config{
 		Addr: addr, Reader: mgr.GetClient(), Namespace: cfg.Namespace, Project: cfg.Project,
-		Harbor: registry, Reports: reports, Thresholds: cfg.Thresholds, Platform: cfg.Platform, Log: ctrl.Log.WithName("reports"),
+		Harbor: registry, Reports: reports, Bundles: reports, Thresholds: cfg.Thresholds, Platform: cfg.Platform, Log: ctrl.Log.WithName("reports"),
+		SPA: spa, Version: version, ModelsConfigMap: modelsCM,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating reports site: %w", err)
@@ -220,6 +221,7 @@ func run() error {
 		harborURL, runnerImage, sandboxImage, pullSecrets, modelsCM, webhookAddr, metricsAddr, reportsAddr string
 		trialBudget                                                                                        int
 		leaderElect                                                                                        bool
+		reportsUI                                                                                          string
 		otlp                                                                                               otlpFlags
 		preinstalled                                                                                       string
 	)
@@ -245,6 +247,7 @@ func run() error {
 	flag.StringVar(&webhookAddr, "webhook-addr", ":8080", "Address for the webhook and health endpoints.")
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")
 	flag.StringVar(&reportsAddr, "reports-addr", ":8082", "Address for the reporting website; empty disables it.")
+	flag.StringVar(&reportsUI, "reports-ui", "html", "Pages of the reporting website: html (server-rendered) or spa (the embedded single page app). Transitional, until the single page app replaces the server-rendered pages.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election (needed only with several replicas).")
 	flag.StringVar(&preinstalled, "preinstalled-agents", strings.Join(network.DefaultPreinstalledAgents, ","),
 		"Comma separated agent@version pins in the sandbox image; another agent version adds the SkillCIConfig network.agentInstallHosts to none and allowlist.")
@@ -255,6 +258,9 @@ func run() error {
 	cfg.Thresholds = th
 	if th.Confidence <= 0 || th.Confidence >= 1 {
 		return fmt.Errorf("invalid --confidence %v: must be between 0 and 1", th.Confidence)
+	}
+	if reportsUI != "html" && reportsUI != "spa" {
+		return fmt.Errorf("invalid --reports-ui %q: must be html or spa", reportsUI)
 	}
 	pins := network.SplitList(preinstalled)
 	if err := validatePins(pins); err != nil {
@@ -339,7 +345,7 @@ func run() error {
 	}
 
 	if reportsAddr != "" {
-		site, err := newReportSite(mgr, reportsAddr, harborURL, cfg, registry)
+		site, err := newReportSite(mgr, reportsAddr, harborURL, modelsCM, reportsUI == "spa", cfg, registry)
 		if err != nil {
 			return err
 		}

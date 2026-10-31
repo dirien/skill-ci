@@ -1,0 +1,7 @@
+{
+  "error": {
+    "status": 404,
+    "code": "not_found",
+    "message": "No run named nope in skill-ci. Runs are removed when their SkillEval is deleted."
+  }
+}

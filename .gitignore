@@ -6,6 +6,11 @@ __pycache__/
 .pytest_cache/
 # Go
 controller/bin/
+# UI: dependencies, and the build the controller embeds (make ui-build). The
+# controller serves web/ui-placeholder.html when the build is missing.
+ui/node_modules/
+ui/coverage/
+controller/internal/reportsite/web/dist/
 # Local results and secrets
 results/
 *.kubeconfig

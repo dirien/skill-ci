@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "skill": "acme-release-notes",
+      "stable": "v1.0.0",
+      "beta": "v1.1.0",
+      "newest": "v1.2.0",
+      "versions": 3,
+      "runs": 5,
+      "active": 0,
+      "lastRunAt": "2026-10-30T14:11:40Z",
+      "heldBack": [],
+      "rejected": [],
+      "required": {
+        "passed": 0,
+        "total": 1
+      }
+    },
+    {
+      "skill": "k8s-resource-naming",
+      "newest": "v1.0.0",
+      "versions": 1,
+      "runs": 1,
+      "active": 1,
+      "lastRunAt": "2026-10-31T08:52:10Z",
+      "heldBack": [],
+      "rejected": [],
+      "required": {
+        "passed": 0,
+        "total": 1
+      }
+    },
+    {
+      "skill": "python-docstrings",
+      "stable": "v1.0.0",
+      "beta": "v1.0.0",
+      "newest": "v1.1.0",
+      "versions": 1,
+      "runs": 1,
+      "active": 0,
+      "lastRunAt": "2026-10-29T11:00:00Z",
+      "heldBack": [],
+      "rejected": [
+        "v1.1.0"
+      ],
+      "required": {
+        "passed": 0,
+        "total": 1
+      }
+    }
+  ]
+}

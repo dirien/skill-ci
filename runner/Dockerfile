@@ -57,7 +57,8 @@ RUN gitleaks version | grep -qx "${GITLEAKS_VERSION}" \
 COPY runner/check_patch.py /tmp/check_patch.py
 RUN python /tmp/check_patch.py && rm /tmp/check_patch.py
 
-COPY runner/skill_eval.py /usr/local/bin/skill_eval.py
+# skill_eval.py imports its sibling modules from the same directory.
+COPY runner/skill_eval.py runner/trial_bundle.py runner/flows.py /usr/local/bin/
 
 # The release this image belongs to: the release workflow passes the tag, and the runner runs
 # its trials in the sandbox image of the same release.

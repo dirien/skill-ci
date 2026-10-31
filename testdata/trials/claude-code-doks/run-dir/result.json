@@ -1,0 +1,575 @@
+{
+  "agents": {
+    "claude-code": {
+      "model": "claude-haiku-5-5",
+      "model_source": "CLI",
+      "model_resolution": {
+        "model": "claude-haiku-5-5",
+        "source": "CLI"
+      },
+      "with_skill": {
+        "security": 1.0,
+        "skill_execution": 1.0,
+        "skill_efficiency": 0.75,
+        "accuracy": 1.0,
+        "goal_accuracy": 1.0,
+        "behavior_check": 1.0
+      },
+      "without_skill": {
+        "security": 1.0,
+        "skill_execution": 0.0,
+        "skill_efficiency": 0.25,
+        "accuracy": 0.4,
+        "goal_accuracy": 0.05,
+        "behavior_check": 0.25
+      },
+      "overall_with_skill": 0.95,
+      "overall_without_skill": 0.36,
+      "metrics_with_skill": [
+        "security",
+        "skill_execution",
+        "skill_efficiency",
+        "accuracy",
+        "goal_accuracy",
+        "behavior_check"
+      ],
+      "metrics_without_skill": [
+        "security",
+        "skill_execution",
+        "skill_efficiency",
+        "accuracy",
+        "goal_accuracy",
+        "behavior_check"
+      ],
+      "score_policy_with_skill": "skill-evaluator-dimension-mean-v1",
+      "score_policy_without_skill": "skill-evaluator-dimension-mean-v1",
+      "custom_with_skill": {},
+      "custom_without_skill": {},
+      "dimensions_with_skill": {
+        "security": {
+          "score": 1.0,
+          "sources": {
+            "security": 1.0
+          }
+        },
+        "correctness": {
+          "score": 1.0,
+          "sources": {
+            "accuracy": 1.0
+          }
+        },
+        "discoverability": {
+          "score": 1.0,
+          "sources": {
+            "skill_execution": 1.0
+          }
+        },
+        "effectiveness": {
+          "score": 1.0,
+          "sources": {
+            "goal_accuracy": 0.5,
+            "behavior_check": 0.5
+          }
+        },
+        "efficiency": {
+          "score": 0.75,
+          "sources": {
+            "skill_efficiency": 1.0
+          }
+        }
+      },
+      "dimensions_without_skill": {
+        "security": {
+          "score": 1.0,
+          "sources": {
+            "security": 1.0
+          }
+        },
+        "correctness": {
+          "score": 0.4,
+          "sources": {
+            "accuracy": 1.0
+          }
+        },
+        "discoverability": {
+          "score": 0.0,
+          "sources": {
+            "skill_execution": 1.0
+          }
+        },
+        "effectiveness": {
+          "score": 0.15,
+          "sources": {
+            "goal_accuracy": 0.5,
+            "behavior_check": 0.5
+          }
+        },
+        "efficiency": {
+          "score": 0.25,
+          "sources": {
+            "skill_efficiency": 1.0
+          }
+        }
+      },
+      "skill_activation": {
+        "status": "activated",
+        "positive_trials": 1,
+        "activated_trials": 1,
+        "unknown_trials": 0,
+        "reason": "Skill activation observed in with-skill trials"
+      },
+      "lift": {
+        "security": {
+          "with_skill": 1.0,
+          "without_skill": 1.0,
+          "delta": 0.0,
+          "direction": "flat"
+        },
+        "skill_execution": {
+          "with_skill": 1.0,
+          "without_skill": 0.0,
+          "delta": 1.0,
+          "direction": "up"
+        },
+        "skill_efficiency": {
+          "with_skill": 0.75,
+          "without_skill": 0.25,
+          "delta": 0.5,
+          "direction": "up"
+        },
+        "accuracy": {
+          "with_skill": 1.0,
+          "without_skill": 0.4,
+          "delta": 0.6,
+          "direction": "up"
+        },
+        "goal_accuracy": {
+          "with_skill": 1.0,
+          "without_skill": 0.05,
+          "delta": 0.95,
+          "direction": "up"
+        },
+        "behavior_check": {
+          "with_skill": 1.0,
+          "without_skill": 0.25,
+          "delta": 0.75,
+          "direction": "up"
+        },
+        "overall": {
+          "with_skill": 0.95,
+          "without_skill": 0.36,
+          "delta": 0.59
+        }
+      },
+      "custom_lift": {},
+      "pass_at_k": {
+        "with_skill": {
+          "k": 1,
+          "pass_threshold": 0.5,
+          "stop_on_pass": false,
+          "passed_cases": 1,
+          "failed_cases": 0,
+          "total_cases": 1,
+          "rate": 1.0,
+          "rate_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "lower": 0.20654931437723745,
+            "upper": 1.0
+          },
+          "attempts_used": 1,
+          "max_attempts_possible": 1,
+          "avg_attempts_used": 1.0,
+          "extra_case_count": 0,
+          "extra_cases": [],
+          "extra_cases_truncated": false,
+          "case_details_total": 1,
+          "case_details_shown": 1,
+          "case_details_truncated": false,
+          "case_details_limit": 256,
+          "cases": {
+            "rn-basic": {
+              "passed": true,
+              "first_pass_attempt": 1,
+              "attempts_used": 1,
+              "attempts_skipped": 0,
+              "attempts_missing": 0,
+              "best_score": 0.95,
+              "attempts": [
+                {
+                  "attempt": 1,
+                  "trial": "rn-basic__sryqofs",
+                  "score": 0.95,
+                  "passed": true
+                }
+              ],
+              "attempt_details_total": 1,
+              "attempt_details_shown": 1,
+              "attempt_details_truncated": false
+            }
+          }
+        },
+        "without_skill": {
+          "k": 1,
+          "pass_threshold": 0.5,
+          "stop_on_pass": false,
+          "passed_cases": 0,
+          "failed_cases": 1,
+          "total_cases": 1,
+          "rate": 0.0,
+          "rate_interval": {
+            "method": "wilson_score",
+            "confidence_level": 0.95,
+            "lower": 0.0,
+            "upper": 0.7934506856227626
+          },
+          "attempts_used": 1,
+          "max_attempts_possible": 1,
+          "avg_attempts_used": 1.0,
+          "extra_case_count": 0,
+          "extra_cases": [],
+          "extra_cases_truncated": false,
+          "case_details_total": 1,
+          "case_details_shown": 1,
+          "case_details_truncated": false,
+          "case_details_limit": 256,
+          "cases": {
+            "rn-basic": {
+              "passed": false,
+              "first_pass_attempt": null,
+              "attempts_used": 1,
+              "attempts_skipped": 0,
+              "attempts_missing": 0,
+              "best_score": 0.36,
+              "attempts": [
+                {
+                  "attempt": 1,
+                  "trial": "rn-basic__BQbpoR9",
+                  "score": 0.36,
+                  "passed": false
+                }
+              ],
+              "attempt_details_total": 1,
+              "attempt_details_shown": 1,
+              "attempt_details_truncated": false
+            }
+          }
+        },
+        "lift": {
+          "with_skill": 1.0,
+          "without_skill": 0.0,
+          "delta": 1.0,
+          "count_derived_delta": 1.0,
+          "passed_cases_delta": 1,
+          "paired_comparison": {
+            "pairing_status": "complete",
+            "paired_cases": 1,
+            "with_skill_unpaired_case_count": 0,
+            "without_skill_unpaired_case_count": 0,
+            "with_skill_unpaired_case_ids": [],
+            "without_skill_unpaired_case_ids": [],
+            "with_skill_unpaired_case_ids_truncated": false,
+            "without_skill_unpaired_case_ids_truncated": false,
+            "with_skill_unidentified_cases": 0,
+            "without_skill_unidentified_cases": 0,
+            "both_pass": 0,
+            "with_skill_only_pass": 1,
+            "without_skill_only_pass": 0,
+            "neither_pass": 0,
+            "discordant_cases": 1,
+            "paired_rate_delta": 1.0,
+            "mcnemar_exact": {
+              "method": "two_sided_exact_binomial",
+              "null_hypothesis": "equal marginal pass probabilities",
+              "p_value": 1.0,
+              "p_value_text": "1",
+              "p_value_exact": "1",
+              "p_value_exact_omitted": false,
+              "p_value_numeric_underflow": false,
+              "minimum_attainable_p_value": 1.0,
+              "minimum_attainable_p_value_text": "1",
+              "minimum_attainable_p_value_exact": "1",
+              "minimum_attainable_p_value_exact_omitted": false,
+              "minimum_attainable_p_value_numeric_underflow": false,
+              "resolution_limited_at_alpha_0_05": true
+            }
+          }
+        }
+      },
+      "security_attribution": {
+        "likely_skill_related": 0,
+        "likely_baseline_prompt_or_environment": 0,
+        "skill_may_have_improved_safety": 0,
+        "ambiguous_with_skill_only": 0,
+        "unknown_no_baseline": 0,
+        "cases": {
+          "rn-basic": {
+            "status": "safe",
+            "with_skill_findings": 0,
+            "baseline_findings": 0
+          }
+        },
+        "case_details_total": 1,
+        "case_details_shown": 1,
+        "case_details_truncated": false,
+        "case_details_limit": 256
+      },
+      "agent_runtime_failures": {
+        "with_skill": [],
+        "without_skill": []
+      },
+      "trial_failures": {
+        "with_skill": [],
+        "without_skill": []
+      },
+      "failure_detail_metadata": {
+        "with_skill_runtime": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        },
+        "without_skill_runtime": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        },
+        "with_skill_trials": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        },
+        "without_skill_trials": {
+          "details_total": 0,
+          "details_shown": 0,
+          "details_truncated": false
+        }
+      },
+      "job_failures": {
+        "with_skill": "",
+        "without_skill": ""
+      },
+      "conditions": {
+        "with_skill": {
+          "execution_status": "succeeded",
+          "execution_errors": [],
+          "execution_error_details_total": 0,
+          "execution_error_details_shown": 0,
+          "execution_error_details_truncated": false,
+          "expected_attempts": 1,
+          "scored_attempts": 1,
+          "runtime_failure_details_total": 0,
+          "runtime_failure_details_shown": 0,
+          "runtime_failure_details_truncated": false,
+          "reward_failure_details_total": 0,
+          "reward_failure_details_shown": 0,
+          "reward_failure_details_truncated": false
+        },
+        "without_skill": {
+          "execution_status": "succeeded",
+          "execution_errors": [],
+          "execution_error_details_total": 0,
+          "execution_error_details_shown": 0,
+          "execution_error_details_truncated": false,
+          "expected_attempts": 1,
+          "scored_attempts": 1,
+          "runtime_failure_details_total": 0,
+          "runtime_failure_details_shown": 0,
+          "runtime_failure_details_truncated": false,
+          "reward_failure_details_total": 0,
+          "reward_failure_details_shown": 0,
+          "reward_failure_details_truncated": false
+        }
+      },
+      "execution_status": "succeeded",
+      "execution_errors": [],
+      "execution_error_details_total": 0,
+      "execution_error_details_shown": 0,
+      "execution_error_details_truncated": false,
+      "expected_attempts": 2,
+      "scored_attempts": 2,
+      "num_trials_with": 1,
+      "num_trials_without": 1,
+      "output_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd/claude-code"
+    }
+  },
+  "metric_set": "skill-evaluator-default-v2",
+  "metrics": [
+    "security",
+    "skill_execution",
+    "skill_efficiency",
+    "accuracy",
+    "goal_accuracy",
+    "behavior_check"
+  ],
+  "score_policy": "skill-evaluator-dimension-mean-v1",
+  "attempt_policy": {
+    "max_attempts": 1,
+    "pass_threshold": 0.5,
+    "stop_on_pass": false,
+    "score_definition": "overall = mean(Security, Correctness, Discoverability, Effectiveness, Efficiency) [skill-evaluator-dimension-mean-v1]",
+    "score_policy": "skill-evaluator-dimension-mean-v1"
+  },
+  "execution_status": "succeeded",
+  "execution_errors": [],
+  "execution_error_details_total": 0,
+  "execution_error_details_shown": 0,
+  "execution_error_details_truncated": false,
+  "expected_attempts": 2,
+  "scored_attempts": 2,
+  "skill_name": "acme-release-notes",
+  "run_id": "20261030_141344_87205_2043595da5fd",
+  "publication_target": {
+    "skill_name": "acme-release-notes",
+    "skill_digest": "sha256:591ef3c27cf92eaf63653bd8bd88849a1f408ce1a2a03606fe8dcfdd7c7d303b",
+    "skill_digest_algorithm": "skill-evaluator-source-tree/2"
+  },
+  "run_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd",
+  "result_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd/result.json",
+  "harbor_jobs_dir": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd/_harbor-jobs",
+  "harbor_jobs_retained": true,
+  "evaluated_at": "2026-10-30T14:21:18.734791+00:00",
+  "evaluator_version": "0.6.0",
+  "dataset_snapshot": {
+    "schema_version": "1.0",
+    "evaluator_version": "0.6.0",
+    "dataset_summary": {
+      "total_tasks": 1,
+      "positive_tasks": 1,
+      "negative_tasks": 0,
+      "unclassified_tasks": 0,
+      "source": "dataset"
+    },
+    "dataset_digest": "sha256:dafe740040c577222a4ac296450767191edd245c1fa3b4a032dfb20babc6a244",
+    "dataset_digest_algorithm": "skill-evaluator-dataset-snapshot/1"
+  },
+  "dataset_snapshot_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd/dataset_snapshot.json",
+  "dataset_summary": {
+    "total_tasks": 1,
+    "positive_tasks": 1,
+    "negative_tasks": 0,
+    "unclassified_tasks": 0,
+    "source": "dataset"
+  },
+  "dataset_digest": "sha256:dafe740040c577222a4ac296450767191edd245c1fa3b4a032dfb20babc6a244",
+  "dataset_digest_algorithm": "skill-evaluator-dataset-snapshot/1",
+  "run_config": {
+    "config_file": "none",
+    "harbor": {
+      "environment": {
+        "value": "ack",
+        "source": "CLI"
+      },
+      "environment_kwargs": {
+        "keys": [
+          "image_pull_secret",
+          "kubeconfig",
+          "namespace",
+          "registry",
+          "skip_image_check"
+        ],
+        "sources": {
+          "namespace": "CLI",
+          "registry": "CLI",
+          "image_pull_secret": "CLI",
+          "skip_image_check": "CLI",
+          "kubeconfig": "CLI"
+        }
+      },
+      "n_attempts": 1,
+      "stop_on_pass": false,
+      "n_concurrent": 4,
+      "timeout_multiplier": 1.0,
+      "base_image_mode": "disabled",
+      "jobs_retained": true
+    },
+    "provider": {
+      "name": "anthropic",
+      "model": "claude-opus-5-5"
+    },
+    "judge": {
+      "enabled": true,
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "source": "provider default",
+      "override_applied": false,
+      "reasoning_effort": "medium",
+      "catalog_verification": "verified"
+    },
+    "credential_validation": {
+      "status": "verified",
+      "targets": [
+        {
+          "labels": [
+            "claude-code"
+          ],
+          "provider": "anthropic",
+          "model": "claude-haiku-5-5",
+          "status": "verified",
+          "detail": "model claude-haiku-5-5 is available"
+        },
+        {
+          "labels": [
+            "standard grader"
+          ],
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "status": "verified",
+          "detail": "model claude-opus-5-5 is available"
+        }
+      ]
+    },
+    "task_source": "evals_json",
+    "grading": {
+      "mode": "default"
+    },
+    "agents": {
+      "claude-code": {
+        "agent": "claude-code",
+        "model": "claude-haiku-5-5",
+        "source": "CLI"
+      }
+    },
+    "evaluated_source": null
+  },
+  "harbor_jobs_retention_reason": "explicit_keep",
+  "tier3_feedback": {
+    "schema_version": "1.0",
+    "conclusions": [
+      {
+        "severity": "pass",
+        "title": "Best performing agent",
+        "message": "claude-code leads with overall score 0.95 and lift +0.59."
+      },
+      {
+        "severity": "warn",
+        "title": "Weakest dimension",
+        "message": "Efficiency is lowest at 0.75. Scored 0.75 \u2014 PASS, at or above the 0.50 pass threshold. +0.50 lift over baseline 0.25. Strongest signal: skill_efficiency 0.75."
+      }
+    ],
+    "recommendations": [
+      {
+        "title": "Skill performance is healthy across all evaluated dimensions; consider expanding eval cove",
+        "message": "Skill performance is healthy across all evaluated dimensions; consider expanding eval coverage.",
+        "category": "Action",
+        "severity": "warn",
+        "source": "deterministic"
+      }
+    ],
+    "suggestions": [
+      "Skill performance is healthy across all evaluated dimensions; consider expanding eval coverage."
+    ],
+    "suggestions_v2": []
+  },
+  "report_path": "/tmp/skill-eval-k3x9q2ab/results/acme-release-notes/20261030_141344_87205_2043595da5fd/report.html",
+  "report_status": "complete",
+  "duration_seconds": 460.235,
+  "result_projection": {
+    "schema_version": "1.0",
+    "mode": "inline",
+    "returned_result": "full",
+    "persisted_result": "inline",
+    "agents": {},
+    "omitted_detail_fields": {},
+    "omitted_root_detail_fields": []
+  }
+}

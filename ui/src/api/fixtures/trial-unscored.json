@@ -1,0 +1,189 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+    "skill": "acme-release-notes",
+    "version": "v1.2.0",
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "entry": "claude-code@2.1.292/claude-haiku-5-5",
+    "job": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+    "currentJob": true
+  },
+  "trial": {
+    "id": "rn-basic__CbK6FQ2",
+    "arm": "with-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "status": "unscored",
+    "errorType": "RuntimeError",
+    "durationSec": 61.7,
+    "steps": 0,
+    "toolCalls": 0,
+    "costEstimated": false,
+    "hasSession": true,
+    "dropped": 0
+  },
+  "header": {
+    "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+    "status": "unscored",
+    "dimensions": [],
+    "error": {
+      "type": "RuntimeError",
+      "message": "Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs:\n#26 [16/27] COPY skills/ /root/.claude/skills/\n#26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#27 [25/27] COPY skills/ /root/.agents/skills/\n#27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#28 [24/27] COPY skills/ /root/.claude/skills/\n#28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#29 [23/27] COPY skills/ /workspace/skills/\n#29 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#30 [ 1/27] FROM docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159\n#30 resolve docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 0.0s done\n#30 sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 10.37kB / 10.37kB done\n#30 sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b 1.75kB / 1.75kB done\n#30 CANCELED\n------\n > [15/27] COPY skills/ /workspace/skills/:\n------\n------\n > [16/27] COPY skills/ /root/.claude/skills/:\n------\n------\n > [17/27] COPY skills/ /root/.agents/skills/:\n------\n------\n > [18/27] COPY skills/ /root/.config/opencode/skills/:\n------\n------\n > [23/27] COPY skills/ /workspace/skills/:\n------\n------\n > [24/27] COPY skills/ /root/.claude/skills/:\n------\n------\n > [25/27] COPY skills/ /root/.agents/skills/:\n------\n------\n > [26/27] COPY skills/ /root/.config/opencode/skills/:\n------\nDockerfile:35\n--------------------\n  33 |     COPY skills/ /root/.claude/skills/\n  34 |     COPY skills/ /root/.agents/skills/\n  35 | >>> COPY skills/ /root/.config/opencode/skills/\n  36 |     ENV BASH_ENV=\"\" CLASSPATH=\"\" DYLD_INSERT_LIBRARIES=\"\" ENV=\"\" GCONV_PATH=\"\" JAVA_TOOL_OPTIONS=\"\" LD_AUDIT=\"\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" LOCPATH=\"\" LUA_CPATH=\"\" LUA_INIT=\"\" LUA_PATH=\"\" NLSPATH=\"\" NODE_OPTIONS=\"\" PERL5LIB=\"\" PERL5OPT=\"\" PYTHONHOME=\"\" PYTHONINSPECT=\"\" PYTHONPATH=\"\" PYTHONSTARTUP=\"\" RUBYLIB=\"\" RUBYOPT=\"\" ZDOTDIR=\"\" _JAVA_OPTIONS=\"\"\n  37 |     ENV CLAUDE_CODE_DISABLE_POLICY_SKILLS=\"1\"\n--------------------\nERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n",
+      "occurredAt": "2026-10-30T14:12:41.347116Z",
+      "traceback": "Traceback (most recent call last):\n  File \"/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py\", line 497, in run\n    await self._prepare()\n  File \"/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py\", line 536, in _prepare\n    await self._setup_agent_environment()\n  File \"/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1684, in _setup_agent_environment\n    await self._start_agent_environment()\n  File \"/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py\", line 1690, in _start_agent_environment\n    await asyncio.wait_for(\n  File \"/usr/local/lib/python3.12/asyncio/tasks.py\", line 520, in wait_for\n    return await fut\n           ^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/harbor_agent_sandbox/environment.py\", line 133, in start\n    await self._ensure_image(force_build)\n  File \"/usr/local/lib/python3.12/site-packages/harbor_agent_sandbox/environment.py\", line 116, in _ensure_image\n    await self._build_and_push_image()\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py\", line 232, in async_wrapped\n    return await copy(fn, *args, **kwargs)  # type: ignore[type-var]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py\", line 126, in __call__\n    do = await self.iter(retry_state=retry_state)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py\", line 171, in iter\n    result = await action(retry_state)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/_utils.py\", line 130, in inner\n    return call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/__init__.py\", line 482, in exc_check\n    retry_exc.reraise()\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/__init__.py\", line 216, in reraise\n    raise self.last_attempt.result()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/concurrent/futures/_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py\", line 130, in __call__\n    result = await fn(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/local/lib/python3.12/site-packages/harbor/environments/ack.py\", line 1061, in _build_and_push_image\n    await self._wait_for_job(job_name, namespace)\n  File \"/usr/local/lib/python3.12/site-packages/harbor/environments/ack.py\", line 1263, in _wait_for_job\n    raise RuntimeError(f\"Build job {job_name} failed. Logs:\\n{log_msg}\")\nRuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs:\n#26 [16/27] COPY skills/ /root/.claude/skills/\n#26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#27 [25/27] COPY skills/ /root/.agents/skills/\n#27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#28 [24/27] COPY skills/ /root/.claude/skills/\n#28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#29 [23/27] COPY skills/ /workspace/skills/\n#29 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#30 [ 1/27] FROM docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159\n#30 resolve docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 0.0s done\n#30 sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 10.37kB / 10.37kB done\n#30 sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b 1.75kB / 1.75kB done\n#30 CANCELED\n------\n > [15/27] COPY skills/ /workspace/skills/:\n------\n------\n > [16/27] COPY skills/ /root/.claude/skills/:\n------\n------\n > [17/27] COPY skills/ /root/.agents/skills/:\n------\n------\n > [18/27] COPY skills/ /root/.config/opencode/skills/:\n------\n------\n > [23/27] COPY skills/ /workspace/skills/:\n------\n------\n > [24/27] COPY skills/ /root/.claude/skills/:\n------\n------\n > [25/27] COPY skills/ /root/.agents/skills/:\n------\n------\n > [26/27] COPY skills/ /root/.config/opencode/skills/:\n------\nDockerfile:35\n--------------------\n  33 |     COPY skills/ /root/.claude/skills/\n  34 |     COPY skills/ /root/.agents/skills/\n  35 | >>> COPY skills/ /root/.config/opencode/skills/\n  36 |     ENV BASH_ENV=\"\" CLASSPATH=\"\" DYLD_INSERT_LIBRARIES=\"\" ENV=\"\" GCONV_PATH=\"\" JAVA_TOOL_OPTIONS=\"\" LD_AUDIT=\"\" LD_LIBRARY_PATH=\"\" LD_PRELOAD=\"\" LOCPATH=\"\" LUA_CPATH=\"\" LUA_INIT=\"\" LUA_PATH=\"\" NLSPATH=\"\" NODE_OPTIONS=\"\" PERL5LIB=\"\" PERL5OPT=\"\" PYTHONHOME=\"\" PYTHONINSPECT=\"\" PYTHONPATH=\"\" PYTHONSTARTUP=\"\" RUBYLIB=\"\" RUBYOPT=\"\" ZDOTDIR=\"\" _JAVA_OPTIONS=\"\"\n  37 |     ENV CLAUDE_CODE_DISABLE_POLICY_SKILLS=\"1\"\n--------------------\nERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n"
+    }
+  },
+  "metadata": {
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "provider": "anthropic",
+    "arm": "with-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "attemptsPerCase": 1,
+    "skill": {
+      "state": "unknown"
+    },
+    "credentials": [
+      {
+        "role": "agent",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      },
+      {
+        "role": "judge",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      }
+    ],
+    "startedAt": "2026-10-30T14:11:59.40848Z",
+    "finishedAt": "2026-10-30T14:13:01.077223Z",
+    "durationSec": 61.7,
+    "phases": [
+      {
+        "name": "environment_setup",
+        "label": "Environment setup",
+        "startedAt": "2026-10-30T14:11:59.415773Z",
+        "finishedAt": "2026-10-30T14:12:41.34452Z",
+        "durationSec": 41.9
+      }
+    ],
+    "tokens": {},
+    "costEstimated": false,
+    "criteria": {
+      "passed": 0,
+      "total": 4
+    },
+    "trigger": "push",
+    "pushedBy": "release-bot"
+  },
+  "log": {
+    "entries": [],
+    "counts": [
+      {
+        "category": "msg",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "user",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "think",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "tools",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "web",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "pkg",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "skill",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "net",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "judge",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "usage",
+        "count": 0,
+        "focus": false
+      },
+      {
+        "category": "meta",
+        "count": 0,
+        "focus": false
+      }
+    ],
+    "jumps": {}
+  },
+  "criteria": {
+    "passed": 0,
+    "total": 4,
+    "behaviors": [
+      {
+        "index": 1,
+        "text": "RELEASE_NOTES.md exists"
+      },
+      {
+        "index": 2,
+        "text": "The first line is exactly 'ACME-RN/2 1.4.0'"
+      },
+      {
+        "index": 3,
+        "text": "There are exactly two sections, '## Added' then '## Fixed'"
+      },
+      {
+        "index": 4,
+        "text": "Each bullet ends with its ticket ID in square brackets"
+      }
+    ],
+    "behaviorSteps": [],
+    "checks": []
+  },
+  "findings": [
+    {
+      "kind": "friction",
+      "rule": "exception",
+      "title": "RuntimeError",
+      "detail": "Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs:\n#26 [16/27] COPY skills/ /root/.claude/skills/\n#26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#27 [25/27] COPY skills/ /root/.agents/skills/\n#27",
+      "steps": [],
+      "runLevel": false
+    }
+  ],
+  "files": [],
+  "judge": [],
+  "truncations": [],
+  "redaction": {
+    "version": "v1",
+    "exact": 0,
+    "pattern": 0,
+    "envDump": 0,
+    "render": 0
+  },
+  "downloads": {}
+}

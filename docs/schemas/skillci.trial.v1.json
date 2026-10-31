@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dirien/skill-ci/docs/schemas/skillci.trial.v1.json",
+  "title": "skill-ci trial document, v1",
+  "description": "One trial of a trial bundle: the JSON inside a trial-<id>.json.gz layer (media type application/vnd.skillci.trial.v1+gzip). See CONTRACT.md, \"Trial bundles\". JSON pointers in truncations are relative to this document; evidence pointers inside reward stay relative to the trajectory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "arm", "case", "attempt", "status", "meta", "prompt", "truncations", "redaction"],
+  "properties": {
+    "schema": {"const": "skillci.trial.v1"},
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "arm": {"enum": ["with-skill", "without-skill"]},
+    "case": {"type": "string", "minLength": 1},
+    "attempt": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["scored", "unscored", "error"]},
+    "meta": {"$ref": "#/$defs/meta"},
+    "prompt": {"type": "string"},
+    "trajectory": {"$ref": "#/$defs/trajectory"},
+    "trajectoryOmitted": {"type": "string", "minLength": 1, "description": "Why there is no trajectory"},
+    "reward": {"type": "object", "description": "reward.json as SkillEvaluator wrote it (scored trials)"},
+    "failure": {"type": "object", "description": "failure.json as SkillEvaluator wrote it (unscored trials)"},
+    "agentLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "text", "bytes", "truncated"],
+      "properties": {
+        "file": {"enum": ["claude-code.txt", "codex.txt", "opencode.txt"]},
+        "text": {"type": "string"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "truncations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pointer", "originalBytes"],
+        "properties": {
+          "pointer": {"type": "string", "pattern": "^(/[^/]*)+$"},
+          "originalBytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "exact", "pattern", "envDump"],
+      "description": "Counts of JSON string values each rule changed. Never values.",
+      "properties": {
+        "version": {"const": "v1"},
+        "exact": {"type": "integer", "minimum": 0},
+        "pattern": {"type": "integer", "minimum": 0},
+        "envDump": {"type": "integer", "minimum": 0}
+      }
+    },
+    "network": {"$ref": "#/$defs/network"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "scored"}}}, "then": {"required": ["reward"]}},
+    {"if": {"not": {"required": ["trajectory"]}}, "then": {"required": ["trajectoryOmitted"]}}
+  ],
+  "$defs": {
+    "time": {"type": "string", "format": "date-time"},
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phases", "agent"],
+      "properties": {
+        "taskName": {"type": "string"},
+        "startedAt": {"$ref": "#/$defs/time"},
+        "finishedAt": {"$ref": "#/$defs/time"},
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "startedAt", "finishedAt"],
+            "properties": {
+              "name": {"enum": ["environment_setup", "agent_setup", "agent_execution", "verifier"]},
+              "startedAt": {"$ref": "#/$defs/time"},
+              "finishedAt": {"$ref": "#/$defs/time"}
+            }
+          }
+        },
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": {"type": "string"},
+            "version": {"type": "string"},
+            "model": {"type": "string"},
+            "provider": {"type": "string"}
+          }
+        },
+        "agentResult": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tokensIn": {"type": "integer", "minimum": 0},
+            "tokensCached": {"type": "integer", "minimum": 0},
+            "tokensOut": {"type": "integer", "minimum": 0},
+            "costUsd": {"type": "number", "minimum": 0}
+          }
+        },
+        "exception": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "message"],
+          "properties": {
+            "type": {"type": "string"},
+            "message": {"type": "string"},
+            "occurredAt": {"$ref": "#/$defs/time"},
+            "traceback": {"type": "string"}
+          }
+        }
+      }
+    },
+    "trajectory": {
+      "type": "object",
+      "description": "ATIF as SkillEvaluator wrote it (ATIF-v1.5 to v1.8). Long strings are shortened in place, so step indices and pointers stay valid. Only the fields the controller reads are constrained; others pass through.",
+      "required": ["schema_version", "agent", "steps"],
+      "properties": {
+        "schema_version": {"type": "string", "pattern": "^ATIF-v1\\.[0-9]+$"},
+        "session_id": {"type": "string"},
+        "agent": {"type": "object", "required": ["name"]},
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step_id", "source"],
+            "properties": {
+              "step_id": {"type": "integer", "minimum": 1},
+              "source": {"enum": ["user", "agent", "system"]},
+              "tool_calls": {
+                "type": "array",
+                "items": {"type": "object", "required": ["tool_call_id", "function_name"]}
+              },
+              "observation": {
+                "type": "object",
+                "properties": {"results": {"type": "array", "items": {"type": "object"}}}
+              }
+            }
+          }
+        },
+        "final_metrics": {"type": "object"}
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "dns", "flows", "truncated", "lost"],
+      "properties": {
+        "state": {"enum": ["collected", "partial", "unavailable", "off"]},
+        "reason": {"type": "string"},
+        "source": {"const": "hubble"},
+        "from": {"$ref": "#/$defs/time"},
+        "to": {"$ref": "#/$defs/time"},
+        "dns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "count", "firstAt", "lastAt"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1},
+              "count": {"type": "integer", "minimum": 1},
+              "firstAt": {"$ref": "#/$defs/time"},
+              "lastAt": {"$ref": "#/$defs/time"},
+              "rcode": {"type": "string"}
+            }
+          }
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["verdict", "destination", "ip", "port", "protocol", "count", "firstAt", "lastAt"],
+            "properties": {
+              "verdict": {"enum": ["FORWARDED", "DROPPED", "ERROR", "AUDIT"]},
+              "destination": {"type": "string", "minLength": 1},
+              "ip": {"type": "string", "minLength": 1},
+              "port": {"type": "integer", "minimum": 0, "maximum": 65535},
+              "protocol": {"enum": ["TCP", "UDP", "ICMPv4", "ICMPv6", "SCTP"]},
+              "count": {"type": "integer", "minimum": 1},
+              "firstAt": {"$ref": "#/$defs/time"},
+              "lastAt": {"$ref": "#/$defs/time"},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "truncated": {"type": "boolean"},
+        "lost": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

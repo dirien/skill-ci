@@ -1,0 +1,216 @@
+{
+  "items": [
+    {
+      "name": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+      "skill": "acme-release-notes",
+      "version": "v1.2.0",
+      "digest": "sha256:bdda6c2ddfaa0b9489e7d77dd3432c630545c7588aa4bc445f8b56caf0e3df1d",
+      "agent": "claude-code",
+      "agentVersion": "2.1.292",
+      "model": "claude-haiku-5-5",
+      "entry": "claude-code@2.1.292/claude-haiku-5-5",
+      "required": true,
+      "attempts": 1,
+      "trigger": "push",
+      "phase": "Failed",
+      "tiers": {
+        "tier1": "passed",
+        "tier2": "passed",
+        "tier3": "incomplete"
+      },
+      "retries": 0,
+      "createdAt": "2026-10-30T14:11:40Z",
+      "hasReport": true,
+      "trials": "stored",
+      "ranVersion": "2.1.292",
+      "pushedBy": "release-bot",
+      "networkMode": "full",
+      "completedAt": "2026-10-30T14:13:20Z",
+      "durationSec": 100.0,
+      "message": "no scores in result.json: Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed."
+    },
+    {
+      "name": "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+      "skill": "acme-release-notes",
+      "version": "v1.1.0",
+      "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+      "agent": "opencode",
+      "agentVersion": "1.19.1",
+      "model": "ollama-cloud/gpt-oss:120b",
+      "entry": "opencode@1.19.1/ollama-cloud/gpt-oss:120b",
+      "required": false,
+      "attempts": 1,
+      "trigger": "push",
+      "phase": "Succeeded",
+      "tiers": {
+        "tier1": "passed",
+        "tier2": "passed",
+        "tier3": "passed"
+      },
+      "retries": 0,
+      "createdAt": "2026-10-30T14:08:02Z",
+      "hasReport": true,
+      "trials": "stored",
+      "ranVersion": "1.19.1",
+      "pushedBy": "release-bot",
+      "verdict": "Helps",
+      "withSkill": 0.92,
+      "withoutSkill": 0.41,
+      "lift": 0.51,
+      "publication": "passed",
+      "networkMode": "allowlist",
+      "completedAt": "2026-10-30T16:11:02Z",
+      "durationSec": 7380.0
+    },
+    {
+      "name": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+      "skill": "acme-release-notes",
+      "version": "v1.1.0",
+      "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+      "agent": "codex",
+      "agentVersion": "0.161.0",
+      "model": "openai/gpt-6.1-sol",
+      "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+      "required": false,
+      "attempts": 1,
+      "trigger": "push",
+      "phase": "Succeeded",
+      "tiers": {
+        "tier1": "passed",
+        "tier2": "passed",
+        "tier3": "passed"
+      },
+      "retries": 1,
+      "createdAt": "2026-10-30T14:08:02Z",
+      "hasReport": true,
+      "trials": "stored",
+      "ranVersion": "0.161.0",
+      "pushedBy": "release-bot",
+      "verdict": "Neutral",
+      "withSkill": 0.92,
+      "withoutSkill": 0.88,
+      "lift": 0.04,
+      "publication": "passed",
+      "networkMode": "allowlist",
+      "completedAt": "2026-10-30T15:03:40Z",
+      "durationSec": 3338.0
+    },
+    {
+      "name": "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+      "skill": "acme-release-notes",
+      "version": "v1.1.0",
+      "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+      "agent": "claude-code",
+      "agentVersion": "2.1.292",
+      "model": "claude-haiku-5-5",
+      "entry": "claude-code@2.1.292/claude-haiku-5-5",
+      "required": true,
+      "attempts": 1,
+      "trigger": "push",
+      "phase": "Succeeded",
+      "tiers": {
+        "tier1": "passed",
+        "tier2": "passed",
+        "tier3": "passed"
+      },
+      "retries": 0,
+      "createdAt": "2026-10-30T14:08:02Z",
+      "hasReport": true,
+      "trials": "stored",
+      "ranVersion": "2.1.292",
+      "pushedBy": "release-bot",
+      "verdict": "Helps",
+      "withSkill": 0.95,
+      "withoutSkill": 0.36,
+      "lift": 0.59,
+      "publication": "passed",
+      "networkMode": "full",
+      "completedAt": "2026-10-30T14:21:31Z",
+      "durationSec": 809.0
+    },
+    {
+      "name": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+      "skill": "acme-release-notes",
+      "version": "v1.0.0",
+      "digest": "sha256:0fb7e3f4ceabce11e194bc4ba99225d48d368511c4f3e32d02701d965bc0d890",
+      "agent": "claude-code",
+      "agentVersion": "2.1.292",
+      "model": "claude-haiku-5-5",
+      "entry": "claude-code@2.1.292/claude-haiku-5-5",
+      "required": true,
+      "attempts": 3,
+      "trigger": "push",
+      "phase": "Succeeded",
+      "tiers": {
+        "tier1": "passed",
+        "tier2": "passed",
+        "tier3": "passed"
+      },
+      "retries": 0,
+      "createdAt": "2026-10-28T09:12:00Z",
+      "hasReport": true,
+      "trials": "none",
+      "ranVersion": "2.1.292",
+      "verdict": "Helps",
+      "withSkill": 0.95,
+      "withoutSkill": 0.37,
+      "lift": 0.58,
+      "liftCI": {
+        "lower": 0.51,
+        "upper": 0.65,
+        "level": "95%"
+      },
+      "n": "3/3",
+      "publication": "passed",
+      "networkMode": "full",
+      "completedAt": "2026-10-28T09:41:12Z",
+      "durationSec": 1752.0
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 50,
+    "total": 5,
+    "pages": 1
+  },
+  "filter": {
+    "skill": "acme-release-notes",
+    "sort": "newest"
+  },
+  "options": {
+    "skills": [
+      "acme-release-notes",
+      "k8s-resource-naming",
+      "python-docstrings"
+    ],
+    "agents": [
+      "claude-code@2.1.292",
+      "codex@0.161.0",
+      "opencode@1.19.1"
+    ],
+    "models": [
+      "claude-haiku-5-5",
+      "ollama-cloud/gpt-oss:120b",
+      "openai/gpt-6.1-sol"
+    ],
+    "verdicts": [
+      "Helps",
+      "Neutral",
+      "Rejected"
+    ],
+    "phases": [
+      "Failed",
+      "Running",
+      "Succeeded"
+    ],
+    "publications": [
+      "failed",
+      "passed"
+    ],
+    "triggers": [
+      "model-change",
+      "push"
+    ]
+  },
+  "refreshSeconds": 0
+}

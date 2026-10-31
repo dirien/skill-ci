@@ -101,6 +101,10 @@ status:
     withoutSkill: ["0.36", "0.38", "0.35"]
   verdict: Helps                    # Helps | Neutral | Hurts | Obsolete | Regressed | Inconclusive | Rejected
   reportDigest: sha256:...          # optional: the eval report attached to the skill digest in Harbor
+  attempts:                         # optional: earlier Jobs of a retried run, oldest first (see "Retry")
+    - jobName: <name>               # the Job of that attempt
+      reportDigest: sha256:...      # optional: the report it attached (with its trial bundle)
+      message: "EnvironmentStartTimeoutError: ..."   # why it ended, at most 1024 characters
   network:                          # optional: absent for runs made before network modes (they ran with full)
     mode: allowlist                 # the effective mode
     policy: skillci-net-<name>      # the CiliumNetworkPolicy, empty when nothing enforces the mode
@@ -115,6 +119,10 @@ status:
 Printer columns: Skill, Version, Agent (`spec.agent`), AgentVer (`status.agentVersion`), Model, Phase, With, Without, Lift, Verdict, Tier1, Network (`status.network.mode`), Age; Lift CI (`status.liftCI`), N (`status.n`), Publication and Report (`status.reportDigest`) at priority 1 (`-o wide`).
 
 The statistics fields are present only when the runner sent trial scores (see "Statistics"). The controller recomputes them from `status.samples` whenever it reconciles a finished run, so a changed `--confidence` shows in `liftCI` without a new run. `samples` holds two decimals as strings (CRDs have no floats), up to 50 per arm.
+
+`status.attempts` keeps the earlier Jobs of a run that was retried, so their reports and trial bundles stay reachable after `status.reportDigest` moves to the new attempt. The current Job is `status.jobName` and `status.reportDigest` and is not listed. At most 10 entries (the oldest go first).
+
+Annotation `skillci.dev/pushed-by` on a SkillEval created by a skill push is the Harbor user who pushed the tag (`operator` of the webhook payload), when the payload has one; at most 253 characters, anything else is dropped. SkillEvals created by a model list change or by hand have none. It is shown as "started by" and is not used by the policy.
 
 Labels on every SkillEval: `skillci.dev/skill`, `skillci.dev/digest` (hex without `sha256:`, first 32 chars), `skillci.dev/agent`, `skillci.dev/model`, and `skillci.dev/agent-version` (the value of `spec.agentVersion`; absent when the entry pins none). Dedupe is by digest + agent + agent version + model, the labels as a selector: an entry without a version matches only SkillEvals without the label, which includes the objects created before agent versions existed.
 
@@ -138,12 +146,14 @@ The controller creates one `batch/v1` Job per SkillEval attempt, named like the 
 | `NVIDIA_API_KEY` | from secret `llm-keys` key `nvidia` (optional) |
 | `OLLAMA_API_KEY` | from secret `llm-keys` key `ollama` (optional) |
 | `OPENROUTER_API_KEY` | from secret `llm-keys` key `openrouter` (optional). Must be an API key: before any work the runner asks OpenRouter (`GET /api/v1/key`) and fails the run when it is a provisioning key, which answers every chat call with 401 "User not found." |
-| `SKILLEVAL_NAME` | `acme-release-notes-v1-1-0-claude-code-2-1-292-claude-opus-5-5`: always set, the SkillEval's `metadata.name` (also on a retry Job `<name>-r1`, whose name differs). The runner labels every trial pod `sandbox.users.io/skillci-eval=<SKILLEVAL_NAME>` and `sandbox.users.io/skillci-role=trial`, which the eval's CiliumNetworkPolicy selects |
+| `SKILLEVAL_NAME` | `acme-release-notes-v1-1-0-claude-code-2-1-292-claude-opus-5-5`: always set, the SkillEval's `metadata.name` (also on a retry Job `<name>-r1`, whose name differs). The runner labels every trial pod `sandbox.users.io/skillci-eval=<SKILLEVAL_NAME>` and `sandbox.users.io/skillci-role=trial`, which the eval's CiliumNetworkPolicy selects, and `sandbox.users.io/skillci-trial=<trial label>`, which maps network flows to their trial (see "Trial bundles") |
+| `SKILL_VERSION` | `v1.1.0`: the SkillEval's `spec.version`, written into the trial bundle index (optional: a runner without it leaves `version` out) |
+| `HUBBLE_SERVER` | `hubble-relay.kube-system.svc.cluster.local:80`: the SkillCIConfig `spec.observability.hubbleRelay` in force when the Job is created; absent when it is empty. The runner then collects the trials' network flows (see "Trial bundles") |
 | `SANDBOX_WARM_POOL` | `default`: the SandboxWarmPool of the run's SandboxProfile (`status.warmPool`). The runner claims one warm trial pod per trial (SandboxClaim with `warmPoolRef`) and ignores `SANDBOX_CPUS`/`SANDBOX_MEMORY_MB`, which the profile decides. Absent when the run has no profile or the profile has no warm pool (Agent Sandbox extensions not installed): the runner then starts a bare `Sandbox` per trial as before |
 
 Pods and Jobs carry the labels `skillci.dev/skill`, `/digest`, `/agent`, `/model` and, for a pinned entry, `/agent-version`.
 
-The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `SANDBOX_IMAGE=ghcr.io/dirien/skill-ci-sandbox:<the runner's release>` (set when the runner image is built, from the release tag), `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job), `TIMEOUT_MULTIPLIER=2` (scales Harbor's step timeouts; matters for a non-default `AGENT_VERSION`, which is installed in every sandbox). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them. No registry, no pull secret and no builder are part of the defaults: see "Sandbox image" for the one optional path that uses them (`TASK_IMAGE_REGISTRY`).
+The runner image provides the rest as defaults (overridable env): `REGISTRY_CONFIG=/auth/config.json` (mount secret `harbor-pull` there), `REGISTRY_PLAIN_HTTP=true`, `SANDBOX_NAMESPACE=skill-ci`, `SANDBOX_IMAGE=ghcr.io/dirien/skill-ci-sandbox:<the runner's release>` (set when the runner image is built, from the release tag), `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per-trial sandbox size), `TRIAL_CONCURRENCY=2` (trials at once per Job), `TIMEOUT_MULTIPLIER=2` (scales Harbor's step timeouts; matters for a non-default `AGENT_VERSION`, which is installed in every sandbox), `TRIAL_BUNDLE=on` (`off` attaches no trial bundle), `TRIAL_BUNDLE_MAX_BYTES=25165824` (compressed size of the whole bundle) and `TRIAL_OUTPUT_MAX_BYTES=8192` (the cap on every observation of a trial that is over its size limit; see "Trial bundles"). Sandboxes created by a runner pod are owned by that pod, so cancelling a run deletes them. No registry, no pull secret and no builder are part of the defaults: see "Sandbox image" for the one optional path that uses them (`TASK_IMAGE_REGISTRY`).
 
 ### Sandbox image
 
@@ -175,9 +185,9 @@ Runner pods and trial sandbox pods carry `cluster-autoscaler.kubernetes.io/safe-
 
 The runner reads them from SkillEvaluator's `result.json`: `agents.<agent>.pass_at_k.<with_skill|without_skill>.cases.<case>.attempts[].score`, one entry per attempt of every eval case, whose mean is the arm's `overall_*` score. With 3 cases x 3 attempts that is 9 scores per arm. The runner caps each arm at 50 scores, and leaves `samples` out when either arm has none (an older SkillEvaluator). A termination message without `samples`, or with fewer than two scores in an arm, is valid; the controller then uses the fixed-number rules.
 
-`report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds.
+`report` is optional: the digest of the report the runner attached to the evaluated skill digest (see "Eval reports"). The controller stores it in `status.reportDigest`. A runner that cannot attach leaves the field out; the eval still succeeds. `report` is also allowed next to `error` (below): when Tier 3 started and then failed, the runner attaches what it has, and the controller stores the digest of the `Failed` run the same way.
 
-If no score was produced it writes `{"error": "<reason>"}` and exits 1. When the error comes after the Tier 1 + 2 gate ran, the payload keeps the gate: `{"error": "...", "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "skipped"}, "findings": [...]}` (`tier3` is `skipped` when the live trials never started, `incomplete` when they started and failed; `publication` may be present too; findings at most 5, redacted). Both fields are optional; the controller stores them in `status.tiers`, `status.publication` and `status.findings` of the `Failed` run, so the reporting site shows the gate. A skill without a Tier 3 source (none of `evals/evals.json`, `evals.jsonl`, `evals.yaml`, `evals.yml`, `dataset.json`, `dataset.jsonl`, and no `evals/harbor/` tasks) gets the Tier 1 + 2 gate only; when the gate passes, the runner starts no Tier 3 run and writes ``{"error": "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. Draft them with `make draft-evals SKILL=<skill>` (skillevaluator create-eval-dataset), review them, and push again"}`` (the gate's tiers and findings go to the container log). A Tier 1 or 2 failure is reported as Rejected, as for any skill. The runner never generates or rewrites a dataset (`validate --no-autopilot`): the gate runs the test cases the author committed.
+If no score was produced it writes `{"error": "<reason>"}` and exits 1. When the error comes after the Tier 1 + 2 gate ran, the payload keeps the gate: `{"error": "...", "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "skipped"}, "findings": [...]}`, and, when Tier 3 left a run directory, `"report": "sha256:..."` (`tier3` is `skipped` when the live trials never started, `incomplete` when they started and failed; `publication` may be present too; findings at most 5, redacted). Both fields are optional; the controller stores them in `status.tiers`, `status.publication` and `status.findings` of the `Failed` run, so the reporting site shows the gate. A skill without a Tier 3 source (none of `evals/evals.json`, `evals.jsonl`, `evals.yaml`, `evals.yml`, `dataset.json`, `dataset.jsonl`, and no `evals/harbor/` tasks) gets the Tier 1 + 2 gate only; when the gate passes, the runner starts no Tier 3 run and writes ``{"error": "no eval dataset: the live evaluation (Tier 3) needs test cases in evals/evals.json. Draft them with `make draft-evals SKILL=<skill>` (skillevaluator create-eval-dataset), review them, and push again"}`` (the gate's tiers and findings go to the container log). A Tier 1 or 2 failure is reported as Rejected, as for any skill. The runner never generates or rewrites a dataset (`validate --no-autopilot`): the gate runs the test cases the author committed.
 
 The `skill-eval-runner` ServiceAccount and Role are in `runner/job.yaml` today; the controller manifests own them from now on.
 
@@ -226,6 +236,8 @@ spec:
       node: [registry.npmjs.org]
       python: [pypi.org, files.pythonhosted.org]
     agentInstallHosts: [registry.npmjs.org]   # added for an agent version not in --preinstalled-agents, at most 20
+  observability:
+    hubbleRelay: ""                 # host:port of Hubble Relay; empty (default) collects no network flows
 status:
   observedGeneration: 3
   conditions:                       # Ready: Applied | Invalid | Ignored
@@ -244,7 +256,11 @@ status:
       enforcedBy: cilium            # cilium | none: what enforcement resolves to on this cluster
       bundles: [apt, github, node, python]
       agentInstallHosts: [registry.npmjs.org]
+    observability:
+      hubbleRelay: hubble-relay.kube-system.svc.cluster.local:80
 ```
+
+`spec.observability.hubbleRelay` is where the runner reads network flows (see "Trial bundles"): `host:port` of a Hubble Relay the runner pods can reach (a hostname or IP, a port from 1 to 65535, at most 255 characters; no scheme). The controller passes it to every new runner Job as `HUBBLE_SERVER`; empty collects nothing, and the trial bundles record network `off`. The chart seeds it from `config.observability.hubbleRelay` (default empty); `infra/` and `deploy/install.sh` set `hubble-relay.kube-system.svc.cluster.local:80` when they find Cilium with Hubble Relay (DOKS). Runner pods have no egress policy, so they reach the relay on any cluster; only trial pods are restricted. A relay that cannot be reached never fails a run.
 
 **Validation.** The CRD checks the enums, the host pattern (lowercase RFC 1123 hostname with at least two labels, optional leading `*.`, at most 255 characters), the bundle name pattern (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`, at most 63 characters), the list and map sizes, and that `network.default` is one of `network.modes` (CEL). The API server fills in the defaults above for fields left out; the controller applies the same defaults to fields it reads as absent. The controller validates again (the same rules, for objects stored before a CRD upgrade added a check or applied without validation) and reports a spec it cannot use with `Ready` `False`, reason `Invalid`, the message `invalid spec: <what is wrong>; the controller keeps the last valid spec (generation <n>)` and a Warning event. Without a valid spec of the same object seen since the controller started (after a restart, or a new object) the message ends `the controller uses the built-in defaults (...)`. With `enforcement: cilium` and no Cilium CRD, `Ready` stays `True` and the message adds that every run fails until Cilium is installed.
 
@@ -338,7 +354,7 @@ A run that starts gets `NetworkPolicy` `True`, reason `Enforced` (a policy enfor
 - **Baseline**, one per namespace, created at controller start and on every SandboxProfile reconcile: `skillci-trial-baseline`, `endpointSelector` `skillci.dev/component: trial-sandbox` (every warm or claimed trial pod of a profile), egress DNS only. A warm pod that is not claimed yet, or a trial pod without an eval policy, has no egress (fail closed). Kubernetes NetworkPolicies and CiliumNetworkPolicies selecting a pod add up, so the eval policy opens what its mode allows.
 - **Per SkillEval**, created or updated before its Job, owned by the SkillEval: `skillci-net-<SkillEval name>` (over 63 characters: the first 52, `-` and 10 hex characters of the SHA-256 of the full name), labels `app.kubernetes.io/managed-by: skill-ci`, `skillci.dev/eval: <name>`, `endpointSelector` `{sandbox.users.io/skillci-eval: <name>, sandbox.users.io/skillci-role: trial}`. Egress: DNS to `kube-system/kube-dns` (`k8s-app: kube-dns`) on port 53 `ANY` with `rules.dns: [{matchPattern: "*"}]`; `full` adds `toEntities: [world]`; `none` and `allowlist` add `toFQDNs` (`matchName`, `*.x` as `matchPattern`) on TCP 443.
 
-Trial pod labels use the `sandbox.users.io` domain because Agent Sandbox lets a SandboxClaim put only that domain on a claimed pod (`additionalPodMetadata.labels`); the bare Sandbox path puts them into the Sandbox pod template.
+Trial pod labels use the `sandbox.users.io` domain because Agent Sandbox lets a SandboxClaim put only that domain on a claimed pod (`additionalPodMetadata.labels`); the bare Sandbox path puts them into the Sandbox pod template. Next to `skillci-eval` and `skillci-role`, every trial pod carries `sandbox.users.io/skillci-trial=<trial label>`: the Harbor trial name (`rn-basic__sryqofs`, the `session_id` without `__env`) when it is a valid label value of at most 63 characters, otherwise its first 52 characters, `-` and the first 10 hex characters of its SHA-256. No policy selects it; the runner uses it to map Hubble flows to trials.
 
 ## Eval reports
 
@@ -348,10 +364,69 @@ After scoring, the runner attaches the SkillEvaluator output to the evaluated sk
 oras attach --artifact-type application/vnd.skillci.report.v1+json \
   --annotation skillci.dev/model=<model> --annotation skillci.dev/agent=<agent> --annotation skillci.dev/agent-version=<version> \
   --annotation skillci.dev/lift=<+0.59> \
+  --annotation skillci.dev/trials=<bundle digest> \
   <SKILL_REF> report.html:text/html result.json:application/json [BENCHMARK.md:text/markdown]
 ```
 
 `SKILL_REF` is pinned to the digest, so the subject is exactly the version that was scored. Re-running an eval adds another referrer. `make report SKILL=<skill> VERSION=<vX.Y.Z> [MODEL=<model>] OUT=reports/` lists the referrers (`oras discover`) and downloads the newest report per agent@version/model entry.
+
+The report is attached after the trial bundle (see "Trial bundles") and names it in `skillci.dev/trials`, or says why there is none in `skillci.dev/trials-withheld`. Its files go through the bundle's redaction and fail-closed scan first. When Tier 3 started and the run then failed, the runner attaches the report anyway (best effort) and reports its digest next to `error`, so the `Failed` run keeps its report and trials.
+
+## Trial bundles
+
+After Tier 3 the runner attaches every trial of the run, redacted, to the evaluated skill digest as a second OCI referrer, before the report (see "Eval reports"). Failed runs are bundled too, whenever Tier 3 left a run directory. Both referrers are accessories of the skill digest, so Harbor deletes them with the version; `make report` filters on the report's artifact type and ignores bundles.
+
+```text
+oras attach --artifact-type application/vnd.skillci.trials.v1+json \
+  --annotation skillci.dev/eval=<SKILLEVAL_NAME> --annotation skillci.dev/agent=<agent> \
+  --annotation skillci.dev/agent-version=<version> --annotation skillci.dev/model=<model> \
+  --annotation skillci.dev/trials-schema=1 --annotation skillci.dev/redaction=v1 \
+  <SKILL_REF> index.json:application/vnd.skillci.trials.index.v1+json \
+  trial-<trial id>.json.gz:application/vnd.skillci.trial.v1+gzip ...
+```
+
+| Layer (title) | Media type | Content |
+| --- | --- | --- |
+| `index.json` | `application/vnd.skillci.trials.index.v1+json` | The run: skill, version, digest, SkillEval, entry, the eval cases, one entry per trial with the numbers the trial grid shows, the withheld trials, the credential routes by name, the caps, the network state. Schema: `docs/schemas/skillci.trials.index.v1.json` |
+| `trial-<trial id>.json.gz` | `application/vnd.skillci.trial.v1+gzip` | One trial: meta (timing phases, agent, exception), prompt, the ATIF trajectory, `reward.json`, `failure.json`, the agent log tail, truncations, redaction counts, network. gzip of compact UTF-8 JSON. Schema: `docs/schemas/skillci.trial.v1.json` |
+
+Layer names are flat, because oras rejects absolute paths. A trial id matches `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`; a trial whose id does not is withheld (`unreadable`). `testdata/trials/` holds golden bundles (a real DOKS run, a failed one, synthetic codex and opencode trials) with the input they are built from.
+
+**Sources.** Only SkillEvaluator's redacted per-trial copies, `<run_dir>/<agent>/<with-skill|without-skill>/trials/<trial id>/` (`trajectory.json`, `reward.json`, `result.json`, `failure.json`, `exception.txt`, `artifact_manifest.json` and the agent log `claude-code.txt`, `codex.txt` or `opencode.txt`), the run's `result.json` (case and attempt of each trial from `agents.<agent>.pass_at_k.<arm>.cases.<case>.attempts[]`, else `trial_failures`) and `dataset_snapshot.json` (the cases). Never `_harbor-jobs` (it holds the agent's `CLAUDE_CONFIG_DIR` with user and machine ids), `config.json` (kubeconfig path, registry, namespace), `trial.log` or `lock.json`. The runner does not pass `--harbor-keep-jobs`.
+
+**Trial document.** `meta` is a subset of Harbor's trial `result.json`: task name, start and finish, the phases that ran, agent name, version, model and provider, the agent result totals, and the exception with the last 8 KiB of `exception.txt` as traceback. `prompt` is the first `source=user` step, or the case question when there is no trajectory. `trajectory` is ATIF exactly as SkillEvaluator wrote it, except that strings over the cap are shortened in place, so step indices and JSON pointers stay valid; `trajectoryOmitted` says why there is none. `reward` and `failure` are the files as written. Evidence pointers inside `reward` stay relative to the trajectory and count steps from 0 (`/steps/3` is ATIF `step_id` 4); `truncations[].pointer` is relative to the trial document. `status` is `scored` (a reward exists), `unscored` (no reward: the trial failed before or during scoring) or `error` (the runner could not read the trial; only `meta` is kept).
+
+**Index entry per trial**: id, layer, arm (`with-skill` or `without-skill`), case, attempt, status, score and passed (scored trials), error type and the first 300 characters of the message (unscored trials), start, duration and agent execution time (seconds, one decimal), steps, tool calls, the `final_metrics` tokens (in, out, cached), the total cost with its source (`estimate` when ATIF says `litellm_estimate`, else `reported`; per-step costs are always estimates), expected behaviors passed of total, `skill_invoked`, compressed and raw size, whether anything was shortened, and the flow counts.
+
+**Network section.** When the Job has `HUBBLE_SERVER`, the runner runs `hubble observe --follow --output jsonpb --label sandbox.users.io/skillci-eval=<SKILLEVAL_NAME>` against it for the length of Tier 3 (the flags of the hubble CLI pinned in `runner/Dockerfile`) and maps each flow to its trial by the source pod's `sandbox.users.io/skillci-trial` label. Each trial document gets `network`: the DNS names asked (count, first and last time, rcode), and the connections grouped by verdict (`FORWARDED`, `DROPPED`, `ERROR`, `AUDIT`), destination (the DNS name Hubble knew, else the IP), port and protocol, with count, first and last time and the drop reason. The index has the run-level state: `collected`, `partial` (Hubble reported lost events, or a row cap applied), `unavailable` (the relay did not answer within 10 s or the CLI failed; the reason says which) or `off` (no `HUBBLE_SERVER`; the trial documents then have no `network`). Flows never fail a run. Hubble's ring buffer can drop flows on a busy node, so a section can be partial.
+
+**Redaction v1, before anything is uploaded.** The runner parses every JSON file and walks every string value, so JSON escaping cannot hide a value; text files (the agent log, the traceback) are one string each. Keys are never changed, so pointers stay valid. In order:
+
+1. `exact`: the values (8 characters or more) of `SECRET_ENV` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `NVIDIA_API_KEY`, `OLLAMA_API_KEY`, `OPENROUTER_API_KEY`), `SKILL_EVAL_EMBEDDING_API_KEY`, `SKILL_EVAL_LLM_API_KEY`, every `HARBOR_*` credential, and the `auth`, `password` and `identitytoken` values of `/auth/config.json` with the password inside each `auth`. Each value also in standard base64 (with and without padding), URL-safe base64, URL-encoded and JSON-escaped form. They become `[redacted:<NAME>]`.
+2. `pattern`: SkillEvaluator's `redact_sensitive_text` (the `sk-`, `nvapi-`, Bearer, JWT, GitHub, AWS and other shapes it knows, and sensitive `key=value` assignments), plus Ollama-style keys (32 hex characters, a dot, 24 or more URL-safe base64 characters), which become `[redacted]`.
+3. `envDump`: the value of every `NAME=value` line whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `AUTH` or `CREDENTIAL` (any case, optional `export`) becomes `[redacted]`.
+
+`redaction` in each trial document counts the string values each rule changed, never the values. Pattern redaction also over-redacts: SkillEvaluator already writes some token counts as `<redacted>`, and the site shows them as unknown.
+
+**Fail closed.** After redaction and shortening the runner serializes each trial document and scans the bytes, before gzip, for every form of every exact value. A hit withholds that trial (`withheld[]` in the index, reason `secret-scan`) and logs the name of the secret, never its value. A hit in the index withholds the whole bundle. The same redaction and scan apply to the report files before they are attached; a report file that still leaks is not attached. The controller redacts again when it renders a session (defense in depth: the same patterns plus the exact values of the `llm-keys` Secret). What redaction cannot catch: a secret the agent fetched from somewhere else, a partial key, or a key the agent rewrote. `testdata/trials-secrets/` is a canary trial with fake keys in every form.
+
+**Caps** (the index records them in `limits`):
+
+| Cap | Default | Past it |
+| --- | --- | --- |
+| One string | 32 KiB | The first 24 KiB and the last 8 KiB are kept with `...[skill-ci: <n> bytes cut]...` between them, and `truncations` gets an entry |
+| One trial layer | 1 MiB compressed | The agent log tail is dropped, then every observation is cut to `TRIAL_OUTPUT_MAX_BYTES` (8 KiB), then the trajectory is left out (`trajectoryOmitted`); still over: the trial is withheld (`size`) |
+| The whole bundle | `TRIAL_BUNDLE_MAX_BYTES`, 24 MiB compressed | Trials are withheld (`size`), the last attempts first. Every layer stays under the controller's 16 MiB blob limit |
+| Trials per arm | 50, as `MAX_SAMPLES` | The rest are withheld (`limit`) |
+| Agent log | 64 KiB | Only the last 64 KiB |
+| Traceback | 8 KiB | Only the last 8 KiB of `exception.txt` |
+| Flow and DNS rows | 200 each per trial | `truncated: true`, network state `partial` |
+
+A run of 18 trials stores about 0.5 to 1 MB.
+
+**Pairing with the report.** The bundle is attached first, then the report with `--annotation skillci.dev/trials=<bundle digest>`, or with `--annotation skillci.dev/trials-withheld=<reason>` when there is no bundle: `disabled` (`TRIAL_BUNDLE=off`), `no-trials` (Tier 3 left no trial directory), `secret-scan` (the index leaked), `size`, `build-failed` or `attach-failed`. The controller finds the bundle through the report manifest it already reads, so no CRD field holds it. A bundle that cannot be built or attached never fails the eval, the same rule as for the report. A retried run keeps the reports, and so the bundles, of its earlier Jobs in `status.attempts`.
+
+**Error path.** When Tier 3 started and the run then fails, the runner still builds the bundle, attaches it and the report on a best-effort basis, and puts `report` into the error payload (see "Runner Job contract"). A failed run, when the session matters most, keeps its trials.
 
 ## All tiers and publication
 
@@ -380,7 +455,7 @@ SkillEval status gains `tiers` (`tier1`, `tier2`, `tier3` strings), `publication
 
 ## Triggers
 
-1. **Skill push.** Harbor webhook policy on project `skills`, events `PUSH_ARTIFACT`, target `http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor`, payload format `Default`. The controller acts only when the pushed tag matches `^v\d+\.\d+\.\d+$`. Other tags (`beta`, `stable`) are ignored. For each entry in the list it creates a SkillEval unless one already exists for the same digest, agent, agent version and model (dedupe by labels).
+1. **Skill push.** Harbor webhook policy on project `skills`, events `PUSH_ARTIFACT`, target `http://skill-ci-controller.skill-ci.svc.cluster.local:8080/webhook/harbor`, payload format `Default`. The controller acts only when the pushed tag matches `^v\d+\.\d+\.\d+$`. Other tags (`beta`, `stable`) are ignored. For each entry in the list it creates a SkillEval unless one already exists for the same digest, agent, agent version and model (dedupe by labels), with the payload's `operator` (the Harbor user who pushed) as annotation `skillci.dev/pushed-by` when present.
 2. **Model list change.** The controller watches ConfigMap `skill-ci-models`. For each added entry (a new agent, a new agent version of an agent already listed, or a new model: the entry identity is agent + agentVersion + model) it creates SkillEvals for every skill digest currently tagged `beta` or `stable` in Harbor (`trigger: model-change`). For an entry whose `required` flag changed it updates `spec.required` of the entry's SkillEvals.
 
 ## Statistics
@@ -466,20 +541,61 @@ Do not scrape and push into the same Prometheus: it would store every series twi
 
 ## Reporting site (controller `:8082`)
 
-Read-only, server-rendered, no JavaScript, no external resources. Data: SkillEvals from the manager's cache, channel tags from the Harbor REST API (cached 5 s), reports from the OCI referrers named by `status.reportDigest` (fetched with the registry API using `HARBOR_USERNAME`/`HARBOR_PASSWORD`, cached in memory by digest, 32 MiB). A run without `reportDigest` shows "not stored".
+Read-only. A single page app (React, built from `ui/` into `controller/internal/reportsite/web/dist/` and embedded with `go:embed`) on a JSON API under `/api/v1/`, both served by the controller. Data: SkillEvals from the manager's cache, channel tags from the Harbor REST API (cached 5 s), the model list ConfigMap, and reports and trial bundles from the OCI referrers named by `status.reportDigest` and `status.attempts[].reportDigest` (fetched with the registry API using `HARBOR_USERNAME`/`HARBOR_PASSWORD`, cached in memory by digest: 32 MiB for reports, a separate budget for trial documents). A run without `reportDigest` shows "not stored". No external resources: no CDN, no web fonts, system font stacks.
 
-| Route | Content |
-| --- | --- |
-| `/` | The network policy in force (default mode, allowed modes, bundles, enforcement, and whether it comes from the SkillCIConfig `default`, its last valid spec or the built-in defaults; a notice when the SkillCIConfig is invalid), counts (including Rejected versions), release channels per skill (Stable, Beta, Held back, Rejected), all runs newest first with Agent (`agent@version`), Model, Tiers (T1 T2 T3 markers) and Publication columns. Filters: `skill`, `agent` (`agent@version`), `model`, `verdict`, `phase`, `publication` |
-| `/skills/{skill}` | Versions x entries (one column per `agent@version` and model: with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") |
-| `/runs/{name}` | One SkillEval (title with model and `agent@version`, an Agent version row that says when the trials ran another release than the spec pins): scores, the SkillEvaluator tiers with findings (also for a `Failed` run whose error came after the gate), the sandbox (profile and warm pool, or a bare Sandbox), the network (mode and its source, what the trials could reach, the declared entries, the allowed hosts, the enforcing CiliumNetworkPolicy or why none, the `NetworkPolicy` message), conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message |
-| `/runs/{name}/report` | The stored `report.html`, as is (`text/html`) |
-| `/runs/{name}/result.json` | The stored `result.json` (`application/json`, attachment) |
-| `/healthz` | `ok` |
+**Pages.** The controller answers every GET path that is not an API, asset or report file route with the app's `index.html`, and the app's router renders the page (history routing):
+
+| Route | Content | API |
+| --- | --- | --- |
+| `/` | Overview: counts (including Rejected versions), needs attention (failed runs, held back and rejected versions, running runs), the 20 newest runs, release channels per skill (Stable, Beta, Held back, Rejected), and the network policy in force (default mode, allowed modes, bundles, enforcement, the Hubble Relay, and whether it comes from the SkillCIConfig `default`, its last valid spec or the built-in defaults; a notice when the SkillCIConfig is invalid) | `overview` |
+| `/runs` | All runs, newest first, with Agent (`agent@version`), Model, Tiers (T1 T2 T3 markers), Publication and Trials columns. Filters: `skill`, `agent` (`agent@version`), `model`, `verdict`, `phase`, `publication`, `trigger`, `q` (part of the name); sort; pages of 50 | `runs` |
+| `/runs/{name}` | One SkillEval (title with model and `agent@version`, an Agent version row that says when the trials ran another release than the spec pins): scores, the SkillEvaluator tiers with findings (also for a `Failed` run whose error came after the gate), the sandbox (profile and warm pool, or a bare Sandbox), the network (mode and its source, what the trials could reach, the declared entries, the allowed hosts, the enforcing CiliumNetworkPolicy or why none, the `NetworkPolicy` message), conditions, the six SkillEvaluator dimensions when a report is stored. A run without scores (Tier 3 skipped) shows "Tier 3 not run: Tier 1 rejected this version, so no live trials were spent." and no score or dimension blocks. A run with `status.retries > 0` shows "Retried once after an infrastructure failure: <message of the Retried condition>" ("Retried N times ..." for more) next to the status message. Plus the run's attempts (`?job=` shows an earlier one) and the trial grid: cases x attempts x arm with score and status, links to the sessions, a Compare link per case, totals (tokens, cost, trial time, unscored and withheld trials) and the credential routes by name. Without a bundle the grid comes from `result.json`: scores, no links | `runs/{name}` |
+| `/runs/{name}/trials/{trial}` | Session, Log tab: the prompt, the metadata strip (arm, case and attempt, agent and model, workspace, skill use, credential routes, times and phases, tokens, cost, criteria passed, trigger, pushed by), the log (one entry per ATIF part, category chips with counts, Focus and All presets, jump links), the eval criteria and the session findings | `runs/{name}/trials/{trial}` |
+| `/runs/{name}/trials/{trial}/files`, `/judge`, `/network` | The files the agent wrote or edited (from its tool calls), every judge metric with its details, the DNS names and flows | the same |
+| `/runs/{name}/cases/{case}/compare` | With and without the skill side by side for one case; attempt k is paired with attempt k (`?attempt=`, or `?with=&without=` trial ids) | `compare` |
+| `/skills` | Skill catalog: stable, beta and newest version, last run, held back and rejected versions, required entries passing | `skills` |
+| `/skills/{skill}` | Versions x entries (one column per `agent@version` and model: with, without, lift, verdict, tier markers), channel tags, policy decision per version ("Rejected by Tier 1: <first finding>") | `skills/{skill}` |
+| `/models` | The model list entries (required, sandbox profile) with runs, verdicts, mean lift, failures and retries, and retired entries that still have runs | `models` |
+
+Keyboard: `j` and `k` move between log entries, `/` focuses the filter, `g g` and `G` jump to the first and last entry. Status is never shown by color alone (an icon and a word go with it), focus is always visible, and the theme follows `prefers-color-scheme` with a light and dark toggle kept in `localStorage`.
+
+**API.** `GET` and `HEAD` only; any other method gets 405. The response types are the Go types in `controller/internal/reportsite/apiv1`, mirrored by `ui/src/api/types.ts`. Fields are lowerCamelCase, lists are always present (`[]`), an unknown optional value is left out rather than `null`, times are RFC 3339 UTC.
+
+| Route | Response | Status codes |
+| --- | --- | --- |
+| `/api/v1/site` | `Site`: namespace, project, controller release, thresholds | 200 |
+| `/api/v1/overview` | `Overview` | 200, 503 |
+| `/api/v1/runs?skill=&agent=&model=&verdict=&phase=&publication=&trigger=&q=&sort=&page=&pageSize=` | `RunList`; `sort` is `newest` (default), `oldest`, `skill` or `lift`; `pageSize` 1 to 200, default 50 | 200, 400, 503 |
+| `/api/v1/runs/{name}?job=` | `RunDetail` | 200, 400, 404, 503 |
+| `/api/v1/runs/{name}/trials/{trial}?job=` | `TrialSession` | 200, 400, 404, 502, 503 |
+| `/api/v1/runs/{name}/trials/{trial}/steps/{step}/output/{k}?job=` | The full text of result `k` of the observation of ATIF step `step`, `text/plain; charset=utf-8` | 200, 400, 404, 502, 503 |
+| `/api/v1/runs/{name}/trials/{trial}/trajectory.json?job=` | The redacted ATIF trajectory, `application/json`, as an attachment | 200, 400, 404, 502, 503 |
+| `/api/v1/runs/{name}/cases/{case}/compare?attempt=&with=&without=&job=` | `Compare` | 200, 400, 404, 502, 503 |
+| `/api/v1/skills` | `SkillList` | 200, 503 |
+| `/api/v1/skills/{skill}` | `SkillDetail` | 200, 404, 503 |
+| `/api/v1/models` | `ModelList` | 200, 503 |
+
+Errors have the body `Error`, `{"error": {"status": 404, "code": "not_found", "message": "..."}}`, with the codes `bad_request` (400: a malformed parameter, or a trial id that does not match `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`), `not_found` (404: an unknown run, Job, skill, case, trial or route), `withheld` (404: the runner withheld the trial or the bundle), `internal` (500), `not_implemented` (501), `registry_error` (502: Harbor did not return a report or bundle file) and `unavailable` (503: the cluster could not be read). `job` must be one of the run's Jobs (`RunDetail.attempts`); a `{trial}` must appear in the bundle index of that Job, and registry paths are never built from raw input. A registry failure while building a `RunDetail` shows in its `report` and `trials` states, not as a status code. An unknown `/api/` path gets a JSON 404, never the app.
+
+**Other routes.** `/runs/{name}/report` (the stored `report.html` as is, `text/html`), `/runs/{name}/result.json` (`application/json`, attachment) and `/healthz` (`ok`) are unchanged; the app links to them with full page loads. `/assets/{file}` serves the app's content-hashed files. A controller built without the UI serves a placeholder page that says to run `make ui-build`, with the API working as usual.
+
+| Response | Cache-Control | Content-Security-Policy |
+| --- | --- | --- |
+| `index.html` (every page route) | `no-store` | `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` |
+| `/assets/{file}` | `public, max-age=31536000, immutable` | the same |
+| API: site, overview, lists, run detail | `no-store` | `default-src 'none'; frame-ancestors 'none'` |
+| API: trial session, compare, output, trajectory | `private, max-age=300`, ETag of bundle digest, trial and query | the same; the output text adds `sandbox` |
+| `/runs/{name}/report` | `private, max-age=3600` | its own: `connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'` |
+
+Every response has `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The build emits no inline script or style; the app sets dynamic styles through the DOM, never through a `style` attribute in markup. Agent output is untrusted: the app renders it as text, never as HTML (no Markdown rendering, no auto-linking), and the controller redacts the session again when it builds it (see "Trial bundles"). The stored `report.html` loads Chart.js from a CDN inside its own page, which its CSP allows; on an airgapped cluster that page loses its charts and everything else works.
 
 Lifts show their evidence wherever they appear (runs table, skill matrix cells, run page): `+0.59` with `95% CI +0.41 to +0.73, n=9/9` (the level is `--confidence`, `n` the trials with/without), left out for runs without trial scores. Verdict `Inconclusive` is neutral (hollow marker, text "Inconclusive"). The policy decision says in plain words when a version is "Not proven" (a drop that may be noise: the numbers, "The stable version stays; more trials would show whether the drop is real") or "Not promoted" because a lift is not beyond noise. The "How to read this" legend explains the interval in two sentences.
 
-Unknown runs and skills give a 404 page. Policy decisions use the controller thresholds.
+Policy decisions use the controller thresholds.
+
+**Access.** The site has no authentication and no authorization. Whoever reaches port 8082 can read every run, report and trial session, and sessions hold agent output, skill content and eval prompts. Keep the `reports` port behind `kubectl port-forward` (`make reports-ui`) or an authenticating reverse proxy (for example oauth2-proxy in front of the Service); never expose it through an Ingress or a LoadBalancer without one. The site never shows a credential value: sessions name the route variables only.
+
+**Transition.** Until the API handlers replace them, the controller serves the server-rendered pages (`--reports-ui=html`, the default) and the API routes answer 501; `--reports-ui=spa` serves the app instead. The flag and the server-rendered pages are removed with the API handlers.
 
 ## Retry
 
@@ -496,7 +612,7 @@ A run that fails for an infrastructure reason is started again, because that fai
     - `NonZeroAgentExitCodeError` whose failed command starts like the agent install (`apt-get`, `apk`, `yum`, `dnf`, `set -euo pipefail; if command -v apk`, `npm install`, `pip install`, `curl ... | sh`) (`agent_install`) or the agent setup (`mkdir -p $CLAUDE_CONFIG_DIR`) (`agent_setup`). Only the start of the command counts, because the agent's own task command carries the task text, which may mention anything.
   - The runner error must show every trial failure. It is not transient when the runner cut it (it ends with `...`), when SkillEvaluator notes that failure details were truncated, or when a trial failure (`Agent runtime failed in <trial>: ` or `Unscoreable reward in <trial>: `) does not start with an `<Name>Error:` token, since its text would otherwise count as part of the error before it. The other SkillEvaluator notes (`Harbor job did not complete successfully: N errored`, `Missing scored attempts for cases: ...`, `Scored attempt coverage is N/M`, `<agent> <arm> Harbor run failed: ...`) only summarise the trial failures and do not count.
   - `AgentTimeoutError` is the agent's own failure on its task and is never transient, nor is a `NonZeroAgentExitCodeError` of any other command.
-- **Mechanics**: the budget is `--max-retries` (default 1, Helm `controller.maxRetries`; 0 disables). When a run would become `Failed`, the failure is transient and `status.retries < --max-retries`, the controller sets `status.retries` +1 and the condition `Retried` (`True`, reason `InfrastructureFailure`, message the failure of the previous Job), writes phase `Pending`, emits a Normal event `InfrastructureFailure`, and only then deletes the old Job (propagation Background; the status write comes first so a lost race never reads a missing Job as a failure). The run then goes through the normal Pending path with a new Job named `<skilleval>-r<n>`: it waits for a slot (`--max-concurrent-jobs`) and spends its trials from `--trial-budget` again. The failed attempt keeps what it spent: the budget counts every Job started. When the budget is exhausted the retry stays `Pending` ("trial budget exhausted"). `completedAt` is set only when the run ends. The `Retried` condition stays after the run finishes; a second transient failure ends `Failed` with that failure as `status.message`.
+- **Mechanics**: the budget is `--max-retries` (default 1, Helm `controller.maxRetries`; 0 disables). When a run would become `Failed`, the failure is transient and `status.retries < --max-retries`, the controller sets `status.retries` +1 and the condition `Retried` (`True`, reason `InfrastructureFailure`, message the failure of the previous Job), appends the previous Job to `status.attempts` (its name, its `reportDigest` when it attached a report, the failure message), clears `status.reportDigest`, writes phase `Pending`, emits a Normal event `InfrastructureFailure`, and only then deletes the old Job (propagation Background; the status write comes first so a lost race never reads a missing Job as a failure). The run then goes through the normal Pending path with a new Job named `<skilleval>-r<n>`: it waits for a slot (`--max-concurrent-jobs`) and spends its trials from `--trial-budget` again. The failed attempt keeps what it spent: the budget counts every Job started. When the budget is exhausted the retry stays `Pending` ("trial budget exhausted"). `completedAt` is set only when the run ends. The `Retried` condition stays after the run finishes; a second transient failure ends `Failed` with that failure as `status.message`.
 
 ## Webhook auth
 
@@ -507,6 +623,7 @@ Secret `harbor-webhook` (key `token`). The Harbor webhook policy sets `auth_head
 - `controller/Dockerfile`, build context `controller/`.
 - `runner/Dockerfile`, build context repo root. Build arg `SKILL_CI_VERSION` sets the runner's default `SANDBOX_IMAGE` tag.
 - `sandbox/Dockerfile`, build context `sandbox/`.
+- `ui/`, the reporting UI: Node at the release in `ui/.nvmrc`, dependencies pinned exactly in `ui/package.json` and `ui/package-lock.json`, every version at least 14 days old when it was chosen (`ui/README.md`). `make ui-build` writes `controller/internal/reportsite/web/dist/` (generated, gitignored), which `go build` embeds; without it the controller embeds the placeholder `web/ui-placeholder.html`, so `go build` and `go test` need no Node. GoReleaser runs `make ui-install` and `make ui-build` in its before hooks, so released binaries and images always carry the UI. `make ui-test` runs eslint, `tsc --noEmit` and vitest; `make ui-dev` serves the UI on port 5173 against the fixtures in `ui/src/api/fixtures/`, or against a port-forwarded controller with `SKILLCI_API=http://localhost:8082`.
 - Nothing is built in the cluster. A `vX.Y.Z` tag runs `.github/workflows/release.yaml`: GoReleaser publishes the controller image and binaries, the workflow builds and Cosign-signs the runner and sandbox images (with SBOM and provenance) and the Helm chart, all as `ghcr.io/dirien/...:X.Y.Z`. The chart's default image tags are its appVersion. `make deploy` installs the working-tree chart with the tags of the newest release (`TAG=...` overrides).
 - All controller-side manifests (CRDs `SkillEval`, `SandboxProfile` and `SkillCIConfig`, controller Deployment and Service, RBAC, runner ServiceAccount and Role, the `default` SandboxProfile and the `default` SkillCIConfig) live under `config/` with a `config/kustomization.yaml`; deploy is `kubectl apply -k config/` (on a new cluster apply twice: the SandboxProfile and SkillCIConfig need their CRDs established first). The controller Role covers SkillEvals, SandboxProfiles (and status), SkillCIConfigs (read, and status), Jobs, pods, the model list ConfigMap, events, leases, `extensions.agents.x-k8s.io` SandboxTemplates and SandboxWarmPools (and warm pool status), `cilium.io` CiliumNetworkPolicies and `get` on the Secret `llm-keys` (for `openai-base-url`); a ClusterRole `skill-ci-controller-crds-<namespace>` reads CustomResourceDefinitions to detect Cilium and the Agent Sandbox extensions. The runner Role covers `agents.x-k8s.io` Sandboxes, `extensions.agents.x-k8s.io` SandboxClaims, pods and `pods/exec`.
 - Controller Service `skill-ci-controller`: port `8080` named `webhook`, port `8081` named `metrics`, port `8082` named `reports` (the reporting site, flag `--reports-addr`, empty disables it; Helm `reports.enabled`); pod label `app.kubernetes.io/name: skill-ci-controller`.

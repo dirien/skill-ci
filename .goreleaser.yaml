@@ -5,6 +5,13 @@ project_name: skill-ci-controller
 env:
   - CGO_ENABLED=0
 
+# The controller embeds the reporting UI (controller/internal/reportsite/web/dist/), so build it
+# before the binaries. The workflows set up Node from ui/.nvmrc first.
+before:
+  hooks:
+    - make ui-install
+    - make ui-build
+
 # The controller is a Go module in controller/. The runner image and the Helm chart are published
 # by .github/workflows/release.yaml, next to this config.
 builds:

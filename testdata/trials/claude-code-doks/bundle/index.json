@@ -1,0 +1,118 @@
+{
+  "schema": "skillci.trials.index.v1",
+  "skill": "acme-release-notes",
+  "version": "v1.1.0",
+  "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+  "eval": "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+  "agent": "claude-code",
+  "agentVersion": "2.1.292",
+  "model": "claude-haiku-5-5",
+  "entry": "claude-code@2.1.292/claude-haiku-5-5",
+  "runId": "20261030_141344_87205_2043595da5fd",
+  "evaluatedAt": "2026-10-30T14:21:18.734791Z",
+  "evaluator": {
+    "version": "0.6.0",
+    "metricSet": "skill-evaluator-default-v2",
+    "scorePolicy": "skill-evaluator-dimension-mean-v1"
+  },
+  "attemptsPerCase": 1,
+  "redaction": "v1",
+  "credentials": [
+    {
+      "role": "agent",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    },
+    {
+      "role": "judge",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    }
+  ],
+  "limits": {
+    "stringBytes": 32768,
+    "outputBytes": 8192,
+    "logTailBytes": 65536,
+    "exceptionBytes": 8192,
+    "trialBytes": 1048576,
+    "bundleBytes": 25165824,
+    "trialsPerArm": 50,
+    "flowRows": 200
+  },
+  "cases": [
+    {
+      "id": "rn-basic",
+      "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+      "expectedBehaviors": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "There are exactly two sections, '## Added' then '## Fixed'",
+        "Each bullet ends with its ticket ID in square brackets"
+      ],
+      "expectedSkill": "acme-release-notes"
+    }
+  ],
+  "trials": [
+    {
+      "id": "rn-basic__sryqofs",
+      "layer": "trial-rn-basic__sryqofs.json.gz",
+      "arm": "with-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "scored",
+      "score": 0.95,
+      "passed": true,
+      "startedAt": "2026-10-30T14:13:45.009297Z",
+      "durationSec": 453.3,
+      "agentSec": 6.0,
+      "steps": 5,
+      "toolCalls": 2,
+      "tokensIn": 83579,
+      "tokensOut": 419,
+      "tokensCached": 79679,
+      "costUsd": 0.04381,
+      "costSource": "reported",
+      "criteria": {
+        "passed": 4,
+        "total": 4
+      },
+      "skillInvoked": true,
+      "bytes": 6974,
+      "rawBytes": 28214,
+      "truncated": false
+    },
+    {
+      "id": "rn-basic__BQbpoR9",
+      "layer": "trial-rn-basic__BQbpoR9.json.gz",
+      "arm": "without-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "scored",
+      "score": 0.36,
+      "passed": false,
+      "startedAt": "2026-10-30T14:13:45.008909Z",
+      "durationSec": 453.1,
+      "agentSec": 7.4,
+      "steps": 4,
+      "toolCalls": 2,
+      "tokensIn": 84064,
+      "tokensOut": 531,
+      "tokensCached": 55614,
+      "costUsd": 0.163987,
+      "costSource": "reported",
+      "criteria": {
+        "passed": 1,
+        "total": 4
+      },
+      "skillInvoked": false,
+      "bytes": 8778,
+      "rawBytes": 35147,
+      "truncated": false
+    }
+  ],
+  "withheld": [],
+  "network": {
+    "state": "off",
+    "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)"
+  }
+}

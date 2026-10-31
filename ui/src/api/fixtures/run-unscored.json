@@ -1,0 +1,164 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+    "skill": "acme-release-notes",
+    "version": "v1.2.0",
+    "digest": "sha256:bdda6c2ddfaa0b9489e7d77dd3432c630545c7588aa4bc445f8b56caf0e3df1d",
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "entry": "claude-code@2.1.292/claude-haiku-5-5",
+    "required": true,
+    "attempts": 1,
+    "trigger": "push",
+    "phase": "Failed",
+    "tiers": {
+      "tier1": "passed",
+      "tier2": "passed",
+      "tier3": "incomplete"
+    },
+    "retries": 0,
+    "createdAt": "2026-10-30T14:11:40Z",
+    "hasReport": true,
+    "trials": "stored",
+    "ranVersion": "2.1.292",
+    "pushedBy": "release-bot",
+    "networkMode": "full",
+    "completedAt": "2026-10-30T14:13:20Z",
+    "durationSec": 100.0,
+    "message": "no scores in result.json: Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed."
+  },
+  "specAgentVersion": "2.1.292",
+  "channels": [],
+  "samples": {
+    "withSkill": [],
+    "withoutSkill": []
+  },
+  "findings": [
+    "tier3/execution: Harbor job did not complete successfully: 1 errored"
+  ],
+  "conditions": [],
+  "network": {
+    "mode": "full",
+    "source": "default",
+    "declared": [],
+    "hosts": [],
+    "policy": "skillci-net-acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+    "enforced": true,
+    "reason": "Enforced",
+    "message": "network full enforced by CiliumNetworkPolicy",
+    "legacy": false
+  },
+  "sandbox": {
+    "profile": "default",
+    "specProfile": "default",
+    "warmPool": "default"
+  },
+  "report": {
+    "state": "files",
+    "digest": "sha256:aa7db62b391210b83ecacab22acfdf2c218b8524671c13efda1f52d5babf36dd",
+    "dimensions": [],
+    "files": [
+      {
+        "name": "report.html",
+        "href": "/runs/acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5/report"
+      },
+      {
+        "name": "result.json",
+        "href": "/runs/acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5/result.json"
+      }
+    ]
+  },
+  "trials": {
+    "state": "stored",
+    "job": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+    "bundleDigest": "sha256:a33872450416d675449128837155d3515dec9e149fdd31b70432ecd25f6adf59",
+    "attemptsPerCase": 1,
+    "cases": [
+      {
+        "id": "rn-basic",
+        "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+        "expectedBehaviors": [
+          "RELEASE_NOTES.md exists",
+          "The first line is exactly 'ACME-RN/2 1.4.0'",
+          "There are exactly two sections, '## Added' then '## Fixed'",
+          "Each bullet ends with its ticket ID in square brackets"
+        ],
+        "withSkill": [
+          {
+            "id": "rn-basic__CbK6FQ2",
+            "arm": "with-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "unscored",
+            "errorType": "RuntimeError",
+            "durationSec": 61.7,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": true,
+            "dropped": 0
+          }
+        ],
+        "withoutSkill": [
+          {
+            "id": "rn-basic__59JHTSp",
+            "arm": "without-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "unscored",
+            "errorType": "RuntimeError",
+            "durationSec": 61.5,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": true,
+            "dropped": 0
+          }
+        ]
+      }
+    ],
+    "totals": {
+      "trials": 2,
+      "scored": 0,
+      "unscored": 2,
+      "withheld": 0,
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "tokensCached": 0,
+      "costUsd": 0,
+      "costEstimated": false,
+      "agentSec": 0,
+      "durationSec": 123.2
+    },
+    "credentials": [
+      {
+        "role": "agent",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      },
+      {
+        "role": "judge",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      }
+    ],
+    "withheld": [],
+    "network": {
+      "state": "off",
+      "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)",
+      "forwarded": 0,
+      "dropped": 0
+    }
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "jobName": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+      "reportDigest": "sha256:aa7db62b391210b83ecacab22acfdf2c218b8524671c13efda1f52d5babf36dd",
+      "current": true,
+      "trials": "stored"
+    }
+  ],
+  "refreshSeconds": 0
+}

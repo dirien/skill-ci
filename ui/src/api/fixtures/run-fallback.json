@@ -1,0 +1,274 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+    "skill": "acme-release-notes",
+    "version": "v1.0.0",
+    "digest": "sha256:0fb7e3f4ceabce11e194bc4ba99225d48d368511c4f3e32d02701d965bc0d890",
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "entry": "claude-code@2.1.292/claude-haiku-5-5",
+    "required": true,
+    "attempts": 3,
+    "trigger": "push",
+    "phase": "Succeeded",
+    "tiers": {
+      "tier1": "passed",
+      "tier2": "passed",
+      "tier3": "passed"
+    },
+    "retries": 0,
+    "createdAt": "2026-10-28T09:12:00Z",
+    "hasReport": true,
+    "trials": "none",
+    "ranVersion": "2.1.292",
+    "verdict": "Helps",
+    "withSkill": 0.95,
+    "withoutSkill": 0.37,
+    "lift": 0.58,
+    "liftCI": {
+      "lower": 0.51,
+      "upper": 0.65,
+      "level": "95%"
+    },
+    "n": "3/3",
+    "publication": "passed",
+    "networkMode": "full",
+    "completedAt": "2026-10-28T09:41:12Z",
+    "durationSec": 1752.0
+  },
+  "specAgentVersion": "2.1.292",
+  "channels": [
+    "stable"
+  ],
+  "samples": {
+    "withSkill": [
+      0.95,
+      0.9,
+      1.0
+    ],
+    "withoutSkill": [
+      0.36,
+      0.38,
+      0.37
+    ]
+  },
+  "findings": [],
+  "conditions": [],
+  "network": {
+    "declared": [],
+    "hosts": [],
+    "enforced": false,
+    "legacy": true
+  },
+  "sandbox": {
+    "profile": "default",
+    "specProfile": "default",
+    "warmPool": "default"
+  },
+  "report": {
+    "state": "ok",
+    "digest": "sha256:c6e95d09b3eae8101f9feecbf0c24657dff05c0f1d45e6f51de21ed4ad8d94cd",
+    "dimensions": [
+      {
+        "key": "accuracy",
+        "label": "Accuracy",
+        "withSkill": 1.0,
+        "withoutSkill": 0.4,
+        "delta": 0.6,
+        "overall": false
+      },
+      {
+        "key": "goal_accuracy",
+        "label": "Goal accuracy",
+        "withSkill": 1.0,
+        "withoutSkill": 0.05,
+        "delta": 0.95,
+        "overall": false
+      },
+      {
+        "key": "behavior_check",
+        "label": "Behavior check",
+        "withSkill": 1.0,
+        "withoutSkill": 0.25,
+        "delta": 0.75,
+        "overall": false
+      },
+      {
+        "key": "skill_execution",
+        "label": "Skill execution",
+        "withSkill": 1.0,
+        "withoutSkill": 0.0,
+        "delta": 1.0,
+        "overall": false
+      },
+      {
+        "key": "skill_efficiency",
+        "label": "Skill efficiency",
+        "withSkill": 0.75,
+        "withoutSkill": 0.25,
+        "delta": 0.5,
+        "overall": false
+      },
+      {
+        "key": "security",
+        "label": "Security",
+        "withSkill": 1.0,
+        "withoutSkill": 1.0,
+        "delta": 0.0,
+        "overall": false
+      },
+      {
+        "key": "overall",
+        "label": "Overall",
+        "withSkill": 0.95,
+        "withoutSkill": 0.36,
+        "delta": 0.59,
+        "overall": true
+      }
+    ],
+    "activation": {
+      "status": "activated",
+      "activated": 1,
+      "positive": 1
+    },
+    "files": [
+      {
+        "name": "report.html",
+        "href": "/runs/acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5/report"
+      },
+      {
+        "name": "result.json",
+        "href": "/runs/acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5/result.json"
+      }
+    ]
+  },
+  "trials": {
+    "state": "fallback",
+    "reason": "This run has no trial bundle (runner before trial bundles): scores from result.json, no sessions.",
+    "job": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+    "attemptsPerCase": 3,
+    "cases": [
+      {
+        "id": "rn-basic",
+        "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+        "expectedBehaviors": [],
+        "withSkill": [
+          {
+            "id": "rn-basic__with0",
+            "arm": "with-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "scored",
+            "score": 0.95,
+            "passed": true,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          },
+          {
+            "id": "rn-basic__with1",
+            "arm": "with-skill",
+            "case": "rn-basic",
+            "attempt": 2,
+            "status": "scored",
+            "score": 0.9,
+            "passed": true,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          },
+          {
+            "id": "rn-basic__with2",
+            "arm": "with-skill",
+            "case": "rn-basic",
+            "attempt": 3,
+            "status": "scored",
+            "score": 1.0,
+            "passed": true,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          }
+        ],
+        "withoutSkill": [
+          {
+            "id": "rn-basic__with0",
+            "arm": "without-skill",
+            "case": "rn-basic",
+            "attempt": 1,
+            "status": "scored",
+            "score": 0.36,
+            "passed": false,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          },
+          {
+            "id": "rn-basic__with1",
+            "arm": "without-skill",
+            "case": "rn-basic",
+            "attempt": 2,
+            "status": "scored",
+            "score": 0.38,
+            "passed": false,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          },
+          {
+            "id": "rn-basic__with2",
+            "arm": "without-skill",
+            "case": "rn-basic",
+            "attempt": 3,
+            "status": "scored",
+            "score": 0.37,
+            "passed": false,
+            "steps": 0,
+            "toolCalls": 0,
+            "costEstimated": false,
+            "hasSession": false,
+            "dropped": 0
+          }
+        ]
+      }
+    ],
+    "totals": {
+      "trials": 6,
+      "scored": 6,
+      "unscored": 0,
+      "withheld": 0,
+      "tokensIn": 0,
+      "tokensOut": 0,
+      "tokensCached": 0,
+      "costUsd": 0,
+      "costEstimated": false,
+      "agentSec": 0,
+      "durationSec": 0
+    },
+    "credentials": [],
+    "withheld": []
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "jobName": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+      "reportDigest": "sha256:c6e95d09b3eae8101f9feecbf0c24657dff05c0f1d45e6f51de21ed4ad8d94cd",
+      "current": true,
+      "trials": "none"
+    }
+  ],
+  "refreshSeconds": 0,
+  "withSkillStdErr": 0.03,
+  "withoutSkillStdErr": 0.01
+}

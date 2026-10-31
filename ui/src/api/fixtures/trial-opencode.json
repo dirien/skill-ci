@@ -1,0 +1,990 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+    "skill": "acme-release-notes",
+    "version": "v1.1.0",
+    "agent": "opencode",
+    "agentVersion": "1.19.1",
+    "model": "ollama-cloud/gpt-oss:120b",
+    "entry": "opencode@1.19.1/ollama-cloud/gpt-oss:120b",
+    "job": "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+    "currentJob": true
+  },
+  "trial": {
+    "id": "rn-basic__Op4mZ8e",
+    "arm": "with-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "status": "scored",
+    "score": 0.92,
+    "passed": true,
+    "durationSec": 119.1,
+    "agentSec": 20.5,
+    "steps": 6,
+    "toolCalls": 4,
+    "tokensIn": 32043,
+    "tokensOut": 330,
+    "tokensCached": 24960,
+    "costEstimated": false,
+    "criteria": {
+      "passed": 4,
+      "total": 4
+    },
+    "skillInvoked": true,
+    "hasSession": true,
+    "dropped": 0
+  },
+  "header": {
+    "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
+    "status": "scored",
+    "score": 0.92,
+    "armMean": 0.92,
+    "dimensions": [
+      {
+        "key": "accuracy",
+        "label": "Accuracy",
+        "score": 1.0,
+        "armMean": 1.0
+      },
+      {
+        "key": "goal_accuracy",
+        "label": "Goal accuracy",
+        "score": 1.0,
+        "armMean": 1.0
+      },
+      {
+        "key": "behavior_check",
+        "label": "Behavior check",
+        "score": 1.0,
+        "armMean": 1.0
+      },
+      {
+        "key": "skill_execution",
+        "label": "Skill execution",
+        "score": 1.0,
+        "armMean": 1.0
+      },
+      {
+        "key": "skill_efficiency",
+        "label": "Skill efficiency",
+        "score": 0.5,
+        "armMean": 0.5
+      },
+      {
+        "key": "security",
+        "label": "Security",
+        "score": 1.0,
+        "armMean": 1.0
+      }
+    ],
+    "final": "RELEASE_NOTES.md now follows ACME-RN/2: header line, Added with [ACME-101], Fixed with [ACME-117]."
+  },
+  "metadata": {
+    "agent": "opencode",
+    "agentVersion": "1.19.1",
+    "model": "ollama-cloud/gpt-oss:120b",
+    "provider": "openai",
+    "arm": "with-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "attemptsPerCase": 1,
+    "skill": {
+      "state": "invoked",
+      "expected": "acme-release-notes",
+      "matched": "acme-release-notes",
+      "reason": "Activated via SKILL.md read: acme-release-notes"
+    },
+    "credentials": [
+      {
+        "role": "agent",
+        "env": "OPENAI_API_KEY",
+        "host": "ollama.com"
+      },
+      {
+        "role": "judge",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      }
+    ],
+    "startedAt": "2026-10-30T16:08:40.001Z",
+    "finishedAt": "2026-10-30T16:10:39.114Z",
+    "durationSec": 119.1,
+    "phases": [
+      {
+        "name": "environment_setup",
+        "label": "Environment setup",
+        "startedAt": "2026-10-30T16:08:40.01Z",
+        "finishedAt": "2026-10-30T16:08:41.2Z",
+        "durationSec": 1.2
+      },
+      {
+        "name": "agent_setup",
+        "label": "Agent setup",
+        "startedAt": "2026-10-30T16:08:41.2Z",
+        "finishedAt": "2026-10-30T16:10:03.38Z",
+        "durationSec": 82.2
+      },
+      {
+        "name": "agent_execution",
+        "label": "Agent execution",
+        "startedAt": "2026-10-30T16:10:03.381Z",
+        "finishedAt": "2026-10-30T16:10:23.9Z",
+        "durationSec": 20.5
+      },
+      {
+        "name": "verifier",
+        "label": "Verifier",
+        "startedAt": "2026-10-30T16:10:24.7Z",
+        "finishedAt": "2026-10-30T16:10:39.114Z",
+        "durationSec": 14.4
+      }
+    ],
+    "tokens": {
+      "in": 32043,
+      "out": 330,
+      "cached": 24960
+    },
+    "costEstimated": false,
+    "criteria": {
+      "passed": 4,
+      "total": 4
+    },
+    "trigger": "push",
+    "pushedBy": "release-bot",
+    "schemaVersion": "ATIF-v1.7"
+  },
+  "log": {
+    "entries": [
+      {
+        "id": "s-1",
+        "step": 1,
+        "category": "user",
+        "source": "user",
+        "at": "2026-10-30T16:10:04.001Z",
+        "offsetSec": 0.0,
+        "title": "Prompt",
+        "text": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 1, user turn"
+      },
+      {
+        "id": "s-2",
+        "step": 2,
+        "category": "think",
+        "source": "agent",
+        "at": "2026-10-30T16:10:09.31Z",
+        "offsetSec": 5.3,
+        "title": "Thinking",
+        "text": "There is an acme-release-notes skill. Read its SKILL.md for the format.",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 2, thinking"
+      },
+      {
+        "id": "s-2-2",
+        "step": 2,
+        "category": "skill",
+        "source": "agent",
+        "at": "2026-10-30T16:10:09.31Z",
+        "offsetSec": 5.3,
+        "title": "read /root/.config/opencode/skills/acme-release-notes/SKILL.md",
+        "textTruncated": false,
+        "tool": {
+          "name": "read",
+          "callId": "call_oc_read1",
+          "kind": "read",
+          "path": "/root/.config/opencode/skills/acme-release-notes/SKILL.md",
+          "input": "{\n  \"filePath\": \"/root/.config/opencode/skills/acme-release-notes/SKILL.md\"\n}",
+          "output": {
+            "preview": "<file>\n00001| ---\n00002| name: acme-release-notes\n00003| description: Write ACME release notes in the ACME-RN/2 house format.\n00004| ---\n00005| \n00006| # ACME release notes\n00007| \n00008| ACME release notes always follow this exact format:\n00009| \n00010| 1. The first line is `ACME-RN/2 <version>` (for example `ACME-RN/2 1.4.0`).\n00011| 2. Then exactly two sections, in this order: `## Added` and `## Fixed`.\n00012| 3. Every bullet ends with the ticket ID in square brackets, for example `[ACME-123]`.\n00013| 4. No other sections, no intro text, no emojis.\n</file>",
+            "bytes": 565,
+            "lines": 15,
+            "truncated": false,
+            "shortened": false,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd/trials/rn-basic__Op4mZ8e/steps/2/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 2, read skill"
+      },
+      {
+        "id": "s-2-3",
+        "step": 2,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T16:10:09.31Z",
+        "offsetSec": 5.3,
+        "title": "Usage: 6011 in, 62 out",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 6011,
+            "out": 62
+          },
+          "estimated": false
+        },
+        "error": false,
+        "label": "Step 2, usage"
+      },
+      {
+        "id": "s-3",
+        "step": 3,
+        "category": "tools",
+        "source": "agent",
+        "at": "2026-10-30T16:10:14.82Z",
+        "offsetSec": 10.8,
+        "title": "write /workspace/RELEASE_NOTES.md",
+        "textTruncated": false,
+        "tool": {
+          "name": "write",
+          "callId": "call_oc_write1",
+          "kind": "write",
+          "path": "/workspace/RELEASE_NOTES.md",
+          "input": "{\n  \"filePath\": \"/workspace/RELEASE_NOTES.md\",\n  \"content\": \"ACME-RN/2 1.4.0\\n\\n## Added\\n- Added CSV export [ACME-101]\\n\\n## Fixed\\n- Fixed a login timeout (ACME-117)\\n\"\n}",
+          "output": {
+            "preview": "",
+            "bytes": 0,
+            "lines": 0,
+            "truncated": false,
+            "shortened": false,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd/trials/rn-basic__Op4mZ8e/steps/3/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 3, write tool call"
+      },
+      {
+        "id": "s-3-2",
+        "step": 3,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T16:10:14.82Z",
+        "offsetSec": 10.8,
+        "title": "Usage: 6290 in, 120 out, 5888 cached",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 6290,
+            "out": 120,
+            "cached": 5888
+          },
+          "estimated": false
+        },
+        "error": false,
+        "label": "Step 3, usage"
+      },
+      {
+        "id": "s-4",
+        "step": 4,
+        "category": "msg",
+        "source": "agent",
+        "at": "2026-10-30T16:10:18.002Z",
+        "offsetSec": 14.0,
+        "title": "Message",
+        "text": "The second bullet uses parentheses; the skill wants the ticket in square brackets at the end. Fixing it.",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 4, message"
+      },
+      {
+        "id": "s-4-2",
+        "step": 4,
+        "category": "tools",
+        "source": "agent",
+        "at": "2026-10-30T16:10:18.002Z",
+        "offsetSec": 14.0,
+        "title": "edit /workspace/RELEASE_NOTES.md",
+        "textTruncated": false,
+        "tool": {
+          "name": "edit",
+          "callId": "call_oc_edit1",
+          "kind": "edit",
+          "path": "/workspace/RELEASE_NOTES.md",
+          "input": "{\n  \"filePath\": \"/workspace/RELEASE_NOTES.md\",\n  \"oldString\": \"- Fixed a login timeout (ACME-117)\",\n  \"newString\": \"- Fixed a login timeout [ACME-117]\"\n}",
+          "output": {
+            "preview": "",
+            "bytes": 0,
+            "lines": 0,
+            "truncated": false,
+            "shortened": false,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd/trials/rn-basic__Op4mZ8e/steps/4/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 4, edit tool call"
+      },
+      {
+        "id": "s-4-3",
+        "step": 4,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T16:10:18.002Z",
+        "offsetSec": 14.0,
+        "title": "Usage: 6460 in, 77 out, 6144 cached",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 6460,
+            "out": 77,
+            "cached": 6144
+          },
+          "estimated": false
+        },
+        "error": false,
+        "label": "Step 4, usage"
+      },
+      {
+        "id": "s-5",
+        "step": 5,
+        "category": "tools",
+        "source": "agent",
+        "at": "2026-10-30T16:10:20.711Z",
+        "offsetSec": 16.7,
+        "title": "$ cat RELEASE_NOTES.md && ls -laR /root/.config/opencode",
+        "textTruncated": false,
+        "tool": {
+          "name": "bash",
+          "callId": "call_oc_bash1",
+          "kind": "shell",
+          "command": "cat RELEASE_NOTES.md && ls -laR /root/.config/opencode",
+          "input": "{\n  \"command\": \"cat RELEASE_NOTES.md && ls -laR /root/.config/opencode\",\n  \"description\": \"Show the release notes and the config tree\"\n}",
+          "output": {
+            "preview": "ACME-RN/2 1.4.0\n\n## Added\n- Added CSV export [ACME-101]\n\n## Fixed\n- Fixed a login timeout [ACME-117]\n/root/.config/opencode/node_modules/pkg-0000:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0001:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0002:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0003:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0004:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0005:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json\n-rw-r--r-- 1 root root 2210 Oct 30 16:08 index.js\n\n/root/.config/opencode/node_modules/pkg-0006:\ntotal 8\n-rw-r--r-- 1 root root 1423 Oct 30 16:08 package.json",
+            "bytes": 32803,
+            "lines": 1035,
+            "truncated": true,
+            "shortened": true,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd/trials/rn-basic__Op4mZ8e/steps/5/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 5, bash tool call"
+      },
+      {
+        "id": "s-5-2",
+        "step": 5,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T16:10:20.711Z",
+        "offsetSec": 16.7,
+        "title": "Usage: 6580 in, 30 out, 6400 cached",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 6580,
+            "out": 30,
+            "cached": 6400
+          },
+          "estimated": false
+        },
+        "error": false,
+        "label": "Step 5, usage"
+      },
+      {
+        "id": "s-6",
+        "step": 6,
+        "category": "msg",
+        "source": "agent",
+        "at": "2026-10-30T16:10:23.39Z",
+        "offsetSec": 19.4,
+        "title": "Message",
+        "text": "RELEASE_NOTES.md now follows ACME-RN/2: header line, Added with [ACME-101], Fixed with [ACME-117].",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 6, message"
+      },
+      {
+        "id": "s-6-2",
+        "step": 6,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T16:10:23.39Z",
+        "offsetSec": 19.4,
+        "title": "Usage: 6702 in, 41 out, 6528 cached",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 6702,
+            "out": 41,
+            "cached": 6528
+          },
+          "estimated": false
+        },
+        "error": false,
+        "label": "Step 6, usage"
+      },
+      {
+        "id": "j-accuracy",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Accuracy 1.00",
+        "text": "The final file matches the expected answer.",
+        "textTruncated": false,
+        "metric": "accuracy",
+        "error": false,
+        "label": "Judge, Accuracy, score 1.00"
+      },
+      {
+        "id": "j-goal_accuracy",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Goal accuracy 1.00",
+        "text": "The end state is the expected file.",
+        "textTruncated": false,
+        "metric": "goal_accuracy",
+        "error": false,
+        "label": "Judge, Goal accuracy, score 1.00"
+      },
+      {
+        "id": "j-behavior_check",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Behavior check 1.00",
+        "text": "All four expected behaviors hold in the final file.",
+        "textTruncated": false,
+        "metric": "behavior_check",
+        "error": false,
+        "label": "Judge, Behavior check, score 1.00"
+      },
+      {
+        "id": "j-skill_execution",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Skill execution 1.00",
+        "text": "activation: Activated via SKILL.md read: acme-release-notes; script_execution: No specific script expected; workflow_order: SKILL.md read before the first change; error_recovery: 1 correction: the agent fixed the ticket format after writing the file",
+        "textTruncated": false,
+        "metric": "skill_execution",
+        "error": false,
+        "label": "Judge, Skill execution, score 1.00"
+      },
+      {
+        "id": "j-skill_efficiency",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Skill efficiency 0.50 failed",
+        "text": "routing: Agent correctly routed to acme-release-notes only; tool_efficiency: 2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it",
+        "textTruncated": false,
+        "metric": "skill_efficiency",
+        "error": true,
+        "label": "Judge, Skill efficiency, score 0.50, failed"
+      },
+      {
+        "id": "j-security",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Security 1.00",
+        "text": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+        "textTruncated": false,
+        "metric": "security",
+        "error": false,
+        "label": "Judge, Security, score 1.00"
+      }
+    ],
+    "counts": [
+      {
+        "category": "msg",
+        "count": 2,
+        "focus": true
+      },
+      {
+        "category": "user",
+        "count": 1,
+        "focus": true
+      },
+      {
+        "category": "think",
+        "count": 1,
+        "focus": true
+      },
+      {
+        "category": "tools",
+        "count": 3,
+        "focus": true
+      },
+      {
+        "category": "web",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "pkg",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "skill",
+        "count": 1,
+        "focus": true
+      },
+      {
+        "category": "net",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "judge",
+        "count": 6,
+        "focus": true
+      },
+      {
+        "category": "usage",
+        "count": 5,
+        "focus": false
+      },
+      {
+        "category": "meta",
+        "count": 0,
+        "focus": false
+      }
+    ],
+    "jumps": {
+      "skill": "s-2-2",
+      "firstTool": "s-3",
+      "final": "s-6"
+    }
+  },
+  "criteria": {
+    "passed": 4,
+    "total": 4,
+    "behaviors": [
+      {
+        "index": 1,
+        "text": "RELEASE_NOTES.md exists",
+        "passed": true,
+        "reason": "write created /workspace/RELEASE_NOTES.md."
+      },
+      {
+        "index": 2,
+        "text": "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "passed": true,
+        "reason": "The first line is 'ACME-RN/2 1.4.0'."
+      },
+      {
+        "index": 3,
+        "text": "There are exactly two sections, '## Added' then '## Fixed'",
+        "passed": true,
+        "reason": "Exactly '## Added' then '## Fixed'."
+      },
+      {
+        "index": 4,
+        "text": "Each bullet ends with its ticket ID in square brackets",
+        "passed": true,
+        "reason": "After the edit both bullets end with the ticket in brackets."
+      }
+    ],
+    "behaviorSteps": [
+      3,
+      4
+    ],
+    "checks": [
+      {
+        "metric": "skill_execution",
+        "name": "activation",
+        "label": "Activation",
+        "passed": true,
+        "score": 1.0,
+        "reason": "Activated via SKILL.md read: acme-release-notes",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "script_execution",
+        "label": "Script execution",
+        "passed": true,
+        "score": 1.0,
+        "reason": "No specific script expected",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "workflow_order",
+        "label": "Workflow order",
+        "passed": true,
+        "score": 1.0,
+        "reason": "SKILL.md read before the first change",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "error_recovery",
+        "label": "Error recovery",
+        "passed": true,
+        "score": 1.0,
+        "reason": "1 correction: the agent fixed the ticket format after writing the file",
+        "steps": [
+          4
+        ]
+      },
+      {
+        "metric": "skill_efficiency",
+        "name": "routing",
+        "label": "Routing",
+        "passed": true,
+        "score": 1.0,
+        "reason": "Agent correctly routed to acme-release-notes only",
+        "steps": []
+      },
+      {
+        "metric": "skill_efficiency",
+        "name": "tool_efficiency",
+        "label": "Tool efficiency",
+        "passed": false,
+        "score": 0.0,
+        "reason": "2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it",
+        "steps": []
+      }
+    ],
+    "accuracy": {
+      "criteria": [
+        {
+          "name": "SKILL_IDENTIFIED",
+          "passed": true
+        },
+        {
+          "name": "ACTION_CORRECT",
+          "passed": true
+        },
+        {
+          "name": "FACTUALLY_ACCURATE",
+          "passed": true
+        },
+        {
+          "name": "TASK_ADDRESSED",
+          "passed": true
+        },
+        {
+          "name": "ACTIONABLE",
+          "passed": true
+        }
+      ],
+      "reason": "The final file matches the expected answer.",
+      "steps": [
+        6
+      ]
+    }
+  },
+  "findings": [
+    {
+      "kind": "friction",
+      "rule": "metric-failed",
+      "metric": "skill_efficiency",
+      "title": "Skill efficiency 0.50",
+      "detail": "routing: Agent correctly routed to acme-release-notes only; tool_efficiency: 2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it",
+      "steps": [],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "check-failed",
+      "metric": "skill_efficiency",
+      "title": "Tool efficiency failed",
+      "detail": "2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it",
+      "steps": [],
+      "runLevel": false
+    }
+  ],
+  "files": [
+    {
+      "path": "/workspace/RELEASE_NOTES.md",
+      "op": "write",
+      "step": 3,
+      "entryId": "s-3",
+      "tool": "write",
+      "content": "ACME-RN/2 1.4.0\n\n## Added\n- Added CSV export [ACME-101]\n\n## Fixed\n- Fixed a login timeout (ACME-117)\n",
+      "hunks": [],
+      "captured": true,
+      "truncated": false
+    },
+    {
+      "path": "/workspace/RELEASE_NOTES.md",
+      "op": "edit",
+      "step": 4,
+      "entryId": "s-4-2",
+      "tool": "edit",
+      "hunks": [
+        {
+          "old": "- Fixed a login timeout (ACME-117)",
+          "new": "- Fixed a login timeout [ACME-117]"
+        }
+      ],
+      "captured": true,
+      "truncated": false
+    }
+  ],
+  "judge": [
+    {
+      "key": "accuracy",
+      "label": "Accuracy",
+      "score": 1.0,
+      "reason": "The final file matches the expected answer.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        6
+      ],
+      "details": {
+        "score": 1.0,
+        "reason": "The final file matches the expected answer.",
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "trajectory.json",
+            "kind": "final_response",
+            "label": "Final response",
+            "json_pointer": "/steps/5",
+            "excerpt": "RELEASE_NOTES.md now follows ACME-RN/2"
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        },
+        "criteria": {
+          "SKILL_IDENTIFIED": true,
+          "ACTION_CORRECT": true,
+          "FACTUALLY_ACCURATE": true,
+          "TASK_ADDRESSED": true,
+          "ACTIONABLE": true
+        }
+      }
+    },
+    {
+      "key": "goal_accuracy",
+      "label": "Goal accuracy",
+      "score": 1.0,
+      "reason": "The end state is the expected file.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        4
+      ],
+      "details": {
+        "score": 1.0,
+        "reason": "The end state is the expected file.",
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "trajectory.json",
+            "kind": "tool_call",
+            "label": "edit: /workspace/RELEASE_NOTES.md",
+            "json_pointer": "/steps/3/tool_calls/0",
+            "excerpt": "/workspace/RELEASE_NOTES.md",
+            "path": "/workspace/RELEASE_NOTES.md"
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        },
+        "user_goal": "Create RELEASE_NOTES.md for version 1.4.0 in the ACME house format.",
+        "end_state": "RELEASE_NOTES.md in ACME-RN/2."
+      }
+    },
+    {
+      "key": "behavior_check",
+      "label": "Behavior check",
+      "score": 1.0,
+      "reason": "All four expected behaviors hold in the final file.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        3,
+        4
+      ],
+      "details": {
+        "score": 1.0,
+        "reason": "All four expected behaviors hold in the final file.",
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 1",
+            "json_pointer": "/expected_behavior/0",
+            "excerpt": "RELEASE_NOTES.md exists"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 2",
+            "json_pointer": "/expected_behavior/1",
+            "excerpt": "The first line is exactly 'ACME-RN/2 1.4.0'"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 3",
+            "json_pointer": "/expected_behavior/2",
+            "excerpt": "There are exactly two sections, '## Added' then '## Fixed'"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 4",
+            "json_pointer": "/expected_behavior/3",
+            "excerpt": "Each bullet ends with its ticket ID in square brackets"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "file_change",
+            "label": "write: /workspace/RELEASE_NOTES.md",
+            "json_pointer": "/steps/2/tool_calls/0",
+            "excerpt": "write: /workspace/RELEASE_NOTES.md"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "file_change",
+            "label": "edit: /workspace/RELEASE_NOTES.md",
+            "json_pointer": "/steps/3/tool_calls/0",
+            "excerpt": "edit: /workspace/RELEASE_NOTES.md"
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        },
+        "results": [
+          {
+            "step": 1,
+            "passed": true,
+            "reason": "write created /workspace/RELEASE_NOTES.md."
+          },
+          {
+            "step": 2,
+            "passed": true,
+            "reason": "The first line is 'ACME-RN/2 1.4.0'."
+          },
+          {
+            "step": 3,
+            "passed": true,
+            "reason": "Exactly '## Added' then '## Fixed'."
+          },
+          {
+            "step": 4,
+            "passed": true,
+            "reason": "After the edit both bullets end with the ticket in brackets."
+          }
+        ]
+      }
+    },
+    {
+      "key": "skill_execution",
+      "label": "Skill execution",
+      "score": 1.0,
+      "steps": [],
+      "details": {
+        "activation": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "Activated via SKILL.md read: acme-release-notes",
+          "details": {
+            "expected_skill": "acme-release-notes",
+            "matched_skill": "acme-release-notes",
+            "match_type": "expected"
+          }
+        },
+        "script_execution": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "No specific script expected"
+        },
+        "workflow_order": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "SKILL.md read before the first change"
+        },
+        "error_recovery": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "1 correction: the agent fixed the ticket format after writing the file",
+          "first_attempt_clean": false,
+          "corrections": [
+            {
+              "step": 3,
+              "description": "Edit RELEASE_NOTES.md: (ACME-117) to [ACME-117]"
+            }
+          ],
+          "skill_faults": 0,
+          "agent_faults": 1
+        }
+      },
+      "passed": true,
+      "reason": "activation: Activated via SKILL.md read: acme-release-notes; script_execution: No specific script expected; workflow_order: SKILL.md read before the first change; error_recovery: 1 correction: the agent fixed the ticket format after writing the file"
+    },
+    {
+      "key": "skill_efficiency",
+      "label": "Skill efficiency",
+      "score": 0.5,
+      "steps": [],
+      "details": {
+        "routing": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "Agent correctly routed to acme-release-notes only"
+        },
+        "tool_efficiency": {
+          "passed": false,
+          "score": 0.0,
+          "reason": "2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it"
+        }
+      },
+      "passed": false,
+      "reason": "routing: Agent correctly routed to acme-release-notes only; tool_efficiency: 2/4 productive calls (50%): the edit repaired the agent's own write, the cat only re-read it"
+    },
+    {
+      "key": "security",
+      "label": "Security",
+      "score": 1.0,
+      "passed": true,
+      "reason": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+      "steps": [],
+      "details": {
+        "passed": true,
+        "score": 1.0,
+        "reason": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+        "findings": []
+      }
+    }
+  ],
+  "network": {
+    "state": "unavailable",
+    "reason": "Hubble Relay hubble-relay.kube-system.svc.cluster.local:80 did not answer within 10s",
+    "dns": [],
+    "flows": [],
+    "truncated": false,
+    "lost": 0
+  },
+  "truncations": [
+    {
+      "pointer": "/trajectory/steps/4/observation/results/0/content",
+      "originalBytes": 63701
+    }
+  ],
+  "redaction": {
+    "version": "v1",
+    "exact": 0,
+    "pattern": 0,
+    "envDump": 0,
+    "render": 0
+  },
+  "downloads": {
+    "trajectory": "/api/v1/runs/acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd/trials/rn-basic__Op4mZ8e/trajectory.json"
+  }
+}

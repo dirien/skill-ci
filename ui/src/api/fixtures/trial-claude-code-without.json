@@ -1,0 +1,993 @@
+{
+  "run": {
+    "name": "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+    "skill": "acme-release-notes",
+    "version": "v1.1.0",
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "entry": "claude-code@2.1.292/claude-haiku-5-5",
+    "job": "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+    "currentJob": true
+  },
+  "trial": {
+    "id": "rn-basic__BQbpoR9",
+    "arm": "without-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "status": "scored",
+    "score": 0.36,
+    "passed": false,
+    "durationSec": 453.1,
+    "agentSec": 7.4,
+    "steps": 4,
+    "toolCalls": 2,
+    "tokensIn": 84064,
+    "tokensOut": 531,
+    "tokensCached": 55614,
+    "costUsd": 0.163987,
+    "costEstimated": false,
+    "criteria": {
+      "passed": 1,
+      "total": 4
+    },
+    "skillInvoked": false,
+    "hasSession": true,
+    "dropped": 0
+  },
+  "header": {
+    "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
+    "status": "scored",
+    "score": 0.36,
+    "armMean": 0.36,
+    "dimensions": [
+      {
+        "key": "accuracy",
+        "label": "Accuracy",
+        "score": 0.4,
+        "armMean": 0.4
+      },
+      {
+        "key": "goal_accuracy",
+        "label": "Goal accuracy",
+        "score": 0.05,
+        "armMean": 0.05
+      },
+      {
+        "key": "behavior_check",
+        "label": "Behavior check",
+        "score": 0.25,
+        "armMean": 0.25
+      },
+      {
+        "key": "skill_execution",
+        "label": "Skill execution",
+        "score": 0.0,
+        "armMean": 0.0
+      },
+      {
+        "key": "skill_efficiency",
+        "label": "Skill efficiency",
+        "score": 0.25,
+        "armMean": 0.25
+      },
+      {
+        "key": "security",
+        "label": "Security",
+        "score": 1.0,
+        "armMean": 1.0
+      }
+    ],
+    "final": "I wrote the 1.4.0 release notes to `/workspace/RELEASE_NOTES.md`. They list CSV export (ACME-101) under New Features and the login timeout fix (ACME-117) under Bug Fixes. The login entry is worded generically since I don't have the ticket details, so you may want to make it more specific."
+  },
+  "metadata": {
+    "agent": "claude-code",
+    "agentVersion": "2.1.292",
+    "model": "claude-haiku-5-5",
+    "provider": "anthropic",
+    "arm": "without-skill",
+    "case": "rn-basic",
+    "attempt": 1,
+    "attemptsPerCase": 1,
+    "workspace": "/workspace",
+    "skill": {
+      "state": "not-used",
+      "expected": "acme-release-notes"
+    },
+    "credentials": [
+      {
+        "role": "agent",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      },
+      {
+        "role": "judge",
+        "env": "ANTHROPIC_API_KEY",
+        "host": "api.anthropic.com"
+      }
+    ],
+    "startedAt": "2026-10-30T14:13:45.008909Z",
+    "finishedAt": "2026-10-30T14:21:18.100004Z",
+    "durationSec": 453.1,
+    "phases": [
+      {
+        "name": "environment_setup",
+        "label": "Environment setup",
+        "startedAt": "2026-10-30T14:13:45.016026Z",
+        "finishedAt": "2026-10-30T14:18:13.595616Z",
+        "durationSec": 268.6
+      },
+      {
+        "name": "agent_setup",
+        "label": "Agent setup",
+        "startedAt": "2026-10-30T14:18:13.595775Z",
+        "finishedAt": "2026-10-30T14:20:52.725952Z",
+        "durationSec": 159.1
+      },
+      {
+        "name": "agent_execution",
+        "label": "Agent execution",
+        "startedAt": "2026-10-30T14:20:52.726738Z",
+        "finishedAt": "2026-10-30T14:21:00.122183Z",
+        "durationSec": 7.4
+      },
+      {
+        "name": "verifier",
+        "label": "Verifier",
+        "startedAt": "2026-10-30T14:21:02.927132Z",
+        "finishedAt": "2026-10-30T14:21:18.042763Z",
+        "durationSec": 15.1
+      }
+    ],
+    "tokens": {
+      "in": 84064,
+      "out": 531,
+      "cached": 55614
+    },
+    "costUsd": 0.163987,
+    "costEstimated": false,
+    "criteria": {
+      "passed": 1,
+      "total": 4
+    },
+    "trigger": "push",
+    "pushedBy": "release-bot",
+    "schemaVersion": "ATIF-v1.7"
+  },
+  "log": {
+    "entries": [
+      {
+        "id": "s-1",
+        "step": 1,
+        "category": "user",
+        "source": "user",
+        "at": "2026-10-30T14:20:54.329Z",
+        "offsetSec": 0.0,
+        "title": "Prompt",
+        "text": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 1, user turn"
+      },
+      {
+        "id": "s-2",
+        "step": 2,
+        "category": "tools",
+        "source": "agent",
+        "at": "2026-10-30T14:20:56.758Z",
+        "offsetSec": 2.4,
+        "title": "$ ls -la /workspace",
+        "textTruncated": false,
+        "tool": {
+          "name": "Bash",
+          "callId": "toolu_01SN7mRAWkrxT6BxWhXLhKqq",
+          "kind": "shell",
+          "command": "ls -la /workspace",
+          "input": "{\n  \"command\": \"ls -la /workspace\",\n  \"description\": \"List workspace contents to check for existing release notes\"\n}",
+          "output": {
+            "preview": "total 60\ndrwxr-xr-x 1 root root 4096 Oct 30 14:16 .\ndrwxr-xr-x 1 root root 4096 Oct 30 14:18 ..\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .agents\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .claude\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .cline\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .codex\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .config\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .cursor\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .gemini\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .opencode\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .qwen\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 input\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 output\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 repo\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 skills\n\n[stdout]\ntotal 60\ndrwxr-xr-x 1 root root 4096 Oct 30 14:16 .\ndrwxr-xr-x 1 root root 4096 Oct 30 14:18 ..\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .agents\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .claude\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .cline\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .codex\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .config\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .cursor\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .gemini\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .opencode\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .qwen\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 input\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 output\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 repo\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 skills\n[metadata] {\"noOutputExpected\": false}",
+            "bytes": 1496,
+            "lines": 35,
+            "truncated": false,
+            "shortened": false,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5/trials/rn-basic__BQbpoR9/steps/2/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 2, Bash tool call"
+      },
+      {
+        "id": "s-2-2",
+        "step": 2,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T14:20:56.758Z",
+        "offsetSec": 2.4,
+        "title": "Usage: 27449 in, 214 out, 0 cached, $0.0035 est.",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 27449,
+            "out": 214,
+            "cached": 0
+          },
+          "costUsd": 0.003538075,
+          "estimated": true
+        },
+        "error": false,
+        "label": "Step 2, usage"
+      },
+      {
+        "id": "s-2-3",
+        "step": 2,
+        "category": "meta",
+        "source": "agent",
+        "at": "2026-10-30T14:20:56.758Z",
+        "offsetSec": 2.4,
+        "title": "stop_reason tool_use, cwd /workspace",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 2, metadata"
+      },
+      {
+        "id": "s-3",
+        "step": 3,
+        "category": "tools",
+        "source": "agent",
+        "at": "2026-10-30T14:20:58.252Z",
+        "offsetSec": 3.9,
+        "title": "Write /workspace/RELEASE_NOTES.md",
+        "textTruncated": false,
+        "tool": {
+          "name": "Write",
+          "callId": "toolu_014ij3bYHJWD7RcZNqW2JBNN",
+          "kind": "write",
+          "path": "/workspace/RELEASE_NOTES.md",
+          "input": "{\n  \"file_path\": \"/workspace/RELEASE_NOTES.md\",\n  \"content\": \"# Release Notes\\n\\n## 1.4.0\\n\\n### New Features\\n\\n- **CSV export** (ACME-101): Export data to CSV format.\\n\\n### Bug Fixes\\n\\n- **Login timeout** (ACME-117): Fixed an issue where users could be logged out or fail to log in due to a timeout.\\n\"\n}",
+          "output": {
+            "preview": "File created successfully at: /workspace/RELEASE_NOTES.md (file state is current in your context — no need to Read it back)\n\n[metadata] {\"type\": \"create\", \"filePath\": \"/workspace/RELEASE_NOTES.md\", \"content\": \"# Release Notes\\n\\n## 1.4.0\\n\\n### New Features\\n\\n- **CSV export** (ACME-101): Export data to CSV format.\\n\\n### Bug Fixes\\n\\n- **Login timeout** (ACME-117): Fixed an issue where users could be logged out or fail to log in due to a timeout.\\n\", \"structuredPatch\": [], \"originalFile\": null, \"userModified\": false}",
+            "bytes": 525,
+            "lines": 3,
+            "truncated": false,
+            "shortened": false,
+            "error": false,
+            "href": "/api/v1/runs/acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5/trials/rn-basic__BQbpoR9/steps/3/output/0"
+          }
+        },
+        "error": false,
+        "label": "Step 3, Write tool call"
+      },
+      {
+        "id": "s-3-2",
+        "step": 3,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T14:20:58.252Z",
+        "offsetSec": 3.9,
+        "title": "Usage: 28169 in, 207 out, 27447 cached, $0.0005 est.",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 28169,
+            "out": 207,
+            "cached": 27447
+          },
+          "costUsd": 0.00046816999999999996,
+          "estimated": true
+        },
+        "error": false,
+        "label": "Step 3, usage"
+      },
+      {
+        "id": "s-3-3",
+        "step": 3,
+        "category": "meta",
+        "source": "agent",
+        "at": "2026-10-30T14:20:58.252Z",
+        "offsetSec": 3.9,
+        "title": "stop_reason tool_use, cwd /workspace",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 3, metadata"
+      },
+      {
+        "id": "s-4",
+        "step": 4,
+        "category": "msg",
+        "source": "agent",
+        "at": "2026-10-30T14:21:00.03Z",
+        "offsetSec": 5.7,
+        "title": "Message",
+        "text": "I wrote the 1.4.0 release notes to `/workspace/RELEASE_NOTES.md`. They list CSV export (ACME-101) under New Features and the login timeout fix (ACME-117) under Bug Fixes. The login entry is worded generically since I don't have the ticket details, so you may want to make it more specific.",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 4, message"
+      },
+      {
+        "id": "s-4-2",
+        "step": 4,
+        "category": "usage",
+        "source": "agent",
+        "at": "2026-10-30T14:21:00.03Z",
+        "offsetSec": 5.7,
+        "title": "Usage: 28446 in, 110 out, 28167 cached, $0.0004 est.",
+        "textTruncated": false,
+        "usage": {
+          "tokens": {
+            "in": 28446,
+            "out": 110,
+            "cached": 28167
+          },
+          "costUsd": 0.000371495,
+          "estimated": true
+        },
+        "error": false,
+        "label": "Step 4, usage"
+      },
+      {
+        "id": "s-4-3",
+        "step": 4,
+        "category": "meta",
+        "source": "agent",
+        "at": "2026-10-30T14:21:00.03Z",
+        "offsetSec": 5.7,
+        "title": "stop_reason end_turn, cwd /workspace",
+        "textTruncated": false,
+        "error": false,
+        "label": "Step 4, metadata"
+      },
+      {
+        "id": "j-accuracy",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Accuracy 0.40 failed",
+        "text": "The agent wrote RELEASE_NOTES.md in a generic format and never used the release-notes skill. The file does not start with 'ACME-RN/2 1.4.0'. It uses '### New Features' and '### Bug Fixes' instead of '## Added' and '## Fixed'. Ticket IDs appear inline in parentheses rather than as a trailing [ACME-xxx], and the file adds an extra '# Release Notes' heading. It does address the request and produces a usable file, but it does not match the required format.",
+        "textTruncated": false,
+        "metric": "accuracy",
+        "error": true,
+        "label": "Judge, Accuracy, score 0.40, failed"
+      },
+      {
+        "id": "j-goal_accuracy",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Goal accuracy 0.05 failed",
+        "text": "The file exists and mentions both changes and tickets, but it fails every format requirement. The first line is not 'ACME-RN/2 1.4.0', the section headers are not '## Added' and '## Fixed', and the bullets do not end in [ACME-101] and [ACME-117]. The agent did not look for and follow the project's required format.",
+        "textTruncated": false,
+        "metric": "goal_accuracy",
+        "error": true,
+        "label": "Judge, Goal accuracy, score 0.05, failed"
+      },
+      {
+        "id": "j-behavior_check",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Behavior check 0.25 failed",
+        "text": "The file was created, but it does not follow the required ACME-RN/2 format: the header line, section names and ticket ID placement are all wrong. The agent apparently did not check the workspace for a format spec beyond a directory listing.",
+        "textTruncated": false,
+        "metric": "behavior_check",
+        "error": true,
+        "label": "Judge, Behavior check, score 0.25, failed"
+      },
+      {
+        "id": "j-skill_execution",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Skill execution 0.00 failed",
+        "text": "activation: No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.; script_execution: No specific script expected; workflow_order: Agent executed before reading SKILL.md for 'acme-release-notes'; error_recovery: All commands succeeded on first attempt",
+        "textTruncated": false,
+        "metric": "skill_execution",
+        "error": true,
+        "label": "Judge, Skill execution, score 0.00, failed"
+      },
+      {
+        "id": "j-skill_efficiency",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Skill efficiency 0.25 failed",
+        "text": "routing: Agent did not read any SKILL.md; tool_efficiency: 1/2 productive calls (50%)",
+        "textTruncated": false,
+        "metric": "skill_efficiency",
+        "error": true,
+        "label": "Judge, Skill efficiency, score 0.25, failed"
+      },
+      {
+        "id": "j-security",
+        "step": 0,
+        "category": "judge",
+        "source": "judge",
+        "title": "Security 1.00",
+        "text": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+        "textTruncated": false,
+        "metric": "security",
+        "error": false,
+        "label": "Judge, Security, score 1.00"
+      }
+    ],
+    "counts": [
+      {
+        "category": "msg",
+        "count": 1,
+        "focus": true
+      },
+      {
+        "category": "user",
+        "count": 1,
+        "focus": true
+      },
+      {
+        "category": "think",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "tools",
+        "count": 2,
+        "focus": true
+      },
+      {
+        "category": "web",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "pkg",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "skill",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "net",
+        "count": 0,
+        "focus": true
+      },
+      {
+        "category": "judge",
+        "count": 6,
+        "focus": true
+      },
+      {
+        "category": "usage",
+        "count": 3,
+        "focus": false
+      },
+      {
+        "category": "meta",
+        "count": 3,
+        "focus": false
+      }
+    ],
+    "jumps": {
+      "firstTool": "s-2",
+      "final": "s-4"
+    }
+  },
+  "criteria": {
+    "passed": 1,
+    "total": 4,
+    "behaviors": [
+      {
+        "index": 1,
+        "text": "RELEASE_NOTES.md exists",
+        "passed": true,
+        "reason": "The agent created /workspace/RELEASE_NOTES.md successfully."
+      },
+      {
+        "index": 2,
+        "text": "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "passed": false,
+        "reason": "The first line is '# Release Notes', not 'ACME-RN/2 1.4.0'."
+      },
+      {
+        "index": 3,
+        "text": "There are exactly two sections, '## Added' then '## Fixed'",
+        "passed": false,
+        "reason": "The file uses '## 1.4.0' with '### New Features' and '### Bug Fixes' subsections, not '## Added' then '## Fixed'."
+      },
+      {
+        "index": 4,
+        "text": "Each bullet ends with its ticket ID in square brackets",
+        "passed": false,
+        "reason": "Ticket IDs appear in parentheses near the start of each bullet, not in square brackets at the end."
+      }
+    ],
+    "behaviorSteps": [
+      3,
+      4
+    ],
+    "checks": [
+      {
+        "metric": "skill_execution",
+        "name": "activation",
+        "label": "Activation",
+        "passed": false,
+        "score": 0.0,
+        "reason": "No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "script_execution",
+        "label": "Script execution",
+        "passed": true,
+        "score": 1.0,
+        "reason": "No specific script expected",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "workflow_order",
+        "label": "Workflow order",
+        "passed": false,
+        "score": 0.0,
+        "reason": "Agent executed before reading SKILL.md for 'acme-release-notes'",
+        "steps": []
+      },
+      {
+        "metric": "skill_execution",
+        "name": "error_recovery",
+        "label": "Error recovery",
+        "passed": true,
+        "score": 1.0,
+        "reason": "All commands succeeded on first attempt",
+        "steps": []
+      },
+      {
+        "metric": "skill_efficiency",
+        "name": "routing",
+        "label": "Routing",
+        "passed": false,
+        "score": 0.0,
+        "reason": "Agent did not read any SKILL.md",
+        "steps": []
+      },
+      {
+        "metric": "skill_efficiency",
+        "name": "tool_efficiency",
+        "label": "Tool efficiency",
+        "passed": true,
+        "score": 0.5,
+        "reason": "1/2 productive calls (50%)",
+        "steps": []
+      }
+    ],
+    "accuracy": {
+      "criteria": [
+        {
+          "name": "SKILL_IDENTIFIED",
+          "passed": false
+        },
+        {
+          "name": "ACTION_CORRECT",
+          "passed": false
+        },
+        {
+          "name": "FACTUALLY_ACCURATE",
+          "passed": false
+        },
+        {
+          "name": "TASK_ADDRESSED",
+          "passed": true
+        },
+        {
+          "name": "ACTIONABLE",
+          "passed": true
+        }
+      ],
+      "reason": "The agent wrote RELEASE_NOTES.md in a generic format and never used the release-notes skill. The file does not start with 'ACME-RN/2 1.4.0'. It uses '### New Features' and '### Bug Fixes' instead of '## Added' and '## Fixed'. Ticket IDs appear inline in parentheses rather than as a trailing [ACME-xxx], and the file adds an extra '# Release Notes' heading. It does address the request and produces a usable file, but it does not match the required format.",
+      "steps": [
+        4
+      ]
+    }
+  },
+  "findings": [
+    {
+      "kind": "friction",
+      "rule": "metric-low",
+      "metric": "accuracy",
+      "title": "Accuracy 0.40",
+      "detail": "The agent wrote RELEASE_NOTES.md in a generic format and never used the release-notes skill. The file does not start with 'ACME-RN/2 1.4.0'. It uses '### New Features' and '### Bug Fixes' instead of '## Added' and '## Fixed'. Ticket IDs appear inline in parentheses rather than as a trailing [ACME-xxx], and the file adds an extra '# Release Notes' heading. It does address the request and produces a usable file, but it does not match the required format.",
+      "steps": [
+        4
+      ],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "metric-low",
+      "metric": "goal_accuracy",
+      "title": "Goal accuracy 0.05",
+      "detail": "The file exists and mentions both changes and tickets, but it fails every format requirement. The first line is not 'ACME-RN/2 1.4.0', the section headers are not '## Added' and '## Fixed', and the bullets do not end in [ACME-101] and [ACME-117]. The agent did not look for and follow the project's required format.",
+      "steps": [
+        2,
+        3,
+        4
+      ],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "metric-low",
+      "metric": "behavior_check",
+      "title": "Behavior check 0.25",
+      "detail": "The file was created, but it does not follow the required ACME-RN/2 format: the header line, section names and ticket ID placement are all wrong. The agent apparently did not check the workspace for a format spec beyond a directory listing.",
+      "steps": [
+        3,
+        4
+      ],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "metric-failed",
+      "metric": "skill_execution",
+      "title": "Skill execution 0.00",
+      "detail": "activation: No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.; script_execution: No specific script expected; workflow_order: Agent executed before reading SKILL.md for 'acme-release-notes'; error_recovery: All commands succeeded on first attempt",
+      "steps": [],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "metric-failed",
+      "metric": "skill_efficiency",
+      "title": "Skill efficiency 0.25",
+      "detail": "routing: Agent did not read any SKILL.md; tool_efficiency: 1/2 productive calls (50%)",
+      "steps": [],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "check-failed",
+      "metric": "skill_execution",
+      "title": "Activation failed",
+      "detail": "No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.",
+      "steps": [],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "check-failed",
+      "metric": "skill_execution",
+      "title": "Workflow order failed",
+      "detail": "Agent executed before reading SKILL.md for 'acme-release-notes'",
+      "steps": [],
+      "runLevel": false
+    },
+    {
+      "kind": "friction",
+      "rule": "check-failed",
+      "metric": "skill_efficiency",
+      "title": "Routing failed",
+      "detail": "Agent did not read any SKILL.md",
+      "steps": [],
+      "runLevel": false
+    }
+  ],
+  "files": [
+    {
+      "path": "/workspace/RELEASE_NOTES.md",
+      "op": "write",
+      "step": 3,
+      "entryId": "s-3",
+      "tool": "Write",
+      "content": "# Release Notes\n\n## 1.4.0\n\n### New Features\n\n- **CSV export** (ACME-101): Export data to CSV format.\n\n### Bug Fixes\n\n- **Login timeout** (ACME-117): Fixed an issue where users could be logged out or fail to log in due to a timeout.\n",
+      "hunks": [],
+      "captured": true,
+      "truncated": false
+    }
+  ],
+  "judge": [
+    {
+      "key": "accuracy",
+      "label": "Accuracy",
+      "score": 0.4,
+      "reason": "The agent wrote RELEASE_NOTES.md in a generic format and never used the release-notes skill. The file does not start with 'ACME-RN/2 1.4.0'. It uses '### New Features' and '### Bug Fixes' instead of '## Added' and '## Fixed'. Ticket IDs appear inline in parentheses rather than as a trailing [ACME-xxx], and the file adds an extra '# Release Notes' heading. It does address the request and produces a usable file, but it does not match the required format.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        4
+      ],
+      "details": {
+        "score": 0.4,
+        "reason": "The agent wrote RELEASE_NOTES.md in a generic format and never used the release-notes skill. The file does not start with 'ACME-RN/2 1.4.0'. It uses '### New Features' and '### Bug Fixes' instead of '## Added' and '## Fixed'. Ticket IDs appear inline in parentheses rather than as a trailing [ACME-xxx], and the file adds an extra '# Release Notes' heading. It does address the request and produces a usable file, but it does not match the required format.",
+        "criteria": {
+          "SKILL_IDENTIFIED": false,
+          "ACTION_CORRECT": false,
+          "FACTUALLY_ACCURATE": false,
+          "TASK_ADDRESSED": true,
+          "ACTIONABLE": true
+        },
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "evals.json",
+            "kind": "ground_truth",
+            "label": "Expected answer",
+            "json_pointer": "/ground_truth",
+            "excerpt": "RELEASE_NOTES.md whose first line is 'ACME-RN/2 1.4.0', followed by '## Added' with the CSV export bullet ending in [ACME-101] and '## Fixed' with the login timeout bullet ending in [ACME-117], and no other sections."
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "final_response",
+            "label": "Final response",
+            "json_pointer": "/steps/3",
+            "excerpt": "I wrote the 1.4.0 release notes to `/workspace/RELEASE_NOTES.md`. They list CSV export (ACME-101) under New Features and the login timeout fix (ACME-117) under Bug Fixes. The login entry is worded generically since I don't have the ticket details, so you may want to make it more specific."
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        }
+      }
+    },
+    {
+      "key": "goal_accuracy",
+      "label": "Goal accuracy",
+      "score": 0.05,
+      "reason": "The file exists and mentions both changes and tickets, but it fails every format requirement. The first line is not 'ACME-RN/2 1.4.0', the section headers are not '## Added' and '## Fixed', and the bullets do not end in [ACME-101] and [ACME-117]. The agent did not look for and follow the project's required format.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        2,
+        3,
+        4
+      ],
+      "details": {
+        "score": 0.05,
+        "reason": "The file exists and mentions both changes and tickets, but it fails every format requirement. The first line is not 'ACME-RN/2 1.4.0', the section headers are not '## Added' and '## Fixed', and the bullets do not end in [ACME-101] and [ACME-117]. The agent did not look for and follow the project's required format.",
+        "user_goal": "Create RELEASE_NOTES.md for version 1.4.0 in the project's required release-notes format (ACME-RN/2): first line 'ACME-RN/2 1.4.0', then a '## Added' section with the CSV export bullet ending in [ACME-101], then a '## Fixed' section with the login timeout bullet ending in [ACME-117], and no other sections.",
+        "end_state": "The agent created /workspace/RELEASE_NOTES.md in a generic format. It starts with '# Release Notes', has a '## 1.4.0' heading, and uses '### New Features' and '### Bug Fixes' sections. Ticket IDs appear inline as '(ACME-101)' and '(ACME-117)' after bolded titles, not as bracketed suffixes. The agent seemingly never checked the workspace (e.g. the skills, repo or .claude directories) for a release-notes convention.",
+        "method": "custom",
+        "provider": "anthropic",
+        "model": "claude-opus-5-5",
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "evals.json",
+            "kind": "ground_truth",
+            "label": "Expected answer",
+            "json_pointer": "/ground_truth",
+            "excerpt": "RELEASE_NOTES.md whose first line is 'ACME-RN/2 1.4.0', followed by '## Added' with the CSV export bullet ending in [ACME-101] and '## Fixed' with the login timeout bullet ending in [ACME-117], and no other sections."
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "tool_call",
+            "label": "Bash: ls -la /workspace",
+            "json_pointer": "/steps/1/tool_calls/0",
+            "excerpt": "ls -la /workspace"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "tool_call",
+            "label": "Write: /workspace/RELEASE_NOTES.md",
+            "json_pointer": "/steps/2/tool_calls/0",
+            "path": "/workspace/RELEASE_NOTES.md",
+            "excerpt": "/workspace/RELEASE_NOTES.md"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "tool_observation",
+            "label": "Tool observation: toolu_01SN7mRAWkrxT6BxWhXLhKqq",
+            "json_pointer": "/steps/1/observation/results/0",
+            "excerpt": "total 60\ndrwxr-xr-x 1 root root 4096 Oct 30 14:16 .\ndrwxr-xr-x 1 root root 4096 Oct 30 14:18 ..\ndrwxr-xr-x 3 root root 4096 Oct 30 14:16 .agents\ndrwxr-xr-x 4 root root 4096 Oct 30 14:16 .\n...[truncated]...\n16 repo\ndrwxr-xr-x 2 root root 4096 Oct 30 14:16 skills\n[metadata] {\"noOutputExpected\": false}"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "tool_observation",
+            "label": "Tool observation: toolu_014ij3bYHJWD7RcZNqW2JBNN",
+            "json_pointer": "/steps/2/observation/results/0",
+            "excerpt": "File created successfully at: /workspace/RELEASE_NOTES.md (file state is current in your context — no need to Read it back)\n\n[metadata] {\"type\": \"create\", \"filePath\": \"/workspace/RELEASE_\n...[truncated]...\ng in due to a timeout.\\n\", \"structuredPatch\": [], \"originalFile\": null, \"userModified\": false}"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "final_response",
+            "label": "Final response",
+            "json_pointer": "/steps/3",
+            "excerpt": "I wrote the 1.4.0 release notes to `/workspace/RELEASE_NOTES.md`. They list CSV export (ACME-101) under New Features and the login timeout fix (ACME-117) under Bug Fixes. The login entry is worded generically since I don't have the ticket details, so you may want to make it more specific."
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        }
+      }
+    },
+    {
+      "key": "behavior_check",
+      "label": "Behavior check",
+      "score": 0.25,
+      "reason": "The file was created, but it does not follow the required ACME-RN/2 format: the header line, section names and ticket ID placement are all wrong. The agent apparently did not check the workspace for a format spec beyond a directory listing.",
+      "model": "claude-opus-5-5",
+      "steps": [
+        3,
+        4
+      ],
+      "details": {
+        "score": 0.25,
+        "reason": "The file was created, but it does not follow the required ACME-RN/2 format: the header line, section names and ticket ID placement are all wrong. The agent apparently did not check the workspace for a format spec beyond a directory listing.",
+        "results": [
+          {
+            "step": 1,
+            "passed": true,
+            "reason": "The agent created /workspace/RELEASE_NOTES.md successfully."
+          },
+          {
+            "step": 2,
+            "passed": false,
+            "reason": "The first line is '# Release Notes', not 'ACME-RN/2 1.4.0'."
+          },
+          {
+            "step": 3,
+            "passed": false,
+            "reason": "The file uses '## 1.4.0' with '### New Features' and '### Bug Fixes' subsections, not '## Added' then '## Fixed'."
+          },
+          {
+            "step": 4,
+            "passed": false,
+            "reason": "Ticket IDs appear in parentheses near the start of each bullet, not in square brackets at the end."
+          }
+        ],
+        "judge_model_used": "claude-opus-5-5",
+        "judge_reasoning_effort": "medium",
+        "judge_fallback_used": false,
+        "evidence_refs": [
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 1",
+            "json_pointer": "/expected_behavior/0",
+            "excerpt": "RELEASE_NOTES.md exists"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 2",
+            "json_pointer": "/expected_behavior/1",
+            "excerpt": "The first line is exactly 'ACME-RN/2 1.4.0'"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 3",
+            "json_pointer": "/expected_behavior/2",
+            "excerpt": "There are exactly two sections, '## Added' then '## Fixed'"
+          },
+          {
+            "source": "evals.json",
+            "kind": "expected_behavior",
+            "label": "Expected behavior 4",
+            "json_pointer": "/expected_behavior/3",
+            "excerpt": "Each bullet ends with its ticket ID in square brackets"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "file_change",
+            "label": "Write: /workspace/RELEASE_NOTES.md",
+            "json_pointer": "/steps/2/tool_calls/0",
+            "path": "/workspace/RELEASE_NOTES.md",
+            "excerpt": "/workspace/RELEASE_NOTES.md"
+          },
+          {
+            "source": "trajectory.json",
+            "kind": "final_response",
+            "label": "Final response",
+            "json_pointer": "/steps/3",
+            "excerpt": "I wrote the 1.4.0 release notes to `/workspace/RELEASE_NOTES.md`. They list CSV export (ACME-101) under New Features and the login timeout fix (ACME-117) under Bug Fixes. The login entry is worded generically since I don't have the ticket details, so you may want to make it more specific."
+          }
+        ],
+        "omitted": {
+          "count": 0,
+          "truncated": false,
+          "reason": ""
+        }
+      }
+    },
+    {
+      "key": "skill_execution",
+      "label": "Skill execution",
+      "score": 0.0,
+      "steps": [],
+      "details": {
+        "activation": {
+          "passed": false,
+          "score": 0.0,
+          "reason": "No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.",
+          "details": {
+            "expected_skill": "acme-release-notes",
+            "acceptable_skills": [
+              "acme-release-notes"
+            ],
+            "acceptable_alternates": []
+          }
+        },
+        "script_execution": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "No specific script expected"
+        },
+        "workflow_order": {
+          "passed": false,
+          "score": 0.0,
+          "reason": "Agent executed before reading SKILL.md for 'acme-release-notes'"
+        },
+        "error_recovery": {
+          "passed": true,
+          "score": 1.0,
+          "reason": "All commands succeeded on first attempt",
+          "first_attempt_clean": true,
+          "corrections": [],
+          "skill_faults": 0,
+          "agent_faults": 0
+        }
+      },
+      "passed": false,
+      "reason": "activation: No evidence of target skill use in trajectory for 'acme-release-notes'. Checked Skill tool calls, SKILL.md reads, bash cat commands, and tool observations.; script_execution: No specific script expected; workflow_order: Agent executed before reading SKILL.md for 'acme-release-notes'; error_recovery: All commands succeeded on first attempt"
+    },
+    {
+      "key": "skill_efficiency",
+      "label": "Skill efficiency",
+      "score": 0.25,
+      "steps": [],
+      "details": {
+        "routing": {
+          "passed": false,
+          "score": 0.0,
+          "reason": "Agent did not read any SKILL.md",
+          "details": {
+            "expected_skill": "acme-release-notes",
+            "acceptable_skills": [
+              "acme-release-notes"
+            ],
+            "acceptable_alternates": []
+          }
+        },
+        "tool_efficiency": {
+          "passed": true,
+          "score": 0.5,
+          "reason": "1/2 productive calls (50%)"
+        }
+      },
+      "passed": false,
+      "reason": "routing: Agent did not read any SKILL.md; tool_efficiency: 1/2 productive calls (50%)"
+    },
+    {
+      "key": "security",
+      "label": "Security",
+      "score": 1.0,
+      "passed": true,
+      "reason": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+      "steps": [],
+      "details": {
+        "passed": true,
+        "score": 1.0,
+        "reason": "No unsafe agent-issued actions, secret leakage, or unauthorized access found in trajectory",
+        "findings": []
+      }
+    }
+  ],
+  "truncations": [],
+  "redaction": {
+    "version": "v1",
+    "exact": 0,
+    "pattern": 0,
+    "envDump": 0,
+    "render": 0
+  },
+  "downloads": {
+    "trajectory": "/api/v1/runs/acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5/trials/rn-basic__BQbpoR9/trajectory.json"
+  }
+}

@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dirien/skill-ci/docs/schemas/skillci.trials.index.v1.json",
+  "title": "skill-ci trial bundle index, v1",
+  "description": "The index.json layer (media type application/vnd.skillci.trials.index.v1+json) of a trial bundle referrer (artifact type application/vnd.skillci.trials.v1+json). See CONTRACT.md, \"Trial bundles\".",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "skill", "digest", "eval", "agent", "model", "entry", "runId", "evaluator", "attemptsPerCase", "redaction", "credentials", "limits", "cases", "trials", "withheld", "network"],
+  "properties": {
+    "schema": {"const": "skillci.trials.index.v1"},
+    "skill": {"type": "string", "minLength": 1, "description": "SKILL_NAME"},
+    "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "SKILL_VERSION; left out when the Job does not set it"},
+    "digest": {"$ref": "#/$defs/digest", "description": "The evaluated skill digest, from SKILL_REF"},
+    "eval": {"type": "string", "minLength": 1, "maxLength": 63, "description": "SKILLEVAL_NAME"},
+    "agent": {"enum": ["claude-code", "codex", "opencode"]},
+    "agentVersion": {"type": "string", "pattern": "^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$", "description": "The release the trials ran"},
+    "model": {"type": "string", "minLength": 1},
+    "entry": {"type": "string", "minLength": 1, "description": "agent@version/model, or agent/model without a version"},
+    "runId": {"type": "string", "minLength": 1, "description": "SkillEvaluator run_id"},
+    "evaluatedAt": {"type": "string", "format": "date-time"},
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "metricSet": {"type": "string"},
+        "scorePolicy": {"type": "string"}
+      }
+    },
+    "attemptsPerCase": {"type": "integer", "minimum": 1},
+    "redaction": {"const": "v1"},
+    "credentials": {"type": "array", "items": {"$ref": "#/$defs/credential"}},
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stringBytes", "outputBytes", "logTailBytes", "exceptionBytes", "trialBytes", "bundleBytes", "trialsPerArm", "flowRows"],
+      "properties": {
+        "stringBytes": {"type": "integer", "minimum": 1024},
+        "outputBytes": {"type": "integer", "minimum": 256},
+        "logTailBytes": {"type": "integer", "minimum": 0},
+        "exceptionBytes": {"type": "integer", "minimum": 0},
+        "trialBytes": {"type": "integer", "minimum": 1024},
+        "bundleBytes": {"type": "integer", "minimum": 1024},
+        "trialsPerArm": {"type": "integer", "minimum": 1},
+        "flowRows": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cases": {"type": "array", "items": {"$ref": "#/$defs/case"}},
+    "trials": {"type": "array", "items": {"$ref": "#/$defs/trial"}},
+    "withheld": {"type": "array", "items": {"$ref": "#/$defs/withheld"}},
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {"$ref": "#/$defs/networkState"},
+        "reason": {"type": "string"}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "trialId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "arm": {"enum": ["with-skill", "without-skill"]},
+    "networkState": {"enum": ["collected", "partial", "unavailable", "off"]},
+    "credential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "env", "host"],
+      "description": "A provider route by name. Never a value.",
+      "properties": {
+        "role": {"enum": ["agent", "judge"]},
+        "env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+        "host": {"type": "string", "minLength": 1}
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "question", "expectedBehaviors"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "question": {"type": "string", "maxLength": 300},
+        "expectedBehaviors": {"type": "array", "items": {"type": "string"}},
+        "expectedSkill": {"type": "string"}
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer", "arm", "case", "attempt", "status", "steps", "toolCalls", "bytes", "rawBytes", "truncated"],
+      "properties": {
+        "id": {"$ref": "#/$defs/trialId"},
+        "layer": {"type": "string", "pattern": "^trial-[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\.json\\.gz$"},
+        "arm": {"$ref": "#/$defs/arm"},
+        "case": {"type": "string", "minLength": 1},
+        "attempt": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["scored", "unscored", "error"]},
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "passed": {"type": "boolean"},
+        "errorType": {"type": "string"},
+        "errorMessage": {"type": "string", "maxLength": 300},
+        "startedAt": {"type": "string", "format": "date-time"},
+        "durationSec": {"type": "number", "minimum": 0},
+        "agentSec": {"type": "number", "minimum": 0},
+        "steps": {"type": "integer", "minimum": 0},
+        "toolCalls": {"type": "integer", "minimum": 0},
+        "tokensIn": {"type": "integer", "minimum": 0},
+        "tokensOut": {"type": "integer", "minimum": 0},
+        "tokensCached": {"type": "integer", "minimum": 0},
+        "costUsd": {"type": "number", "minimum": 0},
+        "costSource": {"enum": ["reported", "estimate"]},
+        "criteria": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["passed", "total"],
+          "properties": {"passed": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 0}}
+        },
+        "skillInvoked": {"type": "boolean"},
+        "bytes": {"type": "integer", "minimum": 0, "description": "Compressed layer size"},
+        "rawBytes": {"type": "integer", "minimum": 0, "description": "Size of the document before gzip"},
+        "truncated": {"type": "boolean"},
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["forwarded", "dropped", "dns"],
+          "properties": {
+            "forwarded": {"type": "integer", "minimum": 0},
+            "dropped": {"type": "integer", "minimum": 0},
+            "dns": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "scored"}}}, "then": {"required": ["score", "passed"]}},
+        {"if": {"properties": {"status": {"const": "unscored"}}}, "then": {"not": {"required": ["score"]}}}
+      ]
+    },
+    "withheld": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "arm", "case", "attempt", "reason"],
+      "properties": {
+        "id": {"$ref": "#/$defs/trialId"},
+        "arm": {"$ref": "#/$defs/arm"},
+        "case": {"type": "string"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "reason": {"enum": ["secret-scan", "size", "limit", "unreadable"]}
+      }
+    }
+  }
+}

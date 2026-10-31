@@ -1,0 +1,97 @@
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py", line 497, in run
+    await self._prepare()
+  File "/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py", line 536, in _prepare
+    await self._setup_agent_environment()
+  File "/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py", line 1684, in _setup_agent_environment
+    await self._start_agent_environment()
+  File "/usr/local/lib/python3.12/site-packages/harbor/trial/trial.py", line 1690, in _start_agent_environment
+    await asyncio.wait_for(
+  File "/usr/local/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/harbor_agent_sandbox/environment.py", line 133, in start
+    await self._ensure_image(force_build)
+  File "/usr/local/lib/python3.12/site-packages/harbor_agent_sandbox/environment.py", line 116, in _ensure_image
+    await self._build_and_push_image()
+  File "/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py", line 232, in async_wrapped
+    return await copy(fn, *args, **kwargs)  # type: ignore[type-var]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py", line 126, in __call__
+    do = await self.iter(retry_state=retry_state)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py", line 171, in iter
+    result = await action(retry_state)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/tenacity/_utils.py", line 130, in inner
+    return call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/tenacity/__init__.py", line 482, in exc_check
+    retry_exc.reraise()
+  File "/usr/local/lib/python3.12/site-packages/tenacity/__init__.py", line 216, in reraise
+    raise self.last_attempt.result()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/local/lib/python3.12/site-packages/tenacity/asyncio/__init__.py", line 130, in __call__
+    result = await fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/harbor/environments/ack.py", line 1061, in _build_and_push_image
+    await self._wait_for_job(job_name, namespace)
+  File "/usr/local/lib/python3.12/site-packages/harbor/environments/ack.py", line 1263, in _wait_for_job
+    raise RuntimeError(f"Build job {job_name} failed. Logs:\n{log_msg}")
+RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs:
+#26 [16/27] COPY skills/ /root/.claude/skills/
+#26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: "/skills": not found
+
+#27 [25/27] COPY skills/ /root/.agents/skills/
+#27 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: "/skills": not found
+
+#28 [24/27] COPY skills/ /root/.claude/skills/
+#28 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: "/skills": not found
+
+#29 [23/27] COPY skills/ /workspace/skills/
+#29 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: "/skills": not found
+
+#30 [ 1/27] FROM docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
+#30 resolve docker.io/library/python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 0.0s done
+#30 sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 10.37kB / 10.37kB done
+#30 sha256:1148dbb014615300fa7e713b2f94f550c0d1c69780c0805f84f093ceee34dd0b 1.75kB / 1.75kB done
+#30 CANCELED
+------
+ > [15/27] COPY skills/ /workspace/skills/:
+------
+------
+ > [16/27] COPY skills/ /root/.claude/skills/:
+------
+------
+ > [17/27] COPY skills/ /root/.agents/skills/:
+------
+------
+ > [18/27] COPY skills/ /root/.config/opencode/skills/:
+------
+------
+ > [23/27] COPY skills/ /workspace/skills/:
+------
+------
+ > [24/27] COPY skills/ /root/.claude/skills/:
+------
+------
+ > [25/27] COPY skills/ /root/.agents/skills/:
+------
+------
+ > [26/27] COPY skills/ /root/.config/opencode/skills/:
+------
+Dockerfile:35
+--------------------
+  33 |     COPY skills/ /root/.claude/skills/
+  34 |     COPY skills/ /root/.agents/skills/
+  35 | >>> COPY skills/ /root/.config/opencode/skills/
+  36 |     ENV BASH_ENV="" CLASSPATH="" DYLD_INSERT_LIBRARIES="" ENV="" GCONV_PATH="" JAVA_TOOL_OPTIONS="" LD_AUDIT="" LD_LIBRARY_PATH="" LD_PRELOAD="" LOCPATH="" LUA_CPATH="" LUA_INIT="" LUA_PATH="" NLSPATH="" NODE_OPTIONS="" PERL5LIB="" PERL5OPT="" PYTHONHOME="" PYTHONINSPECT="" PYTHONPATH="" PYTHONSTARTUP="" RUBYLIB="" RUBYOPT="" ZDOTDIR="" _JAVA_OPTIONS=""
+  37 |     ENV CLAUDE_CODE_DISABLE_POLICY_SKILLS="1"
+--------------------
+ERROR: failed to build: failed to solve: failed to compute cache key: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: "/skills": not found
+

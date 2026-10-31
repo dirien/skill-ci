@@ -1,0 +1,96 @@
+{
+  "schema": "skillci.trials.index.v1",
+  "skill": "acme-release-notes",
+  "version": "v1.2.0",
+  "digest": "sha256:bdda6c2ddfaa0b9489e7d77dd3432c630545c7588aa4bc445f8b56caf0e3df1d",
+  "eval": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+  "agent": "claude-code",
+  "agentVersion": "2.1.292",
+  "model": "claude-haiku-5-5",
+  "entry": "claude-code@2.1.292/claude-haiku-5-5",
+  "runId": "20261030_141159_86801_702d14d01af5",
+  "evaluatedAt": "2026-10-30T14:13:01.244339Z",
+  "evaluator": {
+    "version": "0.6.0",
+    "metricSet": "skill-evaluator-default-v2",
+    "scorePolicy": "skill-evaluator-dimension-mean-v1"
+  },
+  "attemptsPerCase": 1,
+  "redaction": "v1",
+  "credentials": [
+    {
+      "role": "agent",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    },
+    {
+      "role": "judge",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    }
+  ],
+  "limits": {
+    "stringBytes": 32768,
+    "outputBytes": 8192,
+    "logTailBytes": 65536,
+    "exceptionBytes": 8192,
+    "trialBytes": 1048576,
+    "bundleBytes": 25165824,
+    "trialsPerArm": 50,
+    "flowRows": 200
+  },
+  "cases": [
+    {
+      "id": "rn-basic",
+      "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+      "expectedBehaviors": [
+        "RELEASE_NOTES.md exists",
+        "The first line is exactly 'ACME-RN/2 1.4.0'",
+        "There are exactly two sections, '## Added' then '## Fixed'",
+        "Each bullet ends with its ticket ID in square brackets"
+      ],
+      "expectedSkill": "acme-release-notes"
+    }
+  ],
+  "trials": [
+    {
+      "id": "rn-basic__CbK6FQ2",
+      "layer": "trial-rn-basic__CbK6FQ2.json.gz",
+      "arm": "with-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "unscored",
+      "errorType": "RuntimeError",
+      "errorMessage": "Build job img-build-skillevaluator-rn-basic-with-skill failed. Logs:\n#26 [16/27] COPY skills/ /root/.claude/skills/\n#26 ERROR: failed to calculate checksum of ref 20bf79aa-7443-453d-be87-ec71ea9a1373::zs8w7ny3coxcar96ddb8olch7: \"/skills\": not found\n\n#27 [25/27] COPY skills/ /root/.agents/skills/\n#27",
+      "startedAt": "2026-10-30T14:11:59.408480Z",
+      "durationSec": 61.7,
+      "steps": 0,
+      "toolCalls": 0,
+      "bytes": 2213,
+      "rawBytes": 10393,
+      "truncated": false
+    },
+    {
+      "id": "rn-basic__59JHTSp",
+      "layer": "trial-rn-basic__59JHTSp.json.gz",
+      "arm": "without-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "unscored",
+      "errorType": "RuntimeError",
+      "errorMessage": "Build job img-build-skillevaluator-rn-basic-without-skill failed. Logs:\n#25 ERROR: failed to calculate checksum of ref 0c547f08-961d-470b-9539-4c21a0de6eb9::ndcp0jhg50x3l15n3awglxn33: \"/skills\": not found\n\n#26 [26/27] COPY skills/ /root/.config/opencode/skills/\n#26 ERROR: failed to calculate checksu",
+      "startedAt": "2026-10-30T14:11:59.407666Z",
+      "durationSec": 61.5,
+      "steps": 0,
+      "toolCalls": 0,
+      "bytes": 2153,
+      "rawBytes": 10335,
+      "truncated": false
+    }
+  ],
+  "withheld": [],
+  "network": {
+    "state": "off",
+    "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)"
+  }
+}

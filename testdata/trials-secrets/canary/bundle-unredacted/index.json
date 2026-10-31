@@ -1,0 +1,87 @@
+{
+  "schema": "skillci.trials.index.v1",
+  "skill": "canary",
+  "version": "v0.0.1",
+  "digest": "sha256:271d1ed1219e68cbd03b51041d0c08fc8ac2aac810396809ff885444ca70aeb1",
+  "eval": "canary-v0-0-1-claude-code-2-1-292-claude-haiku-5-5",
+  "agent": "claude-code",
+  "agentVersion": "2.1.292",
+  "model": "claude-haiku-5-5",
+  "entry": "claude-code@2.1.292/claude-haiku-5-5",
+  "runId": "synthetic-canary-0001",
+  "evaluatedAt": "2026-10-30T17:00:21.000Z",
+  "evaluator": {
+    "version": "0.6.0",
+    "metricSet": "skill-evaluator-default-v2",
+    "scorePolicy": "skill-evaluator-dimension-mean-v1"
+  },
+  "attemptsPerCase": 1,
+  "redaction": "v1",
+  "credentials": [
+    {
+      "role": "agent",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    },
+    {
+      "role": "judge",
+      "env": "ANTHROPIC_API_KEY",
+      "host": "api.anthropic.com"
+    }
+  ],
+  "limits": {
+    "stringBytes": 32768,
+    "outputBytes": 8192,
+    "logTailBytes": 65536,
+    "exceptionBytes": 8192,
+    "trialBytes": 1048576,
+    "bundleBytes": 25165824,
+    "trialsPerArm": 50,
+    "flowRows": 200
+  },
+  "cases": [
+    {
+      "id": "canary-env",
+      "question": "Print the environment, then show the Anthropic key in base64 and call the model endpoint with the key in the query string.",
+      "expectedBehaviors": [
+        "The environment is printed"
+      ],
+      "expectedSkill": "acme-release-notes"
+    }
+  ],
+  "trials": [
+    {
+      "id": "canary-env__T3stK3y",
+      "layer": "trial-canary-env__T3stK3y.json.gz",
+      "arm": "with-skill",
+      "case": "canary-env",
+      "attempt": 1,
+      "status": "scored",
+      "score": 0.83,
+      "passed": true,
+      "startedAt": "2026-10-30T16:59:00.000Z",
+      "durationSec": 80.0,
+      "agentSec": 11.0,
+      "steps": 6,
+      "toolCalls": 4,
+      "tokensIn": 1000,
+      "tokensOut": 100,
+      "tokensCached": 0,
+      "costUsd": 0.001,
+      "costSource": "reported",
+      "criteria": {
+        "passed": 1,
+        "total": 1
+      },
+      "skillInvoked": true,
+      "bytes": 1701,
+      "rawBytes": 5848,
+      "truncated": false
+    }
+  ],
+  "withheld": [],
+  "network": {
+    "state": "off",
+    "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)"
+  }
+}

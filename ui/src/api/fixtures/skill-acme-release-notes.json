@@ -1,0 +1,148 @@
+{
+  "skill": "acme-release-notes",
+  "stable": "v1.0.0",
+  "beta": "v1.1.0",
+  "runs": 5,
+  "columns": [
+    {
+      "agent": "claude-code",
+      "agentVersion": "2.1.292",
+      "model": "claude-haiku-5-5",
+      "entry": "claude-code@2.1.292/claude-haiku-5-5",
+      "required": true
+    },
+    {
+      "agent": "codex",
+      "agentVersion": "0.161.0",
+      "model": "openai/gpt-6.1-sol",
+      "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+      "required": false
+    },
+    {
+      "agent": "opencode",
+      "agentVersion": "1.19.1",
+      "model": "ollama-cloud/gpt-oss:120b",
+      "entry": "opencode@1.19.1/ollama-cloud/gpt-oss:120b",
+      "required": false
+    }
+  ],
+  "rows": [
+    {
+      "version": "v1.2.0",
+      "digest": "sha256:bdda6c2ddfaa0b9489e7d77dd3432c630545c7588aa4bc445f8b56caf0e3df1d",
+      "channels": [],
+      "cells": [
+        {
+          "run": "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+          "phase": "Failed",
+          "tiers": {
+            "tier1": "passed",
+            "tier2": "passed",
+            "tier3": "incomplete"
+          },
+          "trials": "stored"
+        },
+        null,
+        null
+      ],
+      "decision": {
+        "kind": "failed",
+        "headline": "Eval failed",
+        "detail": "An eval failed on claude-code@2.1.292/claude-haiku-5-5, so the policy did not decide."
+      }
+    },
+    {
+      "version": "v1.1.0",
+      "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
+      "channels": [
+        "beta"
+      ],
+      "cells": [
+        {
+          "run": "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+          "phase": "Succeeded",
+          "verdict": "Helps",
+          "withSkill": 0.95,
+          "withoutSkill": 0.36,
+          "lift": 0.59,
+          "tiers": {
+            "tier1": "passed",
+            "tier2": "passed",
+            "tier3": "passed"
+          },
+          "trials": "stored"
+        },
+        {
+          "run": "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+          "phase": "Succeeded",
+          "verdict": "Neutral",
+          "withSkill": 0.92,
+          "withoutSkill": 0.88,
+          "lift": 0.04,
+          "tiers": {
+            "tier1": "passed",
+            "tier2": "passed",
+            "tier3": "passed"
+          },
+          "trials": "stored"
+        },
+        {
+          "run": "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+          "phase": "Succeeded",
+          "verdict": "Helps",
+          "withSkill": 0.92,
+          "withoutSkill": 0.41,
+          "lift": 0.51,
+          "tiers": {
+            "tier1": "passed",
+            "tier2": "passed",
+            "tier3": "passed"
+          },
+          "trials": "stored"
+        }
+      ],
+      "decision": {
+        "kind": "neutral",
+        "headline": "Not promoted",
+        "detail": "The lift reaches +0.10 but is not beyond noise, so the skill may not help: claude-code@2.1.292/claude-haiku-5-5 (+0.59, no interval with one trial per arm). Stable needs the whole interval above zero."
+      }
+    },
+    {
+      "version": "v1.0.0",
+      "digest": "sha256:0fb7e3f4ceabce11e194bc4ba99225d48d368511c4f3e32d02701d965bc0d890",
+      "channels": [
+        "stable"
+      ],
+      "cells": [
+        {
+          "run": "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+          "phase": "Succeeded",
+          "verdict": "Helps",
+          "withSkill": 0.95,
+          "withoutSkill": 0.37,
+          "lift": 0.58,
+          "liftCI": {
+            "lower": 0.51,
+            "upper": 0.65,
+            "level": "95%"
+          },
+          "n": "3/3",
+          "tiers": {
+            "tier1": "passed",
+            "tier2": "passed",
+            "tier3": "passed"
+          },
+          "trials": "none"
+        },
+        null,
+        null
+      ],
+      "decision": {
+        "kind": "pass",
+        "headline": "On stable",
+        "detail": "This version holds the stable tag."
+      }
+    }
+  ],
+  "refreshSeconds": 0
+}

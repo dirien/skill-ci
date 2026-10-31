@@ -1,0 +1,80 @@
+// The API fixtures and the request paths they answer. The dev mock
+// (mock/fixtures.ts) and the tests (src/test/fetch.ts) both use fixtureFor, so
+// the UI is built and tested against the same responses.
+//
+// The JSON files are API responses as the controller writes them; the Go test
+// TestFixturesMatchTypes (controller/internal/reportsite/apiv1) checks each one
+// against the Go types. In phase 2 the Go API tests regenerate them (-update).
+import compareClaudeCode from "./compare-claude-code.json" with { type: "json" };
+import compareCodexMissing from "./compare-codex-missing.json" with { type: "json" };
+import errorNotFound from "./error-not-found.json" with { type: "json" };
+import models from "./models.json" with { type: "json" };
+import overview from "./overview.json" with { type: "json" };
+import runClaudeCode from "./run-claude-code.json" with { type: "json" };
+import runCodex from "./run-codex.json" with { type: "json" };
+import runFallback from "./run-fallback.json" with { type: "json" };
+import runUnscored from "./run-unscored.json" with { type: "json" };
+import runsAcme from "./runs-acme.json" with { type: "json" };
+import runs from "./runs.json" with { type: "json" };
+import site from "./site.json" with { type: "json" };
+import skillAcme from "./skill-acme-release-notes.json" with { type: "json" };
+import skills from "./skills.json" with { type: "json" };
+import trialClaudeCodeWith from "./trial-claude-code-with.json" with { type: "json" };
+import trialClaudeCodeWithout from "./trial-claude-code-without.json" with { type: "json" };
+import trialCodex from "./trial-codex.json" with { type: "json" };
+import trialOpencode from "./trial-opencode.json" with { type: "json" };
+import trialUnscored from "./trial-unscored.json" with { type: "json" };
+
+/** Run names used by the fixtures. */
+export const RUN = {
+  claudeCode: "acme-release-notes-v1-1-0-claude-code-2-1-292-claude-haiku-5-5",
+  codex: "acme-release-notes-v1-1-0-codex-0-161-0-openai-gpt-6-1-sol",
+  opencode: "acme-release-notes-v1-1-0-opencode-1-19-1-ollama-cloud-g-033cdd",
+  unscored: "acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+  fallback: "acme-release-notes-v1-0-0-claude-code-2-1-292-claude-haiku-5-5",
+} as const;
+
+/** API path (without /api/v1, query included) to fixture. Query-specific entries come first. */
+const ROUTES: [string, unknown][] = [
+  ["/site", site],
+  ["/overview", overview],
+  ["/runs?skill=acme-release-notes", runsAcme],
+  ["/runs", runs],
+  [`/runs/${RUN.claudeCode}`, runClaudeCode],
+  [`/runs/${RUN.codex}`, runCodex],
+  [`/runs/${RUN.unscored}`, runUnscored],
+  [`/runs/${RUN.fallback}`, runFallback],
+  [`/runs/${RUN.claudeCode}/trials/rn-basic__sryqofs`, trialClaudeCodeWith],
+  [`/runs/${RUN.claudeCode}/trials/rn-basic__BQbpoR9`, trialClaudeCodeWithout],
+  [`/runs/${RUN.codex}/trials/rn-basic__Cx7aQ1p`, trialCodex],
+  [`/runs/${RUN.opencode}/trials/rn-basic__Op4mZ8e`, trialOpencode],
+  [`/runs/${RUN.unscored}/trials/rn-basic__CbK6FQ2`, trialUnscored],
+  [`/runs/${RUN.claudeCode}/cases/rn-basic/compare`, compareClaudeCode],
+  [`/runs/${RUN.codex}/cases/rn-basic/compare`, compareCodexMissing],
+  ["/skills", skills],
+  ["/skills/acme-release-notes", skillAcme],
+  ["/models", models],
+];
+
+export interface FixtureResponse {
+  status: number;
+  body: unknown;
+}
+
+/**
+ * fixtureFor answers an API path such as "/runs?skill=x" (the part after
+ * /api/v1). An exact match of path and query wins; otherwise the path alone
+ * matches, so unknown query parameters fall back to the unfiltered fixture.
+ * Anything else is a 404 with the API's error body.
+ */
+export function fixtureFor(pathAndQuery: string): FixtureResponse {
+  const exact = ROUTES.find(([p]) => p === pathAndQuery);
+  if (exact) return { status: 200, body: exact[1] };
+  const path = pathAndQuery.split("?")[0] ?? "";
+  const loose = ROUTES.find(([p]) => !p.includes("?") && p === path);
+  if (loose) return { status: 200, body: loose[1] };
+  return {
+    status: 404,
+    body: { error: { ...errorNotFound.error, message: `No fixture for ${pathAndQuery}.` } },
+  };
+}

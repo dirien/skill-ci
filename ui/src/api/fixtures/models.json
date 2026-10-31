@@ -1,0 +1,55 @@
+{
+  "source": "skill-ci-models",
+  "items": [
+    {
+      "agent": "claude-code",
+      "agentVersion": "2.1.292",
+      "model": "claude-haiku-5-5",
+      "entry": "claude-code@2.1.292/claude-haiku-5-5",
+      "required": true,
+      "sandboxProfile": "default",
+      "listed": true,
+      "runs": 5,
+      "failed": 1,
+      "retries": 0,
+      "verdicts": {
+        "Helps": 2,
+        "Rejected": 1
+      },
+      "lastRunAt": "2026-10-31T08:52:10Z",
+      "meanLift": 0.585
+    },
+    {
+      "agent": "codex",
+      "agentVersion": "0.161.0",
+      "model": "openai/gpt-6.1-sol",
+      "entry": "codex@0.161.0/openai/gpt-6.1-sol",
+      "required": false,
+      "listed": true,
+      "runs": 1,
+      "failed": 0,
+      "retries": 1,
+      "verdicts": {
+        "Neutral": 1
+      },
+      "lastRunAt": "2026-10-30T14:08:02Z",
+      "meanLift": 0.04
+    },
+    {
+      "agent": "opencode",
+      "agentVersion": "1.19.1",
+      "model": "ollama-cloud/gpt-oss:120b",
+      "entry": "opencode@1.19.1/ollama-cloud/gpt-oss:120b",
+      "required": false,
+      "listed": true,
+      "runs": 1,
+      "failed": 0,
+      "retries": 0,
+      "verdicts": {
+        "Helps": 1
+      },
+      "lastRunAt": "2026-10-30T14:08:02Z",
+      "meanLift": 0.51
+    }
+  ]
+}
