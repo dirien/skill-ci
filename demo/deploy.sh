@@ -35,6 +35,17 @@ fi
 say "Installing skill-ci $(pulumi config get skillCiVersion 2>/dev/null || echo "(default from Pulumi.yaml)") with pulumi up"
 pulumi up --yes
 
+# The chart creates the SkillCIConfig default only once, so an install made before
+# spec.observability.hubbleRelay existed keeps it empty. Fill it from the stack once; a value set
+# with kubectl stays. (A Pulumi CustomResourcePatch cannot express this from Pulumi YAML.)
+relay="$(pulumi stack output hubbleRelay 2>/dev/null || pulumi config get hubbleRelay 2>/dev/null || true)"
+current="$(kubectl -n "${NS}" get skillciconfig default -o jsonpath='{.spec.observability.hubbleRelay}' 2>/dev/null || true)"
+if [[ -n "${relay}" && -z "${current}" ]]; then
+  say "Setting the SkillCIConfig Hubble Relay to ${relay}"
+  kubectl -n "${NS}" patch skillciconfig default --type merge \
+    -p "{\"spec\":{\"observability\":{\"hubbleRelay\":\"${relay}\"}}}"
+fi
+
 say "Controller is running"
 kubectl -n "${NS}" rollout status deployment/skill-ci-controller --timeout=180s
 kubectl -n "${NS}" get deployment skill-ci-controller -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
