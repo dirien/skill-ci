@@ -8,17 +8,16 @@
 // here. Trajectories are parsed leniently (unknown fields are ignored, ATIF
 // v1.5 to v1.8), because the agents write the schema version of their Harbor
 // release.
+//
+// Every string of a view goes through render-time redaction (Redactor), and a
+// view that still holds an exact secret value fails with ErrLeak.
 package session
 
 import (
 	"encoding/json"
-	"errors"
 	"regexp"
 	"time"
 )
-
-// ErrNotImplemented is returned by the functions of this package until they are built.
-var ErrNotImplemented = errors.New("session: not implemented")
 
 // OCI artifact and media types of a trial bundle.
 const (
@@ -266,6 +265,9 @@ type Trial struct {
 	Redaction Redaction `json:"redaction"`
 	// Network is the trial's flows, when the run collected flows.
 	Network *Network `json:"network,omitempty"`
+
+	// rawTrajectory is the trajectory as stored, with the fields the Trajectory type leaves out.
+	rawTrajectory json.RawMessage
 }
 
 // TrialMeta is the subset of Harbor's trial result.json a bundle keeps.
