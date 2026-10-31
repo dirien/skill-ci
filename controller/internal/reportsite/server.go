@@ -1,73 +1,83 @@
 // Package reportsite serves the read-only reporting website of the controller:
-// every SkillEval as a run, the release channels per skill, the policy
-// decision per skill version, and the SkillEvaluator report of each run.
+// the single page app built from ui/ and the JSON API under /api/v1/ it reads
+// (CONTRACT.md, "Reporting site"), plus the stored SkillEvaluator report files.
 package reportsite
 
 import (
-	"bytes"
 	"context"
-	"embed"
 	"errors"
 	"fmt"
-	"html/template"
-	"io/fs"
 	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/harbor"
 	"github.com/dirien/skill-ci/controller/internal/platform"
 	"github.com/dirien/skill-ci/controller/internal/policy"
 )
 
-//go:embed web/templates/*.html web/site.css
-var assets embed.FS
+// DefaultSessionCacheBytes bounds the rendered trial session, compare,
+// output and trajectory responses the site keeps in memory.
+const DefaultSessionCacheBytes = 32 << 20
 
-// pages are the page templates; each defines "content" for the shared layout.
-var pages = []string{"index", "skill", "run", "error"}
-
-// ReportStore gives access to the files of a stored report.
+// ReportStore gives access to the files of a stored report or trial bundle.
 type ReportStore interface {
-	// File returns one file of the report whose referrer manifest has the given
+	// File returns one file of the referrer whose manifest has the given
 	// digest. It returns an error wrapping reportstore.ErrNotFound when the
-	// report or the file is gone. The result must not be modified.
-	File(ctx context.Context, skill, reportDigest, name string) ([]byte, error)
+	// manifest or the file is gone. The result must not be modified.
+	File(ctx context.Context, skill, manifestDigest, name string) ([]byte, error)
+}
+
+// BundleStore reads trial bundles and report annotations from the registry;
+// reportstore.OCI implements it.
+type BundleStore interface {
+	// Annotations returns the annotations of a referrer manifest. It returns an
+	// error wrapping reportstore.ErrNotFound when the manifest is gone.
+	Annotations(ctx context.Context, skill, manifestDigest string) (map[string]string, error)
+	// Gunzip returns one gzip layer of a referrer, decompressed, at most limit
+	// bytes (reportstore.ErrTooLarge past them).
+	Gunzip(ctx context.Context, skill, manifestDigest, name string, limit int64) ([]byte, error)
 }
 
 // Config wires the site to its data sources.
 type Config struct {
 	// Addr is the listen address, for example ":8082".
 	Addr string
-	// Reader lists and gets SkillEvals; the manager's cached client fits.
+	// Reader lists and gets SkillEvals, the model list ConfigMap and the
+	// SkillCIConfig; the manager's cached client fits.
 	Reader client.Reader
+	// Secrets reads the llm-keys Secret for render-time redaction; the
+	// manager's API reader fits, so no Secret informer is started. Nil
+	// redacts the Harbor credentials and the patterns only.
+	Secrets client.Reader
+	// LLMKeysSecret is the Secret whose values are redacted; empty means llm-keys.
+	LLMKeysSecret string
+	// HarborUsername and HarborPassword are the registry credentials the
+	// controller holds; they are redacted at render time too.
+	HarborUsername, HarborPassword string
 	// Namespace is where the SkillEvals live.
 	Namespace string
 	// Project is the Harbor project that holds the skills.
 	Project string
 	// Harbor reads the channel tags.
 	Harbor harbor.Client
-	// Reports reads the stored reports.
+	// Reports reads the stored report files and the bundle index.
 	Reports ReportStore
 	// Bundles reads trial bundles and report annotations; nil means no trial
 	// sessions (the API reports trials as unknown).
 	Bundles BundleStore
-	// SPA serves the single page app from web/dist for every page path instead
-	// of the server-rendered pages. The JSON API, /assets/, the stored report
-	// files and /healthz are served either way. Transitional: the server-rendered
-	// pages and this switch go away once the API handlers are built.
-	SPA bool
 	// Version is the controller release, shown by GET /api/v1/site.
 	Version string
 	// ModelsConfigMap names the model list ConfigMap, read by GET /api/v1/models.
 	ModelsConfigMap string
 	// Thresholds are the controller policy bands, shown and used for decisions.
 	Thresholds policy.Thresholds
-	// Platform supplies the network policy in force, shown on the runs page;
-	// nil shows the built-in defaults.
+	// Platform supplies the network policy in force; nil shows the built-in defaults.
 	Platform *platform.Source
+	// SessionCacheBytes bounds the cache of rendered sessions; zero means DefaultSessionCacheBytes.
+	SessionCacheBytes int64
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 	// Log receives server and request errors.
@@ -78,63 +88,52 @@ type Config struct {
 type Server struct {
 	cfg      Config
 	channels *channelSource
-	tmpl     map[string]*template.Template
 	mux      *http.ServeMux
 	ui       *spa
+	secrets  *redactorSource
+	bundles  *bundleMemo
+	rendered *byteCache
 }
 
-// New parses the embedded templates and returns the server.
+// New reads the embedded UI and returns the server.
 func New(cfg Config) (*Server, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	css, err := fs.ReadFile(assets, "web/site.css")
+	if cfg.LLMKeysSecret == "" {
+		cfg.LLMKeysSecret = DefaultLLMKeysSecret
+	}
+	if cfg.SessionCacheBytes <= 0 {
+		cfg.SessionCacheBytes = DefaultSessionCacheBytes
+	}
+	ui, err := newSPA()
 	if err != nil {
-		return nil, fmt.Errorf("reading stylesheet: %w", err)
+		return nil, err
 	}
 	s := &Server{
 		cfg:      cfg,
 		channels: &channelSource{client: cfg.Harbor, now: cfg.Now},
-		tmpl:     make(map[string]*template.Template, len(pages)),
 		mux:      http.NewServeMux(),
-	}
-	for _, name := range pages {
-		// The stylesheet is part of the template text, so it is trusted markup, not data.
-		t, err := template.New(name).Funcs(funcs(cfg.Now)).Parse(`{{define "css"}}` + string(css) + `{{end}}`)
-		if err != nil {
-			return nil, fmt.Errorf("parsing stylesheet template: %w", err)
-		}
-		t, err = t.ParseFS(assets, "web/templates/layout.html", "web/templates/partials.html", "web/templates/"+name+".html")
-		if err != nil {
-			return nil, fmt.Errorf("parsing %s template: %w", name, err)
-		}
-		s.tmpl[name] = t
-	}
-	if s.ui, err = newSPA(); err != nil {
-		return nil, err
+		ui:       ui,
+		secrets: &redactorSource{
+			reader: cfg.Secrets, namespace: cfg.Namespace, secret: cfg.LLMKeysSecret,
+			harborUser: cfg.HarborUsername, harborPw: cfg.HarborPassword, now: cfg.Now,
+		},
+		bundles:  newBundleMemo(),
+		rendered: newByteCache(cfg.SessionCacheBytes),
 	}
 	s.routes()
 	return s, nil
 }
 
 func (s *Server) routes() {
-	// Served in both modes: the stored report files, health, the JSON API and the UI assets.
 	s.mux.HandleFunc("GET /runs/{name}/report", s.reportHTML)
 	s.mux.HandleFunc("GET /runs/{name}/result.json", s.resultJSON)
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	s.apiRoutes()
 	s.mux.HandleFunc("GET /assets/{path...}", s.ui.asset)
-	if s.cfg.SPA {
-		// The app's router handles every other path (history routing).
-		s.mux.HandleFunc("GET /", s.ui.page)
-		return
-	}
-	s.mux.HandleFunc("GET /{$}", s.index)
-	s.mux.HandleFunc("GET /skills/{skill}", s.skill)
-	s.mux.HandleFunc("GET /runs/{name}", s.run)
-	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		s.fail(w, r, http.StatusNotFound, "Page not found", "There is no page at "+r.URL.Path+".")
-	})
+	// The app's router handles every other path (history routing).
+	s.mux.HandleFunc("GET /", s.ui.page)
 }
 
 // ServeHTTP implements http.Handler.
@@ -143,54 +142,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
 	s.mux.ServeHTTP(w, r)
-}
-
-// page returns the layout data shared by all pages.
-func (s *Server) page(title string, crumbs ...Crumb) Page {
-	return Page{Title: title, Crumbs: crumbs, Namespace: s.cfg.Namespace, Project: s.cfg.Project, Generated: s.cfg.Now().UTC()}
-}
-
-// render executes the page template into a buffer first, so a template error
-// becomes a 500 instead of a half-written page.
-func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, data any) {
-	var buf bytes.Buffer
-	if err := s.tmpl[name].ExecuteTemplate(&buf, "layout", data); err != nil {
-		s.cfg.Log.Error(err, "rendering page", "page", name, "path", r.URL.Path)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	h := w.Header()
-	h.Set("Content-Type", "text/html; charset=utf-8")
-	h.Set("Cache-Control", "no-store")
-	// No scripts, no remote resources: the pages are plain HTML and one inline stylesheet.
-	h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
-	w.WriteHeader(status)
-	_, _ = w.Write(buf.Bytes())
-}
-
-type errorView struct {
-	Page
-	Heading, Message string
-}
-
-// fail renders an error page in the normal layout.
-func (s *Server) fail(w http.ResponseWriter, r *http.Request, status int, heading, message string) {
-	v := errorView{Page: s.page(heading, Crumb{"Runs", "/"}, Crumb{Label: heading}), Heading: heading, Message: message}
-	s.render(w, r, status, "error", v)
-}
-
-// runs lists the SkillEvals of the namespace, newest first.
-func (s *Server) runs(ctx context.Context) ([]Run, error) {
-	var list v1alpha1.SkillEvalList
-	if err := s.cfg.Reader.List(ctx, &list, client.InNamespace(s.cfg.Namespace)); err != nil {
-		return nil, fmt.Errorf("listing SkillEvals: %w", err)
-	}
-	runs := make([]Run, 0, len(list.Items))
-	for i := range list.Items {
-		runs = append(runs, newRun(&list.Items[i], s.cfg.Thresholds.Percent()))
-	}
-	sortRuns(runs)
-	return runs, nil
 }
 
 // Start serves until ctx is done, then shuts down gracefully.

@@ -27,7 +27,7 @@ describe("skill page", () => {
     const v110 = within(matrix).getByRole("rowheader", { name: /v1\.1\.0/ }).closest("tr") as HTMLElement;
     expect(within(v110).getByText("beta")).toBeTruthy();
     expect(within(v110).getByRole("link", { name: `Run ${RUN.claudeCode}` }).getAttribute("href")).toBe(`/runs/${RUN.claudeCode}`);
-    expect(within(v110).getByText("Not promoted")).toBeTruthy();
+    expect(within(v110).getByText("Meets threshold")).toBeTruthy();
     expect(within(v110).getAllByText("no interval").length).toBe(3);
 
     const v100 = within(matrix).getByRole("rowheader", { name: /v1\.0\.0/ }).closest("tr") as HTMLElement;

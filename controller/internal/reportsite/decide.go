@@ -50,15 +50,11 @@ func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 		return Decision{Kind: "neutral", Headline: "Waiting", Detail: fmt.Sprintf("%d of %d required models have finished.", done, len(required))}
 	}
 	if failed := filterRuns(required, func(r Run) bool { return r.Phase == string(v1alpha1.PhaseFailed) }); len(failed) > 0 {
-		return Decision{Kind: "failed", Headline: "Eval failed", Detail: fmt.Sprintf("An eval failed on %s, so the policy did not decide.", models(failed))}
+		return Decision{Kind: "failed", Headline: "Eval failed", Detail: fmt.Sprintf("An eval failed on %s, so the policy did not decide.", entries(failed))}
 	}
 	for _, r := range required {
 		if r.Rejected() {
-			detail := "Rejected by " + r.RejectedBy()
-			if f := r.FirstFinding(); f != "" {
-				detail += ": " + f
-			}
-			return Decision{Kind: "failed", Headline: "Rejected", Detail: detail}
+			return Decision{Kind: "failed", Headline: "Rejected", Detail: r.RejectedText()}
 		}
 	}
 	for _, r := range required {
@@ -151,7 +147,7 @@ func allPlanned(runs []Run) bool {
 	return len(filterRuns(runs, func(r Run) bool { return r.Phase == string(v1alpha1.PhasePlanned) })) == len(runs)
 }
 
-func models(runs []Run) string {
+func entries(runs []Run) string {
 	names := make([]string, len(runs))
 	for i, r := range runs {
 		names[i] = r.Entry()

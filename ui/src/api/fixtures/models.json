@@ -16,8 +16,8 @@
         "Helps": 2,
         "Rejected": 1
       },
-      "lastRunAt": "2026-10-31T08:52:10Z",
-      "meanLift": 0.585
+      "meanLift": 0.585,
+      "lastRunAt": "2026-10-31T08:52:10Z"
     },
     {
       "agent": "codex",
@@ -32,8 +32,8 @@
       "verdicts": {
         "Neutral": 1
       },
-      "lastRunAt": "2026-10-30T14:08:02Z",
-      "meanLift": 0.04
+      "meanLift": 0.04,
+      "lastRunAt": "2026-10-30T14:08:02Z"
     },
     {
       "agent": "opencode",
@@ -48,8 +48,8 @@
       "verdicts": {
         "Helps": 1
       },
-      "lastRunAt": "2026-10-30T14:08:02Z",
-      "meanLift": 0.51
+      "meanLift": 0.51,
+      "lastRunAt": "2026-10-30T14:08:02Z"
     }
   ]
 }

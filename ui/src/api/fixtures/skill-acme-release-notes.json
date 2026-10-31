@@ -103,8 +103,8 @@
       ],
       "decision": {
         "kind": "neutral",
-        "headline": "Not promoted",
-        "detail": "The lift reaches +0.10 but is not beyond noise, so the skill may not help: claude-code@2.1.292/claude-haiku-5-5 (+0.59, no interval with one trial per arm). Stable needs the whole interval above zero."
+        "headline": "Meets threshold",
+        "detail": "Lift is +0.10 or more on every required model; v1.0.0 holds stable."
       }
     },
     {
@@ -140,7 +140,7 @@
       "decision": {
         "kind": "pass",
         "headline": "On stable",
-        "detail": "This version holds the stable tag."
+        "detail": "Lift is +0.58 or more on every required model (claude-code@2.1.292/claude-haiku-5-5 lowest)."
       }
     }
   ],

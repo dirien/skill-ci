@@ -46,7 +46,8 @@ rules:
   - apiGroups: ["cilium.io"]
     resources: ["ciliumnetworkpolicies"]
     verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
-  # Only the openai-base-url key, which decides the model host of Codex runs with network none or allowlist.
+  # llm-keys only: openai-base-url decides the model host of Codex runs with network none or allowlist, and the
+  # reporting site redacts every key value from the sessions it renders.
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: [{{ .Values.secrets.llmKeys.existingSecret | quote }}]

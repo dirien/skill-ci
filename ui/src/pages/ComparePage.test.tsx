@@ -25,6 +25,6 @@ describe("compare page", () => {
   it("says when one arm has no trial", async () => {
     renderAt(`/runs/${RUN.codex}/cases/rn-basic/compare`);
     const without = await screen.findByRole("region", { name: "Without skill" });
-    expect(within(without).getByText("No without-skill trial for attempt 1 in the bundle.")).toBeTruthy();
+    expect(within(without).getByText("The without-skill trial of attempt 1 was withheld (secret-scan).")).toBeTruthy();
   });
 });

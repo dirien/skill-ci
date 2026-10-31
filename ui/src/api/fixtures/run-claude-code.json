@@ -6,31 +6,31 @@
     "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
     "agent": "claude-code",
     "agentVersion": "2.1.292",
+    "ranVersion": "2.1.292",
     "model": "claude-haiku-5-5",
     "entry": "claude-code@2.1.292/claude-haiku-5-5",
     "required": true,
     "attempts": 1,
     "trigger": "push",
+    "pushedBy": "release-bot",
     "phase": "Succeeded",
+    "verdict": "Helps",
+    "withSkill": 0.95,
+    "withoutSkill": 0.36,
+    "lift": 0.59,
     "tiers": {
       "tier1": "passed",
       "tier2": "passed",
       "tier3": "passed"
     },
-    "retries": 0,
-    "createdAt": "2026-10-30T14:08:02Z",
-    "hasReport": true,
-    "trials": "stored",
-    "ranVersion": "2.1.292",
-    "pushedBy": "release-bot",
-    "verdict": "Helps",
-    "withSkill": 0.95,
-    "withoutSkill": 0.36,
-    "lift": 0.59,
     "publication": "passed",
     "networkMode": "full",
+    "retries": 0,
+    "createdAt": "2026-10-30T14:08:02Z",
     "completedAt": "2026-10-30T14:21:31Z",
-    "durationSec": 809.0
+    "durationSec": 809,
+    "hasReport": true,
+    "trials": "stored"
   },
   "specAgentVersion": "2.1.292",
   "channels": [
@@ -77,7 +77,7 @@
       {
         "key": "accuracy",
         "label": "Accuracy",
-        "withSkill": 1.0,
+        "withSkill": 1,
         "withoutSkill": 0.4,
         "delta": 0.6,
         "overall": false
@@ -85,7 +85,7 @@
       {
         "key": "goal_accuracy",
         "label": "Goal accuracy",
-        "withSkill": 1.0,
+        "withSkill": 1,
         "withoutSkill": 0.05,
         "delta": 0.95,
         "overall": false
@@ -93,7 +93,7 @@
       {
         "key": "behavior_check",
         "label": "Behavior check",
-        "withSkill": 1.0,
+        "withSkill": 1,
         "withoutSkill": 0.25,
         "delta": 0.75,
         "overall": false
@@ -101,9 +101,9 @@
       {
         "key": "skill_execution",
         "label": "Skill execution",
-        "withSkill": 1.0,
-        "withoutSkill": 0.0,
-        "delta": 1.0,
+        "withSkill": 1,
+        "withoutSkill": 0,
+        "delta": 1,
         "overall": false
       },
       {
@@ -117,9 +117,9 @@
       {
         "key": "security",
         "label": "Security",
-        "withSkill": 1.0,
-        "withoutSkill": 1.0,
-        "delta": 0.0,
+        "withSkill": 1,
+        "withoutSkill": 1,
+        "delta": 0,
         "overall": false
       },
       {
@@ -172,7 +172,7 @@
             "score": 0.95,
             "passed": true,
             "durationSec": 453.3,
-            "agentSec": 6.0,
+            "agentSec": 6,
             "steps": 5,
             "toolCalls": 2,
             "tokensIn": 83579,
@@ -243,13 +243,13 @@
         "host": "api.anthropic.com"
       }
     ],
-    "withheld": [],
     "network": {
       "state": "off",
       "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)",
       "forwarded": 0,
       "dropped": 0
-    }
+    },
+    "withheld": []
   },
   "attempts": [
     {

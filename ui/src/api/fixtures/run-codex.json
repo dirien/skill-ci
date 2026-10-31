@@ -6,31 +6,31 @@
     "digest": "sha256:e2083e2538efcb137f3375686cca135d50b93c5c9494f73dca707621ba05b490",
     "agent": "codex",
     "agentVersion": "0.161.0",
+    "ranVersion": "0.161.0",
     "model": "openai/gpt-6.1-sol",
     "entry": "codex@0.161.0/openai/gpt-6.1-sol",
     "required": false,
     "attempts": 1,
     "trigger": "push",
+    "pushedBy": "release-bot",
     "phase": "Succeeded",
+    "verdict": "Neutral",
+    "withSkill": 0.92,
+    "withoutSkill": 0.88,
+    "lift": 0.04,
     "tiers": {
       "tier1": "passed",
       "tier2": "passed",
       "tier3": "passed"
     },
-    "retries": 1,
-    "createdAt": "2026-10-30T14:08:02Z",
-    "hasReport": true,
-    "trials": "stored",
-    "ranVersion": "0.161.0",
-    "pushedBy": "release-bot",
-    "verdict": "Neutral",
-    "withSkill": 0.92,
-    "withoutSkill": 0.88,
-    "lift": 0.04,
     "publication": "passed",
     "networkMode": "allowlist",
+    "retries": 1,
+    "createdAt": "2026-10-30T14:08:02Z",
     "completedAt": "2026-10-30T15:03:40Z",
-    "durationSec": 3338.0
+    "durationSec": 3338,
+    "hasReport": true,
+    "trials": "stored"
   },
   "specAgentVersion": "0.161.0",
   "channels": [
@@ -61,6 +61,7 @@
       "changedAt": "2026-10-30T14:08:03Z"
     }
   ],
+  "retried": "EnvironmentStartTimeoutError: sandbox rn-basic__Hx3kLm9 did not become ready in 600s",
   "network": {
     "mode": "allowlist",
     "source": "skill",
@@ -88,6 +89,11 @@
     "state": "files",
     "digest": "sha256:effa499cae50e035768d99c08b16c268d987316cf6f3ab0ab26b74dac33befcb",
     "dimensions": [],
+    "activation": {
+      "status": "activated",
+      "activated": 1,
+      "positive": 1
+    },
     "files": [
       {
         "name": "report.html",
@@ -182,6 +188,11 @@
         "host": "api.anthropic.com"
       }
     ],
+    "network": {
+      "state": "collected",
+      "forwarded": 2,
+      "dropped": 1
+    },
     "withheld": [
       {
         "id": "rn-basic__Cx2nW9d",
@@ -190,12 +201,7 @@
         "attempt": 1,
         "reason": "secret-scan"
       }
-    ],
-    "network": {
-      "state": "collected",
-      "forwarded": 2,
-      "dropped": 1
-    }
+    ]
   },
   "attempts": [
     {
@@ -213,6 +219,5 @@
       "trials": "stored"
     }
   ],
-  "refreshSeconds": 0,
-  "retried": "EnvironmentStartTimeoutError: sandbox rn-basic__Hx3kLm9 did not become ready in 600s"
+  "refreshSeconds": 0
 }

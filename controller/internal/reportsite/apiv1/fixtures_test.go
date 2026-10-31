@@ -3,12 +3,17 @@ package apiv1
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+// The golden test of package reportsite takes -update, and go test passes the
+// flag to every package of ./internal/reportsite/..., so this one defines it too.
+var _ = flag.Bool("update", false, "unused here: the reportsite golden test rewrites the fixtures")
 
 // fixtures is where the UI reads its API fixtures (ui/src/api/fixtures).
 const fixtures = "../../../../ui/src/api/fixtures"

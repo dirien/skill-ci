@@ -6,22 +6,13 @@
     "digest": "sha256:0fb7e3f4ceabce11e194bc4ba99225d48d368511c4f3e32d02701d965bc0d890",
     "agent": "claude-code",
     "agentVersion": "2.1.292",
+    "ranVersion": "2.1.292",
     "model": "claude-haiku-5-5",
     "entry": "claude-code@2.1.292/claude-haiku-5-5",
     "required": true,
     "attempts": 3,
     "trigger": "push",
     "phase": "Succeeded",
-    "tiers": {
-      "tier1": "passed",
-      "tier2": "passed",
-      "tier3": "passed"
-    },
-    "retries": 0,
-    "createdAt": "2026-10-28T09:12:00Z",
-    "hasReport": true,
-    "trials": "none",
-    "ranVersion": "2.1.292",
     "verdict": "Helps",
     "withSkill": 0.95,
     "withoutSkill": 0.37,
@@ -32,20 +23,30 @@
       "level": "95%"
     },
     "n": "3/3",
+    "tiers": {
+      "tier1": "passed",
+      "tier2": "passed",
+      "tier3": "passed"
+    },
     "publication": "passed",
-    "networkMode": "full",
+    "retries": 0,
+    "createdAt": "2026-10-28T09:12:00Z",
     "completedAt": "2026-10-28T09:41:12Z",
-    "durationSec": 1752.0
+    "durationSec": 1752,
+    "hasReport": true,
+    "trials": "none"
   },
   "specAgentVersion": "2.1.292",
   "channels": [
     "stable"
   ],
+  "withSkillStdErr": 0.03,
+  "withoutSkillStdErr": 0.01,
   "samples": {
     "withSkill": [
       0.95,
       0.9,
-      1.0
+      1
     ],
     "withoutSkill": [
       0.36,
@@ -73,7 +74,7 @@
       {
         "key": "accuracy",
         "label": "Accuracy",
-        "withSkill": 1.0,
+        "withSkill": 1,
         "withoutSkill": 0.4,
         "delta": 0.6,
         "overall": false
@@ -81,25 +82,25 @@
       {
         "key": "goal_accuracy",
         "label": "Goal accuracy",
-        "withSkill": 1.0,
-        "withoutSkill": 0.05,
-        "delta": 0.95,
+        "withSkill": 1,
+        "withoutSkill": 0.08,
+        "delta": 0.92,
         "overall": false
       },
       {
         "key": "behavior_check",
         "label": "Behavior check",
-        "withSkill": 1.0,
-        "withoutSkill": 0.25,
-        "delta": 0.75,
+        "withSkill": 1,
+        "withoutSkill": 0.28,
+        "delta": 0.72,
         "overall": false
       },
       {
         "key": "skill_execution",
         "label": "Skill execution",
-        "withSkill": 1.0,
-        "withoutSkill": 0.0,
-        "delta": 1.0,
+        "withSkill": 1,
+        "withoutSkill": 0,
+        "delta": 1,
         "overall": false
       },
       {
@@ -113,24 +114,24 @@
       {
         "key": "security",
         "label": "Security",
-        "withSkill": 1.0,
-        "withoutSkill": 1.0,
-        "delta": 0.0,
+        "withSkill": 1,
+        "withoutSkill": 1,
+        "delta": 0,
         "overall": false
       },
       {
         "key": "overall",
         "label": "Overall",
         "withSkill": 0.95,
-        "withoutSkill": 0.36,
-        "delta": 0.59,
+        "withoutSkill": 0.37,
+        "delta": 0.58,
         "overall": true
       }
     ],
     "activation": {
       "status": "activated",
-      "activated": 1,
-      "positive": 1
+      "activated": 3,
+      "positive": 3
     },
     "files": [
       {
@@ -151,11 +152,11 @@
     "cases": [
       {
         "id": "rn-basic",
-        "question": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).",
+        "question": "",
         "expectedBehaviors": [],
         "withSkill": [
           {
-            "id": "rn-basic__with0",
+            "id": "rn-basic__Fw1qa2b",
             "arm": "with-skill",
             "case": "rn-basic",
             "attempt": 1,
@@ -169,7 +170,7 @@
             "dropped": 0
           },
           {
-            "id": "rn-basic__with1",
+            "id": "rn-basic__Fw2kd7e",
             "arm": "with-skill",
             "case": "rn-basic",
             "attempt": 2,
@@ -183,12 +184,12 @@
             "dropped": 0
           },
           {
-            "id": "rn-basic__with2",
+            "id": "rn-basic__Fw3pz5c",
             "arm": "with-skill",
             "case": "rn-basic",
             "attempt": 3,
             "status": "scored",
-            "score": 1.0,
+            "score": 1,
             "passed": true,
             "steps": 0,
             "toolCalls": 0,
@@ -199,7 +200,7 @@
         ],
         "withoutSkill": [
           {
-            "id": "rn-basic__with0",
+            "id": "rn-basic__Fo1mx4r",
             "arm": "without-skill",
             "case": "rn-basic",
             "attempt": 1,
@@ -213,7 +214,7 @@
             "dropped": 0
           },
           {
-            "id": "rn-basic__with1",
+            "id": "rn-basic__Fo2vb8n",
             "arm": "without-skill",
             "case": "rn-basic",
             "attempt": 2,
@@ -227,7 +228,7 @@
             "dropped": 0
           },
           {
-            "id": "rn-basic__with2",
+            "id": "rn-basic__Fo3ty6s",
             "arm": "without-skill",
             "case": "rn-basic",
             "attempt": 3,
@@ -268,7 +269,5 @@
       "trials": "none"
     }
   ],
-  "refreshSeconds": 0,
-  "withSkillStdErr": 0.03,
-  "withoutSkillStdErr": 0.01
+  "refreshSeconds": 0
 }

@@ -6,27 +6,27 @@
     "digest": "sha256:bdda6c2ddfaa0b9489e7d77dd3432c630545c7588aa4bc445f8b56caf0e3df1d",
     "agent": "claude-code",
     "agentVersion": "2.1.292",
+    "ranVersion": "2.1.292",
     "model": "claude-haiku-5-5",
     "entry": "claude-code@2.1.292/claude-haiku-5-5",
     "required": true,
     "attempts": 1,
     "trigger": "push",
+    "pushedBy": "release-bot",
     "phase": "Failed",
     "tiers": {
       "tier1": "passed",
       "tier2": "passed",
       "tier3": "incomplete"
     },
+    "networkMode": "full",
     "retries": 0,
     "createdAt": "2026-10-30T14:11:40Z",
-    "hasReport": true,
-    "trials": "stored",
-    "ranVersion": "2.1.292",
-    "pushedBy": "release-bot",
-    "networkMode": "full",
     "completedAt": "2026-10-30T14:13:20Z",
-    "durationSec": 100.0,
-    "message": "no scores in result.json: Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed."
+    "durationSec": 100,
+    "message": "no scores in result.json: Harbor job did not complete successfully: 1 errored; Unscoreable reward in rn-basic__CbK6FQ2: RuntimeError: Build job img-build-skillevaluator-rn-basic-with-skill failed.",
+    "hasReport": true,
+    "trials": "stored"
   },
   "specAgentVersion": "2.1.292",
   "channels": [],
@@ -37,7 +37,15 @@
   "findings": [
     "tier3/execution: Harbor job did not complete successfully: 1 errored"
   ],
-  "conditions": [],
+  "conditions": [
+    {
+      "type": "NetworkPolicy",
+      "status": "True",
+      "reason": "Enforced",
+      "message": "network full enforced by CiliumNetworkPolicy skillci-net-acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
+      "changedAt": "2026-10-30T14:11:41Z"
+    }
+  ],
   "network": {
     "mode": "full",
     "source": "default",
@@ -46,7 +54,7 @@
     "policy": "skillci-net-acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
     "enforced": true,
     "reason": "Enforced",
-    "message": "network full enforced by CiliumNetworkPolicy",
+    "message": "network full enforced by CiliumNetworkPolicy skillci-net-acme-release-notes-v1-2-0-claude-code-2-1-292-claude-haiku-5-5",
     "legacy": false
   },
   "sandbox": {
@@ -58,6 +66,11 @@
     "state": "files",
     "digest": "sha256:aa7db62b391210b83ecacab22acfdf2c218b8524671c13efda1f52d5babf36dd",
     "dimensions": [],
+    "activation": {
+      "status": "unknown",
+      "activated": 0,
+      "positive": 0
+    },
     "files": [
       {
         "name": "report.html",
@@ -143,13 +156,13 @@
         "host": "api.anthropic.com"
       }
     ],
-    "withheld": [],
     "network": {
       "state": "off",
       "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)",
       "forwarded": 0,
       "dropped": 0
-    }
+    },
+    "withheld": []
   },
   "attempts": [
     {

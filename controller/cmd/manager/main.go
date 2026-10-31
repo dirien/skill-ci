@@ -196,19 +196,22 @@ func main() {
 // newReportSite builds the read-only reporting website over the manager's
 // cached client, the Harbor API and the report and trial bundle referrers in
 // the registry. trialCacheBytes bounds the decompressed trial document cache.
-func newReportSite(mgr ctrl.Manager, addr, harborURL, modelsCM string, spa bool, trialCacheBytes int64, cfg controller.Config, registry harbor.Client) (*reportsite.Server, error) {
+// The llm-keys Secret is read with the API reader for render-time redaction,
+// so the manager starts no Secret informer.
+func newReportSite(mgr ctrl.Manager, addr, harborURL, modelsCM string, trialCacheBytes int64, cfg controller.Config, registry harbor.Client) (*reportsite.Server, error) {
+	user, password := os.Getenv("HARBOR_USERNAME"), os.Getenv("HARBOR_PASSWORD")
 	reports, err := reportstore.New(reportstore.Options{
-		RegistryURL: harborURL, Project: cfg.Project,
-		Username: os.Getenv("HARBOR_USERNAME"), Password: os.Getenv("HARBOR_PASSWORD"),
+		RegistryURL: harborURL, Project: cfg.Project, Username: user, Password: password,
 		TrialCacheBytes: trialCacheBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating report store: %w", err)
 	}
 	site, err := reportsite.New(reportsite.Config{
-		Addr: addr, Reader: mgr.GetClient(), Namespace: cfg.Namespace, Project: cfg.Project,
-		Harbor: registry, Reports: reports, Bundles: reports, Thresholds: cfg.Thresholds, Platform: cfg.Platform, Log: ctrl.Log.WithName("reports"),
-		SPA: spa, Version: version, ModelsConfigMap: modelsCM,
+		Addr: addr, Reader: mgr.GetClient(), Secrets: mgr.GetAPIReader(), HarborUsername: user, HarborPassword: password,
+		Namespace: cfg.Namespace, Project: cfg.Project, Harbor: registry, Reports: reports, Bundles: reports,
+		Thresholds: cfg.Thresholds, Platform: cfg.Platform, Log: ctrl.Log.WithName("reports"),
+		Version: version, ModelsConfigMap: modelsCM,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating reports site: %w", err)
@@ -224,7 +227,6 @@ func run() error {
 		trialBudget                                                                                        int
 		trialCacheBytes                                                                                    int64
 		leaderElect                                                                                        bool
-		reportsUI                                                                                          string
 		otlp                                                                                               otlpFlags
 		preinstalled                                                                                       string
 	)
@@ -251,7 +253,6 @@ func run() error {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8081", "Address for the Prometheus metrics endpoint.")
 	flag.StringVar(&reportsAddr, "reports-addr", ":8082", "Address for the reporting website; empty disables it.")
 	flag.Int64Var(&trialCacheBytes, "trial-cache-bytes", reportstore.DefaultTrialCacheBytes, "Bytes of decompressed trial documents the reporting website keeps in memory, separate from the report cache.")
-	flag.StringVar(&reportsUI, "reports-ui", "html", "Pages of the reporting website: html (server-rendered) or spa (the embedded single page app). Transitional, until the single page app replaces the server-rendered pages.")
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Enable leader election (needed only with several replicas).")
 	flag.StringVar(&preinstalled, "preinstalled-agents", strings.Join(network.DefaultPreinstalledAgents, ","),
 		"Comma separated agent@version pins in the sandbox image; another agent version adds the SkillCIConfig network.agentInstallHosts to none and allowlist.")
@@ -265,9 +266,6 @@ func run() error {
 	}
 	if trialCacheBytes <= 0 {
 		return fmt.Errorf("invalid --trial-cache-bytes %d: must be positive", trialCacheBytes)
-	}
-	if reportsUI != "html" && reportsUI != "spa" {
-		return fmt.Errorf("invalid --reports-ui %q: must be html or spa", reportsUI)
 	}
 	pins := network.SplitList(preinstalled)
 	if err := validatePins(pins); err != nil {
@@ -352,7 +350,7 @@ func run() error {
 	}
 
 	if reportsAddr != "" {
-		site, err := newReportSite(mgr, reportsAddr, harborURL, modelsCM, reportsUI == "spa", trialCacheBytes, cfg, registry)
+		site, err := newReportSite(mgr, reportsAddr, harborURL, modelsCM, trialCacheBytes, cfg, registry)
 		if err != nil {
 			return err
 		}

@@ -94,7 +94,8 @@ const (
 	ReportMissing = "missing"
 	// ReportError means the registry or the file could not be read.
 	ReportError = "error"
-	// ReportFiles means Tier 3 did not run, so only the stored files are offered.
+	// ReportFiles means there are no dimension scores to show (Tier 3 did not run, or
+	// result.json has none), so only the stored files are offered.
 	ReportFiles = "files"
 	// ReportOK means the dimension scores were read.
 	ReportOK = "ok"

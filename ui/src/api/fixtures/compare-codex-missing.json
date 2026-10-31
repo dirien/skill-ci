@@ -57,20 +57,20 @@
         {
           "key": "accuracy",
           "label": "Accuracy",
-          "score": 1.0,
-          "armMean": 1.0
+          "score": 1,
+          "armMean": 1
         },
         {
           "key": "goal_accuracy",
           "label": "Goal accuracy",
-          "score": 1.0,
-          "armMean": 1.0
+          "score": 1,
+          "armMean": 1
         },
         {
           "key": "behavior_check",
           "label": "Behavior check",
-          "score": 1.0,
-          "armMean": 1.0
+          "score": 1,
+          "armMean": 1
         },
         {
           "key": "skill_execution",
@@ -87,8 +87,8 @@
         {
           "key": "security",
           "label": "Security",
-          "score": 1.0,
-          "armMean": 1.0
+          "score": 1,
+          "armMean": 1
         }
       ],
       "final": "Wrote RELEASE_NOTES.md in the ACME-RN/2 format: the header line, an Added section with CSV export [ACME-101] and a Fixed section with the login timeout [ACME-117]. The Markdown linter could not be installed because the sandbox has no access to PyPI, so the file was checked by reading it."
@@ -201,62 +201,6 @@
       "behaviorSteps": [
         4
       ],
-      "checks": [
-        {
-          "metric": "skill_execution",
-          "name": "activation",
-          "label": "Activation",
-          "passed": true,
-          "score": 1.0,
-          "reason": "Activated via SKILL.md read: acme-release-notes",
-          "steps": []
-        },
-        {
-          "metric": "skill_execution",
-          "name": "script_execution",
-          "label": "Script execution",
-          "passed": true,
-          "score": 1.0,
-          "reason": "No specific script expected",
-          "steps": []
-        },
-        {
-          "metric": "skill_execution",
-          "name": "workflow_order",
-          "label": "Workflow order",
-          "passed": true,
-          "score": 1.0,
-          "reason": "SKILL.md read before the first change",
-          "steps": []
-        },
-        {
-          "metric": "skill_execution",
-          "name": "error_recovery",
-          "label": "Error recovery",
-          "passed": false,
-          "score": 0.5,
-          "reason": "1 failed command was not recovered: pip install markdown-it-py (exit 1)",
-          "steps": []
-        },
-        {
-          "metric": "skill_efficiency",
-          "name": "routing",
-          "label": "Routing",
-          "passed": true,
-          "score": 1.0,
-          "reason": "Agent correctly routed to acme-release-notes only",
-          "steps": []
-        },
-        {
-          "metric": "skill_efficiency",
-          "name": "tool_efficiency",
-          "label": "Tool efficiency",
-          "passed": true,
-          "score": 0.5,
-          "reason": "2/3 productive calls (67%)",
-          "steps": []
-        }
-      ],
       "accuracy": {
         "criteria": [
           {
@@ -284,7 +228,63 @@
         "steps": [
           5
         ]
-      }
+      },
+      "checks": [
+        {
+          "metric": "skill_execution",
+          "name": "activation",
+          "label": "Activation",
+          "passed": true,
+          "score": 1,
+          "reason": "Activated via SKILL.md read: acme-release-notes",
+          "steps": []
+        },
+        {
+          "metric": "skill_execution",
+          "name": "script_execution",
+          "label": "Script execution",
+          "passed": true,
+          "score": 1,
+          "reason": "No specific script expected",
+          "steps": []
+        },
+        {
+          "metric": "skill_execution",
+          "name": "workflow_order",
+          "label": "Workflow order",
+          "passed": true,
+          "score": 1,
+          "reason": "SKILL.md read before the first change",
+          "steps": []
+        },
+        {
+          "metric": "skill_execution",
+          "name": "error_recovery",
+          "label": "Error recovery",
+          "passed": false,
+          "score": 0.5,
+          "reason": "1 failed command was not recovered: pip install markdown-it-py (exit 1)",
+          "steps": []
+        },
+        {
+          "metric": "skill_efficiency",
+          "name": "routing",
+          "label": "Routing",
+          "passed": true,
+          "score": 1,
+          "reason": "Agent correctly routed to acme-release-notes only",
+          "steps": []
+        },
+        {
+          "metric": "skill_efficiency",
+          "name": "tool_efficiency",
+          "label": "Tool efficiency",
+          "passed": true,
+          "score": 0.5,
+          "reason": "2/3 productive calls (67%)",
+          "steps": []
+        }
+      ]
     },
     "log": [
       {
@@ -293,7 +293,7 @@
         "category": "user",
         "source": "user",
         "at": "2026-10-30T15:02:11.204Z",
-        "offsetSec": 0.0,
+        "offsetSec": 0,
         "title": "Prompt",
         "text": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
         "textTruncated": false,
@@ -352,7 +352,7 @@
           "command": "cat /root/.agents/skills/acme-release-notes/SKILL.md",
           "input": "{\n  \"cmd\": \"cat /root/.agents/skills/acme-release-notes/SKILL.md\",\n  \"workdir\": \"/workspace\"\n}",
           "output": {
-            "preview": "---\nname: acme-release-notes\ndescription: Write ACME release notes in the ACME-RN/2 house format.\n---\n\n# ACME release notes\n\nACME release notes always follow this exact format:\n\n1. The first line is `ACME-RN/2 <version>` (for example `ACME-RN/2 1.4.0`).\n2. Then exactly two sections, in this order: `## Added` and `## Fixed`.\n3. Every bullet ends with the ticket ID in square brackets, for example `[ACME-123]`.\n4. No other sections, no intro text, no emojis.\n",
+            "preview": "---\nname: acme-release-notes\ndescription: Write ACME release notes in the ACME-RN/2 house format.\n---\n\n# ACME release notes\n\nACME release notes always follow this exact format:\n\n1. The first line is `ACME-RN/2 \u003cversion\u003e` (for example `ACME-RN/2 1.4.0`).\n2. Then exactly two sections, in this order: `## Added` and `## Fixed`.\n3. Every bullet ends with the ticket ID in square brackets, for example `[ACME-123]`.\n4. No other sections, no intro text, no emojis.\n",
             "bytes": 460,
             "lines": 13,
             "truncated": false,
@@ -393,7 +393,7 @@
           "command": "pip install markdown-it-py",
           "input": "{\n  \"cmd\": \"pip install markdown-it-py\",\n  \"workdir\": \"/workspace\"\n}",
           "output": {
-            "preview": "WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a2c1e0b50>: Failed to establish a new connection: [Errno 110] Connection timed out\")': /simple/markdown-it-py/\nWARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"<pip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a2c1e1d90>: Failed to establish a new connection: [Errno 110] Connection timed out\")': /simple/markdown-it-py/\nERROR: Could not find a version that satisfies the requirement markdown-it-py (from versions: none)\nERROR: No matching distribution found for markdown-it-py\n",
+            "preview": "WARNING: Retrying (Retry(total=4, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"\u003cpip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a2c1e0b50\u003e: Failed to establish a new connection: [Errno 110] Connection timed out\")': /simple/markdown-it-py/\nWARNING: Retrying (Retry(total=3, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError(\"\u003cpip._vendor.urllib3.connection.HTTPSConnection object at 0x7f3a2c1e1d90\u003e: Failed to establish a new connection: [Errno 110] Connection timed out\")': /simple/markdown-it-py/\nERROR: Could not find a version that satisfies the requirement markdown-it-py (from versions: none)\nERROR: No matching distribution found for markdown-it-py\n",
             "bytes": 777,
             "lines": 4,
             "truncated": false,
@@ -546,12 +546,12 @@
         "step": 0,
         "category": "judge",
         "source": "judge",
-        "title": "Skill efficiency 0.75 failed",
+        "title": "Skill efficiency 0.75 below 0.8",
         "text": "routing: Agent correctly routed to acme-release-notes only; tool_efficiency: 2/3 productive calls (67%)",
         "textTruncated": false,
         "metric": "skill_efficiency",
         "error": true,
-        "label": "Judge, Skill efficiency, score 0.75, failed"
+        "label": "Judge, Skill efficiency, score 0.75, below 0.8"
       },
       {
         "id": "j-security",
@@ -581,7 +581,19 @@
     ]
   },
   "withoutSkill": {
-    "missing": "No without-skill trial for attempt 1 in the bundle.",
+    "trial": {
+      "id": "rn-basic__Cx2nW9d",
+      "arm": "without-skill",
+      "case": "rn-basic",
+      "attempt": 1,
+      "status": "withheld",
+      "steps": 0,
+      "toolCalls": 0,
+      "costEstimated": false,
+      "hasSession": false,
+      "dropped": 0
+    },
+    "missing": "The without-skill trial of attempt 1 was withheld (secret-scan).",
     "log": [],
     "files": []
   }
