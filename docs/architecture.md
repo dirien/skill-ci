@@ -37,6 +37,8 @@ skill-ci adds three CRDs in the group `skillci.dev/v1alpha1`:
 
 A run that fails for an infrastructure reason (an evicted pod, a sandbox that did not start in time, a lost connection) is started again once by default (`--max-retries`). A run with a real result is never retried. The rules are in [CONTRACT.md, "Retry"](../CONTRACT.md).
 
+Before that, Harbor retries single trials inside the run. A trial that failed because the provider rate limited the agent (`ApiRateLimitError`) runs again up to `TRIAL_RETRIES` times (runner env, default 2, `0` turns it off), after 20 s, then 40 s, and never more than 300 s. Only the last try counts, and `--trial-budget` does not count the retries. Harbor spots a rate limit by the words in the agent's output, which include the task text, so a task about rate limits can also be retried this way, at most `TRIAL_RETRIES` times.
+
 ## Triggers
 
 - A skill push with a `vX.Y.Z` tag evaluates that digest on every model list entry.

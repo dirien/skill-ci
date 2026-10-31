@@ -1,7 +1,7 @@
 Local patch for NVIDIA SkillEvaluator v0.6.0 (applied by runner/Dockerfile with `patch -p1`).
 Regenerate: fetch src/skillevaluator/cli.py, src/skillevaluator/tier3/harbor/runner.py and
 src/skillevaluator/tier3/harbor/local_agents.py at tag v0.6.0, edit, then `diff -u a/<file> b/<file>`.
-Each hunk, in file order:
+Each hunk, by file:
 
 cli.py
   1. `validate --catalog FILE` (option): a saved Tier 2 catalog (`similarity-check --save-catalog`).
@@ -51,6 +51,15 @@ tier3/harbor/local_agents.py
      The wrapper renames the model to `skillevaluator-gateway/<id>`, a provider Harbor does not
      know, so Harbor resolved no key for it and the provider config's `{env:OPENAI_API_KEY}` was
      empty in the sandbox: every OpenCode trial through a gateway failed with HTTP 401.
+
+tier3/harbor/runner.py (added after hunk 12, sits between hunks 5 and 8 in the file)
+ 13. Command builder (trial retries): SKILLEVALUATOR_TRIAL_RETRIES=N (N > 0) adds
+     `--max-retries N --retry-include ApiRateLimitError`, so Harbor runs a trial again, with
+     the same name, when the agent hit a provider rate limit. SKILLEVALUATOR_HARBOR_CONFIG adds
+     `-c <file>`: a JobConfig file with only `retry:` that sets the backoff (wait_multiplier,
+     min_wait_sec, max_wait_sec), which has no CLI flag. Harbor loads the file first and applies
+     every flag over it, so it changes nothing else. Both variables are read in-process; without
+     them, or with N=0, the command is unchanged.
 
 --- a/src/skillevaluator/cli.py
 +++ b/src/skillevaluator/cli.py
@@ -153,7 +162,25 @@ tier3/harbor/local_agents.py
      for name, value in sorted(_harbor_agent_kwargs(agent, model, env_mode).items()):
          command.extend(["--ak", encode_environment_kwarg(name, value)])
      for name, value in sorted(validated_environment_kwargs.items()):
-@@ -1833,6 +1857,7 @@
+@@ -1746,6 +1770,17 @@
+                 "Credentials and operator-owned settings must use ${VAR} placeholder indirection."
+             )
+         command.extend(["--verifier-env", f"{name}={value}"])
++    # skill-ci: Harbor re-runs a trial that failed with ApiRateLimitError up to
++    # SKILLEVALUATOR_TRIAL_RETRIES times. The backoff has no flag; SKILLEVALUATOR_HARBOR_CONFIG
++    # is a JobConfig file with only `retry:`; Harbor loads it first and applies every flag over it.
++    trial_retries = os.environ.get("SKILLEVALUATOR_TRIAL_RETRIES", "").strip()
++    if trial_retries:
++        if not trial_retries.isdigit():
++            raise ValueError(f"SKILLEVALUATOR_TRIAL_RETRIES must be a whole number, got {trial_retries!r}")
++        if int(trial_retries) > 0:
++            command.extend(["--max-retries", trial_retries, "--retry-include", "ApiRateLimitError"])
++    if harbor_config := os.environ.get("SKILLEVALUATOR_HARBOR_CONFIG", "").strip():
++        command.extend(["-c", str(Path(harbor_config).absolute())])
+     if _harbor_supports_yes():
+         command.append("--yes")
+     return command
+@@ -1833,6 +1868,7 @@
          and opencode_model
          and expected_opencode_provider
          and "/" in opencode_model
@@ -161,7 +188,7 @@ tier3/harbor/local_agents.py
          and opencode_model.split("/", maxsplit=1)[0].casefold() != expected_opencode_provider
      ):
          return [
-@@ -2793,7 +2818,7 @@
+@@ -2793,7 +2829,7 @@
          return _gateway_anthropic_agent_credentials(provider, env_mode=env_mode, environment_kwargs=environment_kwargs)
      if provider.provider == "openai" and agent == "claude-code":
          return _independent_anthropic_agent_credentials(env_mode=env_mode, environment_kwargs=environment_kwargs)
@@ -170,7 +197,7 @@ tier3/harbor/local_agents.py
          return {
              name: os.environ.get(name, "") for name in ("OPENAI_API_KEY", "OPENAI_BASE_URL") if os.environ.get(name)
          }
-@@ -2856,7 +2881,7 @@
+@@ -2856,7 +2892,7 @@
              base_url=credentials.get("ANTHROPIC_BASE_URL"),
              litellm_model=f"anthropic/{resolved_model}",
          )
@@ -179,7 +206,7 @@ tier3/harbor/local_agents.py
          resolved_model = model.removeprefix("openai/")
          return ProviderConfig(
              provider="openai-compatible",
-@@ -3158,6 +3183,8 @@
+@@ -3158,6 +3194,8 @@
  
  def _agent_import_path(provider: ProviderConfig, agent: str, env_mode: str) -> str | None:
      """Select only the provider-specific wrappers required for this environment."""

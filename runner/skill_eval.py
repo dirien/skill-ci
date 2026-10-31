@@ -124,6 +124,11 @@ GATEWAY_PROVIDERS = {
 # The Tier 1 + 2 gate or one catalog build, scanners and embedding calls included.
 STATIC_TIMEOUT_SEC = 1200
 RETRY_DELAYS = (2, 5, 10)  # seconds to wait before each retry of a failed oras call
+# Harbor's wait before trial retry n (0, 1, ...) is min(min_wait_sec * wait_multiplier**n,
+# max_wait_sec): 20 s, 40 s, 80 s and so on. Provider rate limits are per minute, so Harbor's
+# own default (1 s, doubling, at most 60 s) would mostly hit the same window again.
+TRIAL_RETRY_BACKOFF = {"wait_multiplier": 2, "min_wait_sec": 20, "max_wait_sec": 300}
+TRIAL_RETRY_CONFIG = "harbor-retry.json"  # in the work dir, read by Harbor (patch hunk 13)
 MAX_FINDINGS = 5
 MAX_FINDING_CHARS = 200
 MAX_CATALOG_SKILLS = 200  # other skills compared against in Tier 2
@@ -196,6 +201,9 @@ DEFAULTS = {
     "SANDBOX_WARM_POOL": "",
     # Trials running at once per eval; the controller caps how many evals run at once.
     "TRIAL_CONCURRENCY": "2",
+    # How often Harbor runs a trial again that failed with ApiRateLimitError (patch hunk 13),
+    # waiting TRIAL_RETRY_BACKOFF in between. 0 turns trial retries off.
+    "TRIAL_RETRIES": "2",
     # The sandbox image has the agent CLIs at the default pins, so a trial does not install
     # them; another AGENT_VERSION is still installed in every sandbox, and on a busy cluster
     # that can outlast Harbor's 360 s agent setup timeout.
@@ -262,6 +270,11 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
             raise EvalError(f"{name} must be a positive integer, got {config[name]!r}")
+    config["TRIAL_RETRIES"] = config["TRIAL_RETRIES"].strip()
+    if not config["TRIAL_RETRIES"].isdigit():
+        raise EvalError(
+            f"TRIAL_RETRIES must be a whole number (0 is off), got {config['TRIAL_RETRIES']!r}"
+        )
     try:
         multiplier = float(config["TIMEOUT_MULTIPLIER"])
     except ValueError:
@@ -682,6 +695,34 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
         if own_name and not env.get(native) and (key := env.get(JUDGE_KEY_ENV)):
             env[native] = key
     return env
+
+
+def trial_retry_env(
+    env: Mapping[str, str], config: Mapping[str, str], work: Path
+) -> dict[str, str]:
+    """Return ``env`` for the Tier 3 run, with Harbor's trial retries for provider rate limits.
+
+    With ``TRIAL_RETRIES`` above 0 the patched SkillEvaluator (hunk 13) passes Harbor
+    ``--max-retries TRIAL_RETRIES --retry-include ApiRateLimitError`` and ``-c`` with a JobConfig
+    file that holds only the backoff (``TRIAL_RETRY_BACKOFF``), written to ``work``. Harbor runs
+    the failed trial again under the same name and keeps only the last result, so the scores
+    count one result per trial and the controller's trial budget does not count the retries.
+    Harbor classifies a failure as ``ApiRateLimitError`` when the agent's output mentions "rate
+    limit" or "too many requests", and that output includes the task text: a failed trial of a
+    task about rate limits can be retried too, at most ``TRIAL_RETRIES`` times.
+    ``TRIAL_RETRIES=0`` turns it off and drops the same variables when the Job's environment has
+    them.
+    """
+    out = dict(env)
+    out.pop("SKILLEVALUATOR_TRIAL_RETRIES", None)
+    out.pop("SKILLEVALUATOR_HARBOR_CONFIG", None)
+    if int(config["TRIAL_RETRIES"]) == 0:
+        return out
+    path = work / TRIAL_RETRY_CONFIG
+    path.write_text(json.dumps({"retry": TRIAL_RETRY_BACKOFF}, indent=2) + "\n")
+    out["SKILLEVALUATOR_TRIAL_RETRIES"] = config["TRIAL_RETRIES"]
+    out["SKILLEVALUATOR_HARBOR_CONFIG"] = str(path.absolute())
+    return out
 
 
 def validate_command(
@@ -1542,7 +1583,7 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
                 if bundle_enabled(environ):
                     flows.start()
                 try:
-                    proc = subprocess.run(cmd, check=False, env=env)
+                    proc = subprocess.run(cmd, check=False, env=trial_retry_env(env, config, work))
                 finally:
                     flows.stop()
                 try:

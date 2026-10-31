@@ -508,6 +508,9 @@ def termination(tmp_path, monkeypatch):
         "SKILL_EVAL_LLM_API_KEY",
         "ANTHROPIC_BASE_URL",
         "OPENAI_BASE_URL",
+        "TRIAL_RETRIES",
+        "SKILLEVALUATOR_TRIAL_RETRIES",
+        "SKILLEVALUATOR_HARBOR_CONFIG",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
@@ -1065,6 +1068,92 @@ def test_sandbox_size_follows_the_job_env(termination, monkeypatch):
     assert (env["HARBOR_SANDBOX_CPUS"], env["HARBOR_SANDBOX_MEMORY_MB"]) == ("2", "3072")
 
 
+def run_with_retry_config(monkeypatch, **settings: str) -> list[tuple[list[str], dict, Any]]:
+    """Run main() and return each validate run: its command, env and Harbor retry config.
+
+    The config of the Tier 3 run is read while it is going on; the work directory is gone
+    afterwards. The gate runs no trials, so its config is not read.
+    """
+    for name, value in settings.items():
+        monkeypatch.setenv(name, value)
+    fake = FakeRun(GOOD)
+    runs: list[tuple[list[str], dict, Any]] = []
+
+    def run(cmd, *args, **kwargs):
+        if cmd[:2] == ["skillevaluator", "validate"]:
+            env = dict(kwargs.get("env") or {})
+            path = env.get("SKILLEVALUATOR_HARBOR_CONFIG")
+            tier3 = "3" in cmd[cmd.index("--tiers") + 1].split(",")
+            retry = json.loads(Path(path).read_text()) if path and tier3 else None
+            runs.append((cmd, env, retry))
+        return fake(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(skill_eval.subprocess, "run", run)
+    assert skill_eval.main() == 0
+    return runs
+
+
+def test_trial_retries_by_default(termination, monkeypatch):
+    """Tier 3 asks Harbor for 2 trial retries on rate limits, with a slow backoff."""
+    (_, gate_env, _), (command, env, retry_config) = run_with_retry_config(monkeypatch)
+    assert "3" in command[command.index("--tiers") + 1]
+    assert env["SKILLEVALUATOR_TRIAL_RETRIES"] == "2"
+    assert Path(env["SKILLEVALUATOR_HARBOR_CONFIG"]).is_absolute()
+    assert retry_config == {
+        "retry": {"wait_multiplier": 2, "min_wait_sec": 20, "max_wait_sec": 300}
+    }
+    # The gate runs no trials.
+    assert "SKILLEVALUATOR_TRIAL_RETRIES" not in gate_env
+    assert "SKILLEVALUATOR_HARBOR_CONFIG" not in gate_env
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        ({"TRIAL_RETRIES": "5"}, "5"),
+        ({"TRIAL_RETRIES": " 1 "}, "1"),
+        ({"TRIAL_RETRIES": "0"}, None),
+        (
+            {
+                "TRIAL_RETRIES": "0",
+                "SKILLEVALUATOR_TRIAL_RETRIES": "9",
+                "SKILLEVALUATOR_HARBOR_CONFIG": "/elsewhere.yaml",
+            },
+            None,  # off means off, whatever the Job's environment says
+        ),
+        ({"SKILLEVALUATOR_TRIAL_RETRIES": "9"}, "2"),  # TRIAL_RETRIES decides
+    ],
+    ids=["five", "spaces", "off", "off drops stray variables", "stray variable"],
+)
+def test_trial_retries_follow_the_job_env(settings, expected, termination, monkeypatch):
+    """TRIAL_RETRIES sets the trial retries; 0 passes Harbor no retry settings at all."""
+    *_, (_, env, retry_config) = run_with_retry_config(monkeypatch, **settings)
+    assert env.get("SKILLEVALUATOR_TRIAL_RETRIES") == expected
+    if expected is None:
+        assert "SKILLEVALUATOR_HARBOR_CONFIG" not in env
+        assert retry_config is None
+    else:
+        assert retry_config == {"retry": skill_eval.TRIAL_RETRY_BACKOFF}
+
+
+def test_trial_retry_config_is_a_harbor_job_config(tmp_path):
+    """Harbor accepts the file with only ``retry:`` and keeps its other defaults."""
+    harbor = pytest.importorskip("harbor.models.job.config")
+    config = skill_eval.load_config(ENV)
+    env = skill_eval.trial_retry_env({}, config, tmp_path)
+    job = harbor.JobConfig.model_validate(
+        json.loads(Path(env["SKILLEVALUATOR_HARBOR_CONFIG"]).read_text())
+    )
+    assert (job.retry.wait_multiplier, job.retry.min_wait_sec, job.retry.max_wait_sec) == (
+        2,
+        20,
+        300,
+    )
+    assert job.retry.max_retries == 0  # the count comes from --max-retries (patch hunk 13)
+    assert "ApiRateLimitError" not in job.retry.exclude_exceptions
+    assert job == harbor.JobConfig(job_name=job.job_name, retry=job.retry)
+
+
 def test_attach_command(termination, monkeypatch):
     """The combined report and the Tier 3 files are attached as a typed referrer."""
     fake = FakeRun(GOOD)
@@ -1178,6 +1267,8 @@ def test_samples_are_capped_and_the_message_fits(tmp_path):
         ({**ENV, "SANDBOX_MEMORY_MB": "2g"}, "SANDBOX_MEMORY_MB must be a positive integer"),
         ({**ENV, "TIMEOUT_MULTIPLIER": "fast"}, "TIMEOUT_MULTIPLIER must be a positive number"),
         ({**ENV, "TIMEOUT_MULTIPLIER": "0"}, "TIMEOUT_MULTIPLIER must be a positive number"),
+        ({**ENV, "TRIAL_RETRIES": "-1"}, "TRIAL_RETRIES must be a whole number"),
+        ({**ENV, "TRIAL_RETRIES": "two"}, "TRIAL_RETRIES must be a whole number"),
     ],
 )
 def test_bad_config(env, message):
