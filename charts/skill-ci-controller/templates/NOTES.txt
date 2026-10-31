@@ -24,7 +24,7 @@ overwrite them:
   kubectl -n {{ include "skill-ci-controller.watchNamespace" . }} get sbp
 
 Helm installs crds/ only on the first install and never upgrades them. When upgrading from an older
-chart, apply them first (0.10.0 adds the SkillCIConfig CRD, 0.9.0 the SandboxProfile CRD, 0.5.0 SkillEval
+chart, apply them first (0.10.0 adds the SkillCIConfig and SandboxProfile CRDs, 0.5.0 SkillEval
 status fields): kubectl apply --server-side -f charts/skill-ci-controller/crds/
 
 Try it:

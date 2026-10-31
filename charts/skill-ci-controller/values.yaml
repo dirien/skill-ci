@@ -94,7 +94,7 @@ controller:
   # --preinstalled-agents: agent@version pins in the sandbox image of this release (a fact of the
   # image, not a policy). An entry on another agentVersion installs the CLI with npm, so the
   # SkillCIConfig network.agentInstallHosts are added to none and allowlist. Keep it in step with
-  # controller.sandboxImage. Needs controller image 0.9.0 or newer.
+  # controller.sandboxImage. Needs controller image 0.10.0 or newer.
   preinstalledAgents: [claude-code@2.1.292, codex@0.161.0, opencode@1.19.1]
   # Removed in 0.10.0 and ignored: controller.defaultSandboxProfile and controller.network moved to the
   # SkillCIConfig `default` (config.* below seeds it). NOTES.txt warns when they are still set.

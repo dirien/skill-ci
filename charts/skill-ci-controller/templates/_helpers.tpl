@@ -112,7 +112,7 @@ Create-once object in the watch namespace: a SkillCIConfig or SandboxProfile the
 values and then leaves to kubectl or GitOps. Rendered (with helm.sh/resource-policy: keep, so a later
 upgrade that stops rendering it never deletes it) only when lookup finds no such object. helm template
 and helm lint have no cluster, lookup returns nothing, and the object always renders.
-An object this release created before the annotation existed (chart 0.9.0 SandboxProfiles) is rendered
+An object this release created before the annotation existed (pre-release builds) is rendered
 once more from its live spec with the annotation added, so the upgrade adopts it instead of deleting it.
 Usage: include "skill-ci-controller.createOnce" (dict "root" $ "kind" "SandboxProfile" "name" "default" "spec" $spec)
 */}}
