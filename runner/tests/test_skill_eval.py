@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +121,9 @@ TIER2_SKIPPED = report(
 )
 GOOD = {"agents": {"claude-code": agent_entry(0.951, 0.364)}}
 REPORT = "sha256:" + "c" * 64
+TRIALS = "sha256:" + "b" * 64  # the trial bundle's digest
+# What happened, in order: validate runs, flow collection, bundle builds and attaches.
+EVENTS: list[str] = []
 TIERS_OK = {"tier1": "passed", "tier2": "passed", "tier3": "passed"}
 GOOD_PAYLOAD = {
     "withSkill": 0.95,
@@ -171,8 +177,13 @@ class FakeRun:
         attach_failures: int = 0,
         trial_versions: list[str] | None = None,
         evals: str | None = "evals/evals.json",
+        trials: list[tuple[str, str, str, str | None]] | None = None,
+        trials_attach_exit: int = 0,
     ):
         self.evals = evals
+        self.trials = trials or []  # (arm, trial id, started_at, finished_at) in the run dir
+        self.trials_attach_exit = trials_attach_exit  # exit code of the trial bundle attach
+        self.attaches: list[dict[str, Any]] = []  # every oras attach: type, command, directory
         self.trial_versions = trial_versions  # agent_info.version of the kept Harbor trials
         self.attach_failures = attach_failures  # attach calls that fail before one succeeds
         self.result = result
@@ -203,9 +214,24 @@ class FakeRun:
         """Return whether a ``validate`` run selected Tier 3."""
         return any("3" in c[c.index("--tiers") + 1].split(",") for c in self.validates())
 
+    def report_attaches(self) -> list[list[str]]:
+        """Return the ``oras attach`` command lines of the report, in order."""
+        return [a["cmd"] for a in self.attaches if a["type"] == skill_eval.REPORT_TYPE]
+
+    def trials_attaches(self) -> list[list[str]]:
+        """Return the ``oras attach`` command lines of the trial bundle, in order."""
+        return [a["cmd"] for a in self.attaches if a["type"] == skill_eval.BUNDLE_TYPE]
+
     def oras(self, cmd: list[str], kwargs: dict[str, Any]) -> subprocess.CompletedProcess:
         """Fake the oras sub-commands the runner uses."""
         if cmd[1] == "attach":
+            kind = cmd[cmd.index("--artifact-type") + 1]
+            self.attaches.append({"type": kind, "cmd": cmd, "cwd": kwargs.get("cwd")})
+            EVENTS.append(f"attach {kind}")
+            if kind == skill_eval.BUNDLE_TYPE:
+                if self.trials_attach_exit:
+                    return subprocess.CompletedProcess(cmd, self.trials_attach_exit, "", "denied")
+                return subprocess.CompletedProcess(cmd, 0, f"Digest: {TRIALS}\n", "")
             self.attach_cwd = kwargs.get("cwd")
             self.bundle = sorted(p.name for p in Path(kwargs["cwd"]).iterdir())
             self.bundle_text = {p.name: p.read_text() for p in Path(kwargs["cwd"]).iterdir()}
@@ -240,6 +266,7 @@ class FakeRun:
         """Fake ``skillevaluator validate``: write the combined report and, with Tier 3, scores."""
         selected = set(cmd[cmd.index("--tiers") + 1].split(","))
         with_tier3 = "3" in selected
+        EVENTS.append(f"validate {cmd[cmd.index('--tiers') + 1]}")
         content = self.full if with_tier3 else self.gate
         if with_tier3 and self.result is not None:
             run_dir = Path(cmd[cmd.index("--results-dir") + 1]) / "acme" / "20260101_000000"
@@ -252,6 +279,11 @@ class FakeRun:
                 trial.mkdir(parents=True)
                 info = {"name": "claude-code", "version": version}
                 (trial / "result.json").write_text(json.dumps({"agent_info": info}))
+            for arm, trial_id, started, finished in self.trials:
+                trial = run_dir / "claude-code" / arm / "trials" / trial_id
+                trial.mkdir(parents=True)
+                times = {"started_at": started, "finished_at": finished}
+                (trial / "result.json").write_text(json.dumps(times))
         if content is None:
             return subprocess.CompletedProcess(cmd, 1, "", "provider error\nboom")
         results = [r for r in content["results"] if str(r["gating"]["tier"]) in selected]
@@ -279,6 +311,170 @@ class FakeRun:
         return self.validate(cmd)
 
 
+@dataclass(frozen=True)
+class Credential:
+    """trial_bundle.Credential."""
+
+    role: str
+    env: str
+    host: str
+
+
+@dataclass
+class Bundle:
+    """trial_bundle.Bundle."""
+
+    directory: Path
+    files: list[str]
+    index: dict[str, Any]
+    annotations: dict[str, str]
+    withheld: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class NotBuilt:
+    """trial_bundle.NotBuilt."""
+
+    reason: str
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class Limits:
+    """trial_bundle.Limits, the one field the runner reads."""
+
+    flow_rows: int = 200
+
+
+BUNDLE_FILES = [
+    "index.json:application/vnd.skillci.trials.index.v1+json",
+    "trial-t1.json.gz:application/vnd.skillci.trial.v1+gzip",
+]
+
+
+class FakeTrialBundle:
+    """Stands in for the trial_bundle module (work package 1), recording every call.
+
+    ``outcome`` is what ``build`` does: ``None`` writes a bundle, a ``NotBuilt`` is returned,
+    an exception is raised. ``drop`` are report files the redaction refuses.
+    """
+
+    ARTIFACT_TYPE = "application/vnd.skillci.trials.v1+json"
+    SCHEMA_MAJOR = "1"
+    REDACTION_VERSION = "v1"
+    Credential = Credential
+    Bundle = Bundle
+    NotBuilt = NotBuilt
+
+    def __init__(self) -> None:
+        self.outcome: Any = None
+        self.builds: list[dict[str, Any]] = []
+        self.drop: set[str] = set()
+        self.redact_error: Exception | None = None
+        self.redacted: list[list[str]] = []
+        self.auth_configs: list[Path] = []
+
+    def enabled(self, environ):
+        return (environ.get("TRIAL_BUNDLE") or "on").strip().lower() != "off"
+
+    def limits_from_env(self, environ):
+        return Limits(flow_rows=7)
+
+    def build(self, run_dir, out, **kwargs):
+        EVENTS.append("bundle.build")
+        self.builds.append({"run_dir": run_dir, "out": out, **kwargs})
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
+        if self.outcome is not None:
+            return self.outcome
+        out.mkdir(parents=True)
+        (out / "index.json").write_text("{}")
+        (out / "trial-t1.json.gz").write_bytes(b"\x1f\x8b")
+        annotations = {"skillci.dev/eval": kwargs["config"]["SKILLEVAL_NAME"]}
+        return Bundle(out, ["index.json", "trial-t1.json.gz"], {}, annotations)
+
+    def oras_files(self, bundle):
+        return list(BUNDLE_FILES)
+
+    def secret_values(self, environ, auth_config):
+        self.auth_configs.append(auth_config)
+        return {"ANTHROPIC_API_KEY": environ.get("ANTHROPIC_API_KEY", "")}
+
+    def Redactor(self, secrets):  # a class in the real module
+        return ("redactor", dict(secrets))
+
+    def redact_report_files(self, directory, files, redactor):
+        if self.redact_error is not None:
+            raise self.redact_error
+        self.redacted.append(list(files))
+        return [name for name in files if name not in self.drop]
+
+
+@dataclass(frozen=True)
+class Window:
+    """flows.Window."""
+
+    start: datetime
+    end: datetime
+
+
+class FakeCollector:
+    """A started flows.FlowCollector."""
+
+    def __init__(self, flows: FakeFlows) -> None:
+        self.flows = flows
+
+    def stop(self):
+        EVENTS.append("flows.stop")
+        if self.flows.stop_error is not None:
+            raise self.flows.stop_error
+        return "collection"
+
+
+class FakeFlows:
+    """Stands in for the flows module (work package 8), recording every call."""
+
+    Window = Window
+
+    def __init__(self) -> None:
+        self.started: list[tuple[str, Path]] = []
+        self.summaries: list[tuple[Any, dict[str, Window], int]] = []
+        self.start_error: Exception | None = None
+        self.stop_error: Exception | None = None
+        self.summary_error: Exception | None = None
+
+    def start_from_env(self, environ, eval_name, work):
+        EVENTS.append("flows.start")
+        self.started.append((eval_name, work))
+        if self.start_error is not None:
+            raise self.start_error
+        return FakeCollector(self) if environ.get("HUBBLE_SERVER") else None
+
+    def summarize(self, collection, trials, *, max_rows):
+        self.summaries.append((collection, dict(trials), max_rows))
+        if self.summary_error is not None:
+            raise self.summary_error
+        return {"state": "collected"}, {trial: {"dns": []} for trial in trials}
+
+
+@dataclass
+class Modules:
+    """The fake trial_bundle and flows modules a test runs with."""
+
+    bundle: FakeTrialBundle
+    flows: FakeFlows
+
+
+@pytest.fixture(autouse=True)
+def modules(monkeypatch) -> Modules:
+    """Replace trial_bundle and flows (built in parallel) with recording fakes."""
+    EVENTS.clear()
+    fakes = Modules(FakeTrialBundle(), FakeFlows())
+    monkeypatch.setitem(sys.modules, skill_eval.BUNDLE_MODULE, fakes.bundle)
+    monkeypatch.setitem(sys.modules, skill_eval.FLOWS_MODULE, fakes.flows)
+    return fakes
+
+
 @pytest.fixture(autouse=True)
 def sleeps(monkeypatch):
     """Record the retry backoff instead of waiting for it."""
@@ -304,6 +500,14 @@ def termination(tmp_path, monkeypatch):
         "SANDBOX_WARM_POOL",
         "HARBOR_SANDBOX_WARM_POOL",
         "SKILLEVAL_NAME",
+        "SKILL_VERSION",
+        "HUBBLE_SERVER",
+        "TRIAL_BUNDLE",
+        "SKILL_EVAL_LLM_MODEL",
+        "SKILL_EVAL_LLM_BASE_URL",
+        "SKILL_EVAL_LLM_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "OPENAI_BASE_URL",
     ):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
@@ -361,7 +565,8 @@ def termination(tmp_path, monkeypatch):
 def test_main(name, fake, code, expected, termination, monkeypatch):
     """main() writes the contract's termination message and exit code.
 
-    A failure before the gate is the error alone; one in Tier 3 keeps the gate's tiers.
+    A failure before the gate is the error alone; one in Tier 3 keeps the gate's tiers and the
+    report attached anyway.
     """
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == code, name
@@ -375,7 +580,8 @@ def test_main(name, fake, code, expected, termination, monkeypatch):
         assert expected in written["error"]
         assert written["tiers"] == {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"}
         assert written["findings"] == []
-        assert set(written) == {"error", "tiers", "findings"}
+        assert written["report"] == REPORT
+        assert set(written) == {"error", "tiers", "findings", "report"}
 
 
 @pytest.mark.parametrize(
@@ -567,6 +773,9 @@ def test_rejected_run_attaches_the_failing_report(termination, monkeypatch):
     attach = fake.calls[-1]
     assert "skillci.dev/publication=failed" in attach
     assert not any(a.startswith("skillci.dev/lift") for a in attach)
+    # No Tier 3, no trials: the report says so and no bundle is attached.
+    assert "skillci.dev/trials-withheld=no-trials" in attach
+    assert fake.trials_attaches() == []
 
 
 def test_one_validate_covers_all_tiers(termination, monkeypatch):
@@ -582,6 +791,7 @@ def test_one_validate_covers_all_tiers(termination, monkeypatch):
         "skillevaluator similarity-check",
         "skillevaluator validate",
         "skillevaluator validate",
+        "oras attach --artifact-type",
         "oras attach --artifact-type",
     ]
     gate, full = fake.validates()
@@ -870,6 +1080,7 @@ def test_attach_command(termination, monkeypatch):
         "skillci.dev/agent-version=2.1.292",
         "skillci.dev/lift=+0.59",
         "skillci.dev/publication=passed",
+        f"skillci.dev/trials={TRIALS}",
     ]
     subject = attach.index(ENV["SKILL_REF"])
     assert attach[subject + 1 :] == [
@@ -880,7 +1091,7 @@ def test_attach_command(termination, monkeypatch):
         "tier3.html:text/html",
     ]
     assert fake.attach_cwd is not None
-    assert fake.attach_cwd.name == "bundle"
+    assert fake.attach_cwd.name == "report"
     assert "combined" in fake.bundle_text["report.html"]
     assert "tier 3" in fake.bundle_text["tier3.html"]
     assert "agents" in json.loads(fake.bundle_text["result.json"])  # the Tier 3 result
@@ -1067,7 +1278,11 @@ def test_unexpected_error_after_the_gate_keeps_the_tiers(termination, monkeypatc
         "error": "no space left on device",
         "tiers": {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"},
         "findings": [],
+        "report": REPORT,
     }
+    # Tier 3 left no run directory: the gate's report is attached, without trials.
+    (attach,) = fake.report_attaches()
+    assert "skillci.dev/trials-withheld=no-trials" in attach
 
 
 def test_oversized_error_keeps_the_tiers(tmp_path):
@@ -1098,7 +1313,7 @@ def test_attach_is_retried(termination, monkeypatch, sleeps):
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     assert termination()["report"] == REPORT
-    assert sum(c[:2] == ["oras", "attach"] for c in fake.calls) == 2
+    assert len(fake.report_attaches()) == 2
     assert sleeps == [2]
 
 
@@ -1108,7 +1323,7 @@ def test_attach_gives_up_after_three_retries(termination, monkeypatch, sleeps):
     monkeypatch.setattr(skill_eval.subprocess, "run", fake)
     assert skill_eval.main() == 0
     assert "report" not in termination()
-    assert sum(c[:2] == ["oras", "attach"] for c in fake.calls) == 4
+    assert len(fake.report_attaches()) == 4
     assert sleeps == [2, 5, 10]
 
 
@@ -1381,3 +1596,562 @@ def test_gateway_environment_resolves_in_skillevaluator():
     assert (embedding.provider, embedding.api_key) == ("openai-compatible", "real-openai")
     assert embedding.base_url == "https://api.openai.com/v1"
     assert config.resolve_llm_provider(env).provider == "anthropic"
+
+
+EVAL_NAME = "acme-v1-0-0-claude-code-2-1-292-claude-haiku-5-5"
+TRIAL_TIMES = [
+    ("with-skill", "rn-basic__sryqofs", "2026-10-30T14:13:45.009297Z", "2026-10-30T14:21:18Z"),
+    ("without-skill", "rn-basic__BQbpoR9", "2026-10-30T14:13:46Z", None),
+]
+
+
+def annotations_of(command: list[str]) -> list[str]:
+    """Return the values of the ``--annotation`` flags of an oras command."""
+    return [command[i + 1] for i, arg in enumerate(command) if arg == "--annotation"]
+
+
+def run_main(monkeypatch, fake: FakeRun, code: int = 0, **settings: str) -> None:
+    """Run main() with ``fake`` and extra Job env, expecting exit ``code``."""
+    for name, value in settings.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(skill_eval.subprocess, "run", fake)
+    assert skill_eval.main() == code
+
+
+def test_bundle_is_attached_before_the_report(termination, monkeypatch, modules):
+    """The trial bundle is attached first; the report names its digest."""
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake, SKILLEVAL_NAME=EVAL_NAME, SKILL_VERSION="v1.0.0")
+    assert [a["type"] for a in fake.attaches] == [skill_eval.BUNDLE_TYPE, skill_eval.REPORT_TYPE]
+    assert EVENTS[-3:] == [
+        "bundle.build",
+        f"attach {skill_eval.BUNDLE_TYPE}",
+        f"attach {skill_eval.REPORT_TYPE}",
+    ]
+    (bundle,) = fake.trials_attaches()
+    assert "--plain-http" in bundle
+    assert annotations_of(bundle) == [
+        f"skillci.dev/eval={EVAL_NAME}",
+        "skillci.dev/agent=claude-code",
+        "skillci.dev/agent-version=2.1.292",
+        "skillci.dev/model=claude-haiku-5-5",
+        "skillci.dev/trials-schema=1",
+        "skillci.dev/redaction=v1",
+    ]
+    assert bundle[bundle.index(ENV["SKILL_REF"]) + 1 :] == BUNDLE_FILES
+    assert fake.attaches[0]["cwd"] == modules.bundle.builds[0]["out"]
+    (report_attach,) = fake.report_attaches()
+    assert annotations_of(report_attach)[-1] == f"skillci.dev/trials={TRIALS}"
+    assert termination() == GOOD_PAYLOAD
+
+
+def test_bundle_build_gets_the_run(termination, monkeypatch, modules):
+    """build() receives the run directory, the runner settings, the version and the routes."""
+    fake = FakeRun(GOOD, trial_versions=["2.1.300"])
+    run_main(monkeypatch, fake, SKILLEVAL_NAME=EVAL_NAME, SKILL_VERSION="v1.0.0", TRIAL_BUNDLE="on")
+    (build,) = modules.bundle.builds
+    assert build["run_dir"].parent.parent.name == "results"
+    assert build["run_dir"].name == "20260101_000000"
+    assert build["config"] == {
+        "SKILL_NAME": "acme",
+        "SKILL_REF": ENV["SKILL_REF"],
+        "AGENT": "claude-code",
+        "MODEL": "claude-haiku-5-5",
+        "ATTEMPTS": "2",
+        "SKILLEVAL_NAME": EVAL_NAME,
+        "SKILL_VERSION": "v1.0.0",
+    }
+    assert build["agent_version"] == "2.1.300"
+    assert build["credentials"] == [
+        Credential("agent", "ANTHROPIC_API_KEY", "api.anthropic.com"),
+        Credential("judge", "ANTHROPIC_API_KEY", "api.anthropic.com"),
+    ]
+    assert build["network"] == skill_eval.NETWORK_OFF
+    assert build["trial_networks"] is None
+    assert build["auth_config"] == Path("/auth/config.json")
+    assert build["environ"]["TRIAL_BUNDLE"] == "on"
+
+
+def test_bundle_config_leaves_out_a_missing_version(termination, monkeypatch, modules):
+    """Without SKILL_VERSION the bundle config has none, so the index leaves version out."""
+    run_main(monkeypatch, FakeRun(GOOD))
+    assert "SKILL_VERSION" not in modules.bundle.builds[0]["config"]
+
+
+@pytest.mark.parametrize(
+    ("name", "outcome", "attach_exit", "withheld"),
+    [
+        ("index leaked", NotBuilt("secret-scan", "ANTHROPIC_API_KEY"), 0, "secret-scan"),
+        ("no trial directories", NotBuilt("no-trials"), 0, "no-trials"),
+        ("builder crashed", RuntimeError("boom"), 0, "build-failed"),
+        ("builder not built yet", NotImplementedError(), 0, "build-failed"),
+        ("bundle attach failed", None, 1, "attach-failed"),
+    ],
+)
+def test_bundle_failures_never_fail_the_eval(
+    name, outcome, attach_exit, withheld, termination, monkeypatch, modules
+):
+    """Without a bundle the eval still succeeds and the report says why it has none."""
+    modules.bundle.outcome = outcome
+    fake = FakeRun(GOOD, trials_attach_exit=attach_exit)
+    run_main(monkeypatch, fake)
+    assert termination() == GOOD_PAYLOAD, name
+    (report_attach,) = fake.report_attaches()
+    assert annotations_of(report_attach)[-1] == f"skillci.dev/trials-withheld={withheld}"
+    assert not any(a.startswith("skillci.dev/trials=") for a in annotations_of(report_attach))
+    assert len(fake.trials_attaches()) == (4 if attach_exit else 0)  # attach is retried
+
+
+def test_bundle_switched_off(termination, monkeypatch, modules):
+    """TRIAL_BUNDLE=off builds nothing, collects no flows and says ``disabled``."""
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake, TRIAL_BUNDLE="off", HUBBLE_SERVER="relay:80")
+    assert modules.bundle.builds == []
+    assert modules.flows.started == []
+    assert fake.trials_attaches() == []
+    (report_attach,) = fake.report_attaches()
+    assert annotations_of(report_attach)[-1] == "skillci.dev/trials-withheld=disabled"
+    assert termination() == GOOD_PAYLOAD
+
+
+def test_broken_bundle_module(termination, monkeypatch):
+    """A trial_bundle that cannot be imported: no bundle, and no unredacted report either."""
+    monkeypatch.setitem(sys.modules, skill_eval.BUNDLE_MODULE, None)  # import raises
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake)
+    assert termination() == NO_REPORT
+    assert fake.attaches == []
+
+
+def test_report_files_are_redacted_first(termination, monkeypatch, modules):
+    """Report files go through the bundle's redaction; a file that still leaks stays home."""
+    modules.bundle.drop = {"tier3.html"}
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake)
+    assert modules.bundle.redacted == [
+        ["report.html", "result.json", "BENCHMARK.md", "validate.json", "tier3.html"]
+    ]
+    assert modules.bundle.auth_configs == [Path("/auth/config.json")]
+    (report_attach,) = fake.report_attaches()
+    assert "tier3.html:text/html" not in report_attach
+    assert "validate.json:application/json" in report_attach
+    assert termination()["report"] == REPORT
+
+
+def test_report_redaction_fails_closed(termination, monkeypatch, modules):
+    """When the redaction cannot run, the report is not attached; the eval still succeeds."""
+    modules.bundle.redact_error = RuntimeError("no redactor")
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake)
+    assert fake.report_attaches() == []
+    assert len(fake.trials_attaches()) == 1
+    assert termination() == NO_REPORT
+
+
+def test_flows_wrap_the_tier3_run(termination, monkeypatch, modules):
+    """With HUBBLE_SERVER the collector runs for exactly the Tier 3 validate, per trial."""
+    fake = FakeRun(GOOD, trials=TRIAL_TIMES)
+    run_main(monkeypatch, fake, HUBBLE_SERVER="relay:80", SKILLEVAL_NAME=EVAL_NAME)
+    assert EVENTS[:4] == ["validate 1,2", "flows.start", "validate 1,2,3", "flows.stop"]
+    ((eval_name, work),) = modules.flows.started
+    assert eval_name == EVAL_NAME
+    assert work.name == "flows"
+    ((collection, windows, max_rows),) = modules.flows.summaries
+    assert collection == "collection"
+    assert max_rows == 7  # Limits.flow_rows from limits_from_env
+    assert set(windows) == {"rn-basic__sryqofs", "rn-basic__BQbpoR9"}
+    done = windows["rn-basic__sryqofs"]
+    assert done.start == datetime(2026, 10, 30, 14, 13, 45, 9297, tzinfo=UTC)
+    assert done.end == datetime(2026, 10, 30, 14, 21, 18, tzinfo=UTC)
+    assert windows["rn-basic__BQbpoR9"].end > done.end  # not finished: ends now
+    (build,) = modules.bundle.builds
+    assert build["network"] == {"state": "collected"}
+    assert build["trial_networks"] == {
+        "rn-basic__sryqofs": {"dns": []},
+        "rn-basic__BQbpoR9": {"dns": []},
+    }
+    assert termination() == GOOD_PAYLOAD
+
+
+def test_no_flows_without_a_relay(termination, monkeypatch, modules):
+    """Without HUBBLE_SERVER nothing is started and the network state is off."""
+    run_main(monkeypatch, FakeRun(GOOD), SKILLEVAL_NAME=EVAL_NAME)
+    assert modules.flows.started == []
+    assert modules.bundle.builds[0]["network"] == skill_eval.NETWORK_OFF
+
+
+@pytest.mark.parametrize("broken", ["start_error", "stop_error", "summary_error"])
+def test_flow_failures_never_fail_the_eval(broken, termination, monkeypatch, modules):
+    """A collector that cannot start, stop or summarize leaves the network unavailable."""
+    setattr(modules.flows, broken, RuntimeError("relay gone"))
+    fake = FakeRun(GOOD, trials=TRIAL_TIMES)
+    run_main(monkeypatch, fake, HUBBLE_SERVER="relay:80", SKILLEVAL_NAME=EVAL_NAME)
+    assert termination() == GOOD_PAYLOAD
+    (build,) = modules.bundle.builds
+    assert build["network"]["state"] == "unavailable"
+    assert "relay gone" in build["network"]["reason"]
+    assert build["trial_networks"] is None
+    assert len(fake.trials_attaches()) == 1
+
+
+def test_flows_need_the_eval_name(termination, monkeypatch, modules):
+    """Without SKILLEVAL_NAME there is no label to select: no collector, state unavailable."""
+    run_main(monkeypatch, FakeRun(GOOD), HUBBLE_SERVER="relay:80")
+    assert modules.flows.started == []
+    assert "SKILLEVAL_NAME" in modules.bundle.builds[0]["network"]["reason"]
+
+
+def test_flows_stop_when_tier3_crashes(termination, monkeypatch, modules):
+    """The collector stops even when the Tier 3 command raises."""
+    fake = FakeRun(GOOD)
+
+    def run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess:
+        if cmd[:2] == ["skillevaluator", "validate"] and "--results-dir" in cmd:
+            raise OSError("no space left on device")
+        return fake(cmd, **kwargs)
+
+    for name, value in (("HUBBLE_SERVER", "relay:80"), ("SKILLEVAL_NAME", EVAL_NAME)):
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(skill_eval.subprocess, "run", run)
+    assert skill_eval.main() == 1
+    assert EVENTS[1:3] == ["flows.start", "flows.stop"]
+    assert termination()["report"] == REPORT
+
+
+def test_failed_run_keeps_its_trials(termination, monkeypatch, modules):
+    """Tier 3 started and failed: bundle, then report, and the digest next to the error."""
+    fake = FakeRun({"agents": {"codex": agent_entry(1, 0)}}, trials=TRIAL_TIMES)
+    run_main(monkeypatch, fake, code=1, SKILLEVAL_NAME=EVAL_NAME)
+    written = termination()
+    assert "no entry for agent 'claude-code'" in written["error"]
+    assert written["report"] == REPORT
+    assert written["tiers"]["tier3"] == "incomplete"
+    assert [a["type"] for a in fake.attaches] == [skill_eval.BUNDLE_TYPE, skill_eval.REPORT_TYPE]
+    (build,) = modules.bundle.builds
+    assert build["run_dir"].name == "20260101_000000"
+    (report_attach,) = fake.report_attaches()
+    annotations = annotations_of(report_attach)
+    assert "skillci.dev/publication=incomplete" in annotations
+    assert annotations[-1] == f"skillci.dev/trials={TRIALS}"
+    assert not any(a.startswith("skillci.dev/lift") for a in annotations)
+    # The combined report of the Tier 3 run, not the gate's.
+    assert "tier3.html" in fake.bundle
+
+
+def test_failed_run_without_a_report_still_fails_cleanly(termination, monkeypatch, modules):
+    """When nothing can be attached on the error path, the error payload has no report."""
+    modules.bundle.outcome = RuntimeError("boom")
+    fake = FakeRun({"agents": {}}, attach_exit=1)
+    run_main(monkeypatch, fake, code=1)
+    written = termination()
+    assert "report" not in written
+    assert set(written) == {"error", "tiers", "findings"}
+
+
+def test_failed_run_payload_with_report_fits(tmp_path):
+    """An oversized error that carries a report keeps the digest and the tiers."""
+    tiers = {"tier1": "passed", "tier2": "passed", "tier3": "incomplete"}
+    err = skill_eval.EvalError("e" * 10_000, tiers, ["tier1/x: " + "y" * 190] * 5, REPORT)
+    path = tmp_path / "log"
+    skill_eval.write_termination(skill_eval.error_payload(err), str(path))
+    written = json.loads(path.read_text())
+    assert len(path.read_text().encode()) <= skill_eval.MAX_MESSAGE_BYTES
+    assert written["report"] == REPORT
+    assert written["tiers"] == tiers
+
+
+def test_find_run_dir(tmp_path):
+    """The run directory is the newest result.json's parent, else the newest run directory."""
+    assert skill_eval.find_run_dir(tmp_path / "missing") is None
+    run = tmp_path / "acme" / "20260101_000000"
+    (run / "claude-code").mkdir(parents=True)
+    assert skill_eval.find_run_dir(tmp_path) == run
+    done = tmp_path / "acme" / "20250101_000000"
+    done.mkdir()
+    (done / "result.json").write_text("{}")
+    assert skill_eval.find_run_dir(tmp_path) == done
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-10-30T14:21:18Z", datetime(2026, 10, 30, 14, 21, 18, tzinfo=UTC)),
+        ("2026-10-30T14:21:18", datetime(2026, 10, 30, 14, 21, 18, tzinfo=UTC)),
+        ("yesterday", None),
+        (None, None),
+        (12, None),
+    ],
+)
+def test_parse_time(value, expected):
+    """Harbor's times parse to aware datetimes; anything else is None."""
+    assert skill_eval.parse_time(value) == expected
+
+
+# The judge (SkillCIConfig spec.judge, CONTRACT.md "LLM keys").
+JUDGE_KEY = "sk-judge-test-0000"
+
+
+@pytest.mark.parametrize(
+    ("name", "environ", "provider", "key_env", "host"),
+    [
+        ("legacy anthropic", {"ANTHROPIC_API_KEY": "a"}, "anthropic", "ANTHROPIC_API_KEY",
+         "api.anthropic.com"),
+        ("legacy openai", {"OPENAI_API_KEY": "o"}, "openai", "OPENAI_API_KEY", "api.openai.com"),
+        ("anthropic from the judge key", {"SKILL_EVAL_LLM_PROVIDER": "anthropic",
+         "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY}, "anthropic", "ANTHROPIC_API_KEY",
+         "api.anthropic.com"),
+        ("anthropic behind a proxy", {"SKILL_EVAL_LLM_PROVIDER": "Anthropic",
+         "ANTHROPIC_API_KEY": "a", "SKILL_EVAL_LLM_BASE_URL": "https://llm.example.com/anthropic"},
+         "anthropic", "ANTHROPIC_API_KEY", "llm.example.com"),
+        ("openai prefers its own key", {"SKILL_EVAL_LLM_PROVIDER": "openai",
+         "OPENAI_API_KEY": "o", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY}, "openai", "OPENAI_API_KEY",
+         "api.openai.com"),
+        ("openai from the judge key", {"SKILL_EVAL_LLM_PROVIDER": "openai",
+         "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY, "OPENAI_BASE_URL": "https://gw.example.com/v1"},
+         "openai", "SKILL_EVAL_LLM_API_KEY", "gw.example.com"),
+        ("openai-compatible", {"SKILL_EVAL_LLM_PROVIDER": "openai-compatible",
+         "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY, "SKILL_EVAL_LLM_BASE_URL": "http://litellm:4000/v1"},
+         "openai-compatible", "SKILL_EVAL_LLM_API_KEY", "litellm"),
+        ("nv_build", {"SKILL_EVAL_LLM_PROVIDER": "nv_build", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         "nv_build", "NVIDIA_API_KEY", "integrate.api.nvidia.com"),
+        ("bedrock api key", {"SKILL_EVAL_LLM_PROVIDER": "bedrock",
+         "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY, "AWS_REGION": "eu-central-1"}, "bedrock",
+         "AWS_BEARER_TOKEN_BEDROCK", "bedrock-runtime.eu-central-1.amazonaws.com"),
+        ("bedrock web identity", {"SKILL_EVAL_LLM_PROVIDER": "bedrock",
+         "AWS_WEB_IDENTITY_TOKEN_FILE": "/var/run/token"}, "bedrock",
+         "AWS_WEB_IDENTITY_TOKEN_FILE", "bedrock-runtime.us-west-2.amazonaws.com"),
+        ("no key", {"SKILL_EVAL_LLM_PROVIDER": "nv_build"}, "nv_build", "",
+         "integrate.api.nvidia.com"),
+    ],
+)  # fmt: skip
+def test_judge_of(name, environ, provider, key_env, host):
+    """The judge's provider, key variable and host follow SkillEvaluator's resolution."""
+    assert skill_eval.judge_of(environ) == skill_eval.Judge(provider, key_env, host), name
+
+
+def test_no_judge():
+    """Without a provider and without an Anthropic or OpenAI key there is no judge."""
+    assert skill_eval.judge_of({"NVIDIA_API_KEY": "n"}) is None
+    with pytest.raises(skill_eval.EvalError, match="no judge for Tier 3"):
+        skill_eval.check_judge(skill_eval.load_config(ENV), {**ENV, "NVIDIA_API_KEY": "n"})
+
+
+@pytest.mark.parametrize(
+    ("environ", "message"),
+    [
+        ({"SKILL_EVAL_LLM_PROVIDER": "gemini", "SKILL_EVAL_LLM_API_KEY": "k"},
+         "SKILL_EVAL_LLM_PROVIDER must be one of: anthropic, bedrock, nv_build, openai, "
+         "openai-compatible, got 'gemini'"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": ""},
+         "the anthropic judge needs its key: SKILL_EVAL_LLM_API_KEY or ANTHROPIC_API_KEY"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai-compatible", "SKILL_EVAL_LLM_API_KEY": "k"},
+         "the openai-compatible judge needs SKILL_EVAL_LLM_BASE_URL"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai-compatible", "SKILL_EVAL_LLM_BASE_URL": "http://gw/v1"},
+         "the openai-compatible judge needs its key: SKILL_EVAL_LLM_API_KEY in the Job"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai", "SKILL_EVAL_LLM_API_KEY": "k",
+          "SKILL_EVAL_LLM_BASE_URL": "gw.example.com/v1"}, "needs an http\\(s\\) base URL"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "bedrock"}, "the bedrock judge needs its key: "
+         "SKILL_EVAL_LLM_API_KEY or AWS_BEARER_TOKEN_BEDROCK \\(or AWS credentials\\)"),
+    ],
+)  # fmt: skip
+def test_judge_key_is_required(environ, message):
+    """A judge without its key (or endpoint) fails before any work."""
+    config = skill_eval.load_config(ENV)
+    with pytest.raises(skill_eval.EvalError, match=message):
+        skill_eval.check_judge(config, {**ENV, "ANTHROPIC_API_KEY": "a", **environ})
+
+
+def test_judge_failure_stops_before_the_pull(termination, monkeypatch):
+    """A missing judge key ends the run with its error, before oras and every tier."""
+    monkeypatch.setenv("SKILL_EVAL_LLM_PROVIDER", "openai-compatible")
+    fake = FakeRun(GOOD)
+    run_main(monkeypatch, fake, code=1)
+    assert "SKILL_EVAL_LLM_BASE_URL" in termination()["error"]
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize(
+    ("agent", "model", "judge", "ok"),
+    [
+        ("claude-code", "claude-haiku-5-5", "openai-compatible", True),
+        ("claude-code", "claude-haiku-5-5", "bedrock", False),
+        ("codex", "openai/gpt-6.1-sol", "openai", True),
+        ("codex", "openai/gpt-6.1-sol", "openai-compatible", False),
+        ("opencode", "anthropic/claude-sonnet-5-5", "anthropic", True),
+        ("opencode", "ollama-cloud/gpt-oss:120b", "openai", False),
+        ("opencode", "nvidia/nemotron-3-super", "nv_build", False),
+    ],
+)
+def test_agent_and_judge_must_fit(agent, model, judge, ok):
+    """SkillEvaluator routes the agent by the judge provider, so some pairs are refused."""
+    environ = {
+        **ENV,
+        "AGENT": agent,
+        "MODEL": model,
+        "ANTHROPIC_API_KEY": "a",
+        "OPENAI_API_KEY": "o",
+        "OLLAMA_API_KEY": "l",
+        "NVIDIA_API_KEY": "n",
+        "SKILL_EVAL_LLM_PROVIDER": judge,
+        "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY,
+        "SKILL_EVAL_LLM_BASE_URL": "https://gw.example.com/v1",
+    }
+    config = skill_eval.load_config(environ)
+    if ok:
+        assert skill_eval.check_judge(config, environ).provider == judge
+    else:
+        with pytest.raises(skill_eval.EvalError, match=f"cannot run under the {judge} judge"):
+            skill_eval.check_judge(config, environ)
+
+
+@pytest.mark.parametrize(
+    ("agent", "model", "message"),
+    [
+        ("claude-code", "claude-haiku-5-5", "claude-code needs ANTHROPIC_API_KEY"),
+        ("codex", "openai/gpt-6.1-sol", "codex needs OPENAI_API_KEY \\(llm-keys key openai\\)"),
+    ],
+)
+def test_agent_key_is_required(agent, model, message):
+    """The Anthropic key is no longer implied by the judge, so the agent's key is checked."""
+    environ = {
+        **ENV,
+        "AGENT": agent,
+        "MODEL": model,
+        "SKILL_EVAL_LLM_PROVIDER": "nv_build",
+        "NVIDIA_API_KEY": "n",
+    }
+    with pytest.raises(skill_eval.EvalError, match=message):
+        skill_eval.check_judge(skill_eval.load_config(environ), environ)
+
+
+@pytest.mark.parametrize(
+    ("agent", "model", "judge"),
+    [
+        ("claude-code", "claude-haiku-5-5", "anthropic"),
+        ("opencode", "anthropic/claude-sonnet-5-5", "anthropic"),
+        ("codex", "openai/gpt-6.1-sol", "openai"),
+    ],
+)
+def test_agent_shares_the_judge_key(agent, model, judge):
+    """Under the judge of its own provider the agent runs on the judge's key."""
+    environ = {
+        **ENV,
+        "AGENT": agent,
+        "MODEL": model,
+        "SKILL_EVAL_LLM_PROVIDER": judge,
+        "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY,
+    }
+    assert skill_eval.check_judge(skill_eval.load_config(environ), environ).provider == judge
+
+
+def test_judge_from_the_job_wins(termination, monkeypatch, modules):
+    """The Job's SKILL_EVAL_LLM_* reach SkillEvaluator; the index names the judge's route."""
+    run_main(
+        monkeypatch,
+        FakeRun(GOOD),
+        SKILL_EVAL_LLM_PROVIDER="openai-compatible",
+        SKILL_EVAL_LLM_MODEL="nvidia/nemotron-judge",
+        SKILL_EVAL_LLM_BASE_URL="https://llm.example.com/v1",
+        SKILL_EVAL_LLM_API_KEY=JUDGE_KEY,
+    )
+    (build,) = modules.bundle.builds
+    assert build["credentials"] == [
+        Credential("agent", "ANTHROPIC_API_KEY", "api.anthropic.com"),
+        Credential("judge", "SKILL_EVAL_LLM_API_KEY", "llm.example.com"),
+    ]
+
+
+def test_judge_environment_reaches_skillevaluator(termination, monkeypatch):
+    """Tier 3 gets the judge provider, model and base URL as the Job set them."""
+    fake = FakeRun(GOOD)
+    run_main(
+        monkeypatch,
+        fake,
+        SKILL_EVAL_LLM_PROVIDER="openai-compatible",
+        SKILL_EVAL_LLM_MODEL="nvidia/nemotron-judge",
+        SKILL_EVAL_LLM_BASE_URL="https://llm.example.com/v1",
+        SKILL_EVAL_LLM_API_KEY=JUDGE_KEY,
+    )
+    env = fake.envs["validate"]
+    assert env["SKILL_EVAL_LLM_PROVIDER"] == "openai-compatible"
+    assert env["SKILL_EVAL_LLM_MODEL"] == "nvidia/nemotron-judge"
+    assert env["SKILL_EVAL_LLM_BASE_URL"] == "https://llm.example.com/v1"
+    assert env["SKILL_EVAL_LLM_API_KEY"] == JUDGE_KEY
+    assert env["ANTHROPIC_API_KEY"] == "anthropic-test"  # the agent's key is untouched
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({"SKILL_EVAL_LLM_PROVIDER": "anthropic", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         {"ANTHROPIC_API_KEY": JUDGE_KEY}),
+        ({"SKILL_EVAL_LLM_PROVIDER": "anthropic", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY,
+          "ANTHROPIC_API_KEY": "already-here"}, {"ANTHROPIC_API_KEY": "already-here"}),
+        ({"SKILL_EVAL_LLM_PROVIDER": "nv_build", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         {"NVIDIA_API_KEY": JUDGE_KEY}),
+        ({"SKILL_EVAL_LLM_PROVIDER": "bedrock", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         {"AWS_BEARER_TOKEN_BEDROCK": JUDGE_KEY}),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         {"OPENAI_API_KEY": None}),  # SkillEvaluator reads SKILL_EVAL_LLM_API_KEY itself
+        ({"SKILL_EVAL_LLM_PROVIDER": " ", "ANTHROPIC_API_KEY": "a"},
+         {"SKILL_EVAL_LLM_PROVIDER": "anthropic"}),  # blank: the legacy choice
+        ({"SKILL_EVAL_LLM_PROVIDER": "NV_BUILD", "NVIDIA_API_KEY": "n"},
+         {"SKILL_EVAL_LLM_PROVIDER": "nv_build"}),
+        ({"ANTHROPIC_API_KEY": "a", "SKILL_EVAL_LLM_MODEL": "", "SKILL_EVAL_LLM_BASE_URL": " ",
+          "SKILL_EVAL_LLM_API_KEY": ""},
+         {"SKILL_EVAL_LLM_MODEL": None, "SKILL_EVAL_LLM_BASE_URL": None,
+          "SKILL_EVAL_LLM_API_KEY": None}),  # SkillEvaluator refuses a blank model
+        ({"OPENAI_API_KEY": "o"}, {"SKILL_EVAL_LLM_PROVIDER": "openai"}),
+        ({}, {"SKILL_EVAL_LLM_PROVIDER": None}),
+    ],
+)  # fmt: skip
+def test_tool_env_judge(environ, expected):
+    """tool_env keeps the Job's judge and puts its key where SkillEvaluator reads it."""
+    env = skill_eval.tool_env({**ENV, **environ})
+    for name, value in expected.items():
+        assert env.get(name) == value, name
+
+
+def test_opencode_gateway_judge_keeps_the_real_openai_key():
+    """The legacy openai judge choice uses the Job's keys, not the gateway's OPENAI_API_KEY."""
+    env = skill_eval.tool_env({**ENV, **OLLAMA, "OPENAI_API_KEY": "real-openai"})
+    assert env["SKILL_EVAL_LLM_PROVIDER"] == "openai"
+    assert env["OPENAI_API_KEY"] == "ollama-key"  # which is why check_judge refuses the pair
+
+
+def test_judge_key_is_redacted(monkeypatch):
+    """The judge's key never reaches the log or the message."""
+    monkeypatch.setenv("SKILL_EVAL_LLM_API_KEY", JUDGE_KEY)
+    monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", "bedrock-test-0000")
+    text = f"failed with {JUDGE_KEY} and bedrock-test-0000"
+    assert skill_eval.redact(text) == "failed with [redacted] and [redacted]"
+
+
+@pytest.mark.parametrize(
+    ("environ", "provider", "key"),
+    [
+        ({"ANTHROPIC_API_KEY": "a", "OPENAI_API_KEY": "o"}, "anthropic", "a"),
+        ({"SKILL_EVAL_LLM_PROVIDER": "anthropic", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         "anthropic", JUDGE_KEY),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY},
+         "openai", JUDGE_KEY),
+        ({"SKILL_EVAL_LLM_PROVIDER": "nv_build", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY,
+          "ANTHROPIC_API_KEY": "a"}, "nv_build", JUDGE_KEY),
+        ({"SKILL_EVAL_LLM_PROVIDER": "openai-compatible", "SKILL_EVAL_LLM_API_KEY": JUDGE_KEY,
+          "SKILL_EVAL_LLM_BASE_URL": "https://gw.example.com/v1", "SKILL_EVAL_LLM_MODEL": "m"},
+         "openai-compatible", JUDGE_KEY),
+    ],
+)  # fmt: skip
+def test_judge_environment_resolves_in_skillevaluator(environ, provider, key):
+    """SkillEvaluator's own resolver finds the judge and its key in what tool_env hands it."""
+    config = pytest.importorskip("skillevaluator.provider_config")
+    resolved = config.resolve_llm_provider(skill_eval.tool_env({**ENV, **environ}))
+    assert (resolved.provider, resolved.api_key) == (provider, key)
+    if "SKILL_EVAL_LLM_MODEL" in environ:
+        assert resolved.model == environ["SKILL_EVAL_LLM_MODEL"]
+
+
+def test_judge_providers_match_skillevaluator():
+    """The providers the runner accepts are exactly the ones SkillEvaluator supports."""
+    config = pytest.importorskip("skillevaluator.provider_config")
+    assert set(skill_eval.JUDGE_PROVIDERS) == set(config._SUPPORTED_PROVIDERS)

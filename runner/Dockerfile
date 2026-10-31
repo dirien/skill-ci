@@ -16,6 +16,10 @@ ARG SKILLSPECTOR_COMMIT=c7958a3268d9498644b22edb75d0f051bbc8cbfc
 ARG SEMGREP_VERSION=1.183.0
 ARG BANDIT_VERSION=1.9.4
 ARG PIP_AUDIT_VERSION=2.10.1
+# Network flows of the trial pods from Hubble Relay (runner/flows.py, HUBBLE_SERVER). The checksum
+# is the release's hubble-linux-amd64.tar.gz.sha256sum.
+ARG HUBBLE_VERSION=1.20.2
+ARG HUBBLE_SHA256=03f248a50cad11e728bf9383382392c57148fd6a19853ad359fb7598dae29312
 
 # Nodes are linux/amd64.
 RUN apt-get update && apt-get install -y --no-install-recommends git curl patch ca-certificates \
@@ -26,7 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl patch 
  && curl -sSfL -o /tmp/gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz \
  && echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c - \
  && tar xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks \
- && rm /tmp/oras.tgz /tmp/gitleaks.tgz
+ && curl -sSfL -o /tmp/hubble.tgz https://github.com/cilium/hubble/releases/download/v${HUBBLE_VERSION}/hubble-linux-amd64.tar.gz \
+ && echo "${HUBBLE_SHA256}  /tmp/hubble.tgz" | sha256sum -c - \
+ && tar xzf /tmp/hubble.tgz -C /usr/local/bin hubble \
+ && rm /tmp/oras.tgz /tmp/gitleaks.tgz /tmp/hubble.tgz
 
 # SkillSpector and Semgrep pin conflicting click versions, so each gets its own virtualenv.
 # SkillEvaluator finds both on PATH. SkillSpector is pinned to the v2.12.0 commit.
@@ -48,6 +55,7 @@ RUN pip install --no-cache-dir /opt/harbor-agent-sandbox kubernetes==${KUBERNETE
 
 # Fail the build, not the first run, when a tool is missing or the wrong version.
 RUN gitleaks version | grep -qx "${GITLEAKS_VERSION}" \
+ && hubble version | grep -q "^hubble v${HUBBLE_VERSION}@" \
  && skillspector --version | grep -q "${SKILLSPECTOR_VERSION#v}" \
  && semgrep --version | grep -qx "${SEMGREP_VERSION}" \
  && bandit --version | grep -q "${BANDIT_VERSION}" \

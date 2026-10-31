@@ -28,7 +28,9 @@ Where the sandbox comes from:
 
 Both paths label the trial pod ``sandbox.users.io/skillci-eval: <SkillEval>`` (from
 ``SKILLEVAL_NAME``, else the runner pod's Job name) and ``sandbox.users.io/skillci-role: trial``,
-which is what the SkillEval's network policy selects.
+which is what the SkillEval's network policy selects, and ``sandbox.users.io/skillci-trial:
+<trial label>`` (:func:`trial_label` of the Harbor trial name), which the runner uses to map
+Hubble flows to their trial (runner/flows.py imports :func:`trial_label` from here).
 
 Usage::
 
@@ -39,6 +41,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import logging
 import os
@@ -80,8 +83,20 @@ CLAIM_FAILURES = frozenset({"InvalidMetadata", "EnvVarsInjectionRejected"})
 SKILLEVAL_NAME_ENV = "SKILLEVAL_NAME"
 EVAL_LABEL = "sandbox.users.io/skillci-eval"
 ROLE_LABEL = "sandbox.users.io/skillci-role"
+# Maps network flows to their trial; no policy selects it (CONTRACT.md "Network modes").
+TRIAL_LABEL = "sandbox.users.io/skillci-trial"
 JOB_NAME_LABEL = "batch.kubernetes.io/job-name"
 LABEL_VALUE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9])?$")
+
+# Over-long or odd trial names: the first 52 characters, "-" and 10 hex characters of the
+# SHA-256, the rule of the controller's policy names.
+_LABEL_PREFIX_CHARS = 52
+_LABEL_HASH_CHARS = 10
+_NOT_LABEL_CHAR = re.compile(r"[^A-Za-z0-9._-]")
+# Harbor's environment session ids: "<trial name>__env", and "<trial name>__verifier__<key>"
+# for a separate verifier environment (harbor/trial/trial.py).
+_ENV_SUFFIX = "__env"
+_VERIFIER_MARK = "__verifier__"
 
 # Where a pod finds its own namespace and name.
 SA_NAMESPACE_FILE = Path("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
@@ -96,6 +111,36 @@ def _log_once(key: str, message: str, *args: Any) -> None:
     if key not in _logged_once:
         _logged_once.add(key)
         logger.info(message, *args)
+
+
+def trial_label(trial_id: str) -> str:
+    """Return the value of the ``sandbox.users.io/skillci-trial`` label for a trial id.
+
+    The Harbor trial name (``rn-basic__sryqofs``) when it is a valid label value of at most 63
+    characters; otherwise its first 52 characters, ``-`` and the first 10 hex characters of
+    its SHA-256 (the rule of the controller's policy names). Characters a label value cannot
+    hold are replaced by ``-`` in that prefix, and leading or trailing punctuation is dropped,
+    so the result is always a valid label value. This is the one implementation: the runner
+    (runner/flows.py) imports it to map flows to trials.
+    """
+    if LABEL_VALUE.match(trial_id):
+        return trial_id
+    digest = hashlib.sha256(trial_id.encode()).hexdigest()[:_LABEL_HASH_CHARS]
+    prefix = _NOT_LABEL_CHAR.sub("-", trial_id[:_LABEL_PREFIX_CHARS]).lstrip("._-")
+    return f"{prefix}-{digest}" if prefix else digest
+
+
+def trial_name_from_session(session_id: str) -> str:
+    """Return the Harbor trial name behind an environment session id.
+
+    Harbor names the trial environment ``<trial name>__env`` and a separate verifier
+    environment ``<trial name>__verifier__<key>``; both belong to the same trial. Any other
+    session id is returned as it is.
+    """
+    if session_id.endswith(_ENV_SUFFIX):
+        return session_id[: -len(_ENV_SUFFIX)]
+    name, mark, _ = session_id.partition(_VERIFIER_MARK)
+    return name if mark and name else session_id
 
 
 def _positive_int(name: str, value: str) -> int:
@@ -251,10 +296,16 @@ class AgentSandboxEnvironment(ACKEnvironment):
         return self.prebuilt_image or self._get_image_url()
 
     def _trial_labels(self) -> dict[str, str]:
-        """Return the labels of every trial pod; the eval label only when the name is known."""
+        """Return the labels of every trial pod; the eval label only when the name is known.
+
+        Only the ``sandbox.users.io`` domain: a SandboxClaim may put no other label on the pod.
+        The trial label carries :func:`trial_label` of the Harbor trial name.
+        """
         labels = {ROLE_LABEL: "trial"}
         if self.skilleval_name:
             labels[EVAL_LABEL] = self.skilleval_name
+        if trial := trial_name_from_session(self.session_id or ""):
+            labels[TRIAL_LABEL] = trial_label(trial)
         return labels
 
     def _image_ref(self) -> str:

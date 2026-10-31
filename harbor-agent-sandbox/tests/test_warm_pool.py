@@ -205,6 +205,7 @@ def test_claim_names_the_warm_pool_and_the_trial_labels(tmp_path, monkeypatch):
             "labels": {
                 "sandbox.users.io/skillci-eval": EVAL,
                 "sandbox.users.io/skillci-role": "trial",
+                "sandbox.users.io/skillci-trial": "rn-basic__abc",
             }
         },
     }
@@ -402,7 +403,10 @@ def test_skilleval_name_source(tmp_path, monkeypatch, env_name, job_name, expect
     runner_labels = {"batch.kubernetes.io/job-name": job_name} if job_name else {}
     cluster = FakeCluster(env, monkeypatch, runner_labels=runner_labels, pod_labels=[{}])
     cluster.pod_labels = [
-        {"sandbox.users.io/skillci-role": "trial"}
+        {
+            "sandbox.users.io/skillci-role": "trial",
+            "sandbox.users.io/skillci-trial": "rn-basic__abc",
+        }
         | ({"sandbox.users.io/skillci-eval": expected} if expected else {})
     ]
     start(env)
@@ -420,6 +424,72 @@ def test_bare_sandbox_pod_template_carries_the_trial_labels(tmp_path, monkeypatc
     assert pod_labels["sandbox.users.io/skillci-role"] == "trial"
     assert pod_labels["app.kubernetes.io/managed-by"] == "harbor"
     assert "sandbox.users.io/skillci-eval" not in manifest["metadata"]["labels"]
+
+
+@pytest.mark.parametrize(
+    ("session_id", "trial"),
+    [
+        ("rn-basic__sryqofs__env", "rn-basic__sryqofs"),
+        ("rn-basic__sryqofs__verifier__default", "rn-basic__sryqofs"),
+        ("rn-basic__sryqofs", "rn-basic__sryqofs"),
+        ("__verifier__x", "__verifier__x"),
+    ],
+)
+def test_trial_name_from_session(session_id, trial):
+    """The trial environment and a separate verifier environment map to the same trial."""
+    assert environment.trial_name_from_session(session_id) == trial
+
+
+@pytest.mark.parametrize("warm_pool", [POOL, None])
+def test_both_paths_label_the_pod_with_the_trial(tmp_path, monkeypatch, warm_pool):
+    """The claim's additionalPodMetadata and the bare pod template carry the same trial label."""
+    monkeypatch.setenv("SKILLEVAL_NAME", EVAL)
+    env = make_env(tmp_path, warm_pool=warm_pool)
+    env.session_id = "rn-basic__sryqofs__env"
+    if warm_pool:
+        manifest = env._claim_manifest()
+        pod_labels = manifest["spec"]["additionalPodMetadata"]["labels"]
+    else:
+        manifest = env._sandbox_manifest()
+        pod_labels = manifest["spec"]["podTemplate"]["metadata"]["labels"]
+    assert pod_labels["sandbox.users.io/skillci-trial"] == "rn-basic__sryqofs"
+    # Only the agent's label domain on the pod labels a claim asks for.
+    if warm_pool:
+        assert all(key.startswith("sandbox.users.io/") for key in pod_labels)
+    assert "sandbox.users.io/skillci-trial" not in manifest["metadata"]["labels"]
+
+
+def test_long_trial_names_get_a_hashed_label(tmp_path, monkeypatch):
+    """Past 63 characters: the first 52, "-" and 10 hex characters of the SHA-256."""
+    import hashlib
+
+    trial = "release-notes-for-a-case-with-a-really-long-name-xxxxxxx__sryqofs"
+    env = make_env(tmp_path)
+    env.session_id = trial + "__env"
+    label = env._claim_manifest()["spec"]["additionalPodMetadata"]["labels"][
+        "sandbox.users.io/skillci-trial"
+    ]
+    assert label == trial[:52] + "-" + hashlib.sha256(trial.encode()).hexdigest()[:10]
+    assert environment.LABEL_VALUE.match(label)
+    assert environment.trial_label(trial) == label
+
+
+@pytest.mark.parametrize("trial", ["_x__abc", "a/b__abc", "-" * 70, "x" * 50 + ".__abc" + "y" * 20])
+def test_trial_label_is_always_a_label_value(trial):
+    label = environment.trial_label(trial)
+    assert environment.LABEL_VALUE.match(label)
+    assert len(label) <= 63
+
+
+def test_start_waits_for_the_trial_label(tmp_path, monkeypatch):
+    """The trial label maps flows: start waits until the claimed pod carries it too."""
+    monkeypatch.setenv("SKILLEVAL_NAME", EVAL)
+    env = make_env(tmp_path)
+    labels = env._trial_labels()
+    without_trial = {k: v for k, v in labels.items() if k != "sandbox.users.io/skillci-trial"}
+    cluster = FakeCluster(env, monkeypatch, pod_labels=[without_trial, labels])
+    start(env)
+    assert cluster.pod_reads == 2
 
 
 def test_bare_sandbox_start_takes_the_name_from_the_job(tmp_path, monkeypatch):

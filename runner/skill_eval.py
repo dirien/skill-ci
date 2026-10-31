@@ -12,10 +12,17 @@ error that says how to draft the dataset. On completion the runner writes one
 JSON object to the container termination log and exits 0, or ``{"error": ...}``
 and exits 1. An error after the gate ran keeps the gate's ``tiers`` and ``findings``
 next to ``error``.
+
+After the run the runner attaches two OCI referrers to the skill digest (CONTRACT.md, "Trial
+bundles" and "Eval reports"): first the trial bundle (``trial_bundle.py``, with the network
+flows ``flows.py`` collected during Tier 3), then the report, which names the bundle digest
+or the reason there is none. Neither ever fails the eval. When Tier 3 started and the run
+then failed, both are still attached and the error payload carries ``report``.
 """
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import re
@@ -29,8 +36,10 @@ import urllib.request
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 TERMINATION_LOG = "/dev/termination-log"
 MAX_MESSAGE_BYTES = 4000  # Kubernetes caps the termination message at 4096 bytes.
@@ -48,6 +57,15 @@ SECRET_ENV = (
     "OLLAMA_API_KEY",
     "OPENROUTER_API_KEY",
 )
+# The judge key the controller mounts from llm-keys/<SkillCIConfig spec.judge.secretKey>.
+JUDGE_KEY_ENV = "SKILL_EVAL_LLM_API_KEY"
+# Every value ``redact`` removes from the log and the termination message.
+REDACTED_ENV = (
+    *SECRET_ENV,
+    JUDGE_KEY_ENV,
+    "SKILL_EVAL_EMBEDDING_API_KEY",
+    "AWS_BEARER_TOKEN_BEDROCK",
+)
 # The agent CLI release each agent runs when the Job names none (AGENT_VERSION). claude-code and
 # codex are the pins SkillEvaluator 0.6.0 ships (tier3/harbor/runner.py: _CLAUDE_CODE_VERSION,
 # _CODEX_VERSION; a test compares them). Upstream pins no OpenCode release, so Harbor would
@@ -61,6 +79,39 @@ AGENT_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,61}[A-Za-z0-9
 IMAGE_REFERENCE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$")
 SECRET_NAME = re.compile(r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$")
 OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+ANTHROPIC_DEFAULT_BASE_URL = "https://api.anthropic.com"
+NVIDIA_DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
+BEDROCK_DEFAULT_REGION = "us-west-2"  # SkillEvaluator's default when AWS_REGION is unset
+# The judge providers SkillEvaluator 0.6.0 supports (provider_config.py, _SUPPORTED_PROVIDERS)
+# and the variable its resolve_llm_provider reads the key from: anthropic and nv_build read only
+# their own key, openai reads OPENAI_API_KEY and then SKILL_EVAL_LLM_API_KEY, openai-compatible
+# reads SKILL_EVAL_LLM_API_KEY (with SKILL_EVAL_LLM_BASE_URL, both required), and bedrock uses the
+# AWS credential chain, where a Bedrock API key is AWS_BEARER_TOKEN_BEDROCK.
+JUDGE_PROVIDERS = {
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openai-compatible": JUDGE_KEY_ENV,
+    "nv_build": "NVIDIA_API_KEY",
+    "bedrock": "AWS_BEARER_TOKEN_BEDROCK",
+}
+# The judges each agent can run under. SkillEvaluator chooses the agent's credentials from the
+# judge provider (tier3/harbor/runner.py, _agent_credentials): under openai-compatible, Codex
+# would call the judge's gateway; under bedrock, Claude Code would run on Bedrock and Codex
+# would get no key; and the OpenCode routes of skill-ci (patch hunks 8 to 11) act only under
+# the anthropic judge. An agent not listed here is not restricted.
+AGENT_JUDGES = {
+    "claude-code": ("anthropic", "openai", "openai-compatible", "nv_build"),
+    "codex": ("anthropic", "openai", "nv_build"),
+    "opencode": ("anthropic",),
+}
+# Other AWS credential sources a Bedrock judge can use instead of a Bedrock API key.
+BEDROCK_CREDENTIAL_ENV = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_WEB_IDENTITY_TOKEN_FILE",
+    "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+    "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+    "AWS_PROFILE",
+)
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 # OpenCode providers served through an OpenAI-compatible Chat Completions endpoint: the model
 # `<provider>/<model id>` runs with the key from llm-keys and the base URL below (patch hunks 8-11).
@@ -97,6 +148,23 @@ NO_DATASET_ERROR = (
     "Draft them with `make draft-evals SKILL={skill}` (skillevaluator create-eval-dataset), "
     "review them, and push again"
 )
+
+# The trial bundle and the network flows (CONTRACT.md, "Trial bundles"). The modules sit next to
+# this file in the runner image; they are imported when needed, so a broken one never fails a run.
+BUNDLE_MODULE = "trial_bundle"
+FLOWS_MODULE = "flows"
+BUNDLE_TYPE = "application/vnd.skillci.trials.v1+json"
+TRIALS_ANNOTATION = "skillci.dev/trials"
+WITHHELD_ANNOTATION = "skillci.dev/trials-withheld"
+WITHHELD_BUILD_FAILED = "build-failed"
+WITHHELD_ATTACH_FAILED = "attach-failed"
+WITHHELD_DISABLED = "disabled"
+WITHHELD_NO_TRIALS = "no-trials"
+DEFAULT_FLOW_ROWS = 200  # trial_bundle.Limits.flow_rows, when the limits cannot be read
+NETWORK_OFF = {
+    "state": "off",
+    "reason": "no Hubble Relay configured (SkillCIConfig spec.observability.hubbleRelay is empty)",
+}
 
 # The generic sandbox image of the release the runner belongs to. runner/Dockerfile sets
 # SANDBOX_IMAGE to its own release tag; this is the fallback outside the image.
@@ -142,7 +210,8 @@ class EvalError(Exception):
     """A failure that ends the run with an ``{"error": ...}`` termination message.
 
     ``tiers`` and ``findings`` are the gate's outcome when the failure came after the Tier 1 + 2
-    gate ran; the termination message then carries them next to the error.
+    gate ran; the termination message then carries them next to the error. ``report`` is the
+    digest of the report attached after Tier 3 started and failed.
     """
 
     def __init__(
@@ -150,10 +219,12 @@ class EvalError(Exception):
         message: str,
         tiers: Mapping[str, str] | None = None,
         findings: Iterable[str] = (),
+        report: str | None = None,
     ) -> None:
         super().__init__(message)
         self.tiers = dict(tiers) if tiers is not None else None
         self.findings = list(findings)
+        self.report = report
 
 
 def load_config(environ: Mapping[str, str]) -> dict[str, str]:
@@ -185,6 +256,9 @@ def load_config(environ: Mapping[str, str]) -> dict[str, str]:
                 f"got {config['SANDBOX_WARM_POOL']!r}"
             )
     config["AGENT_MODEL"] = agent_route(config["AGENT"], config["MODEL"], environ).model
+    # Both go into the trial bundle; the controller always sets SKILLEVAL_NAME.
+    config["SKILLEVAL_NAME"] = (environ.get("SKILLEVAL_NAME") or "").strip()
+    config["SKILL_VERSION"] = (environ.get("SKILL_VERSION") or "").strip()
     for name in ("ATTEMPTS", "SANDBOX_CPUS", "SANDBOX_MEMORY_MB", "TRIAL_CONCURRENCY"):
         if not config[name].isdigit() or int(config[name]) < 1:
             raise EvalError(f"{name} must be a positive integer, got {config[name]!r}")
@@ -290,6 +364,153 @@ def check_gateway_key(
         )
 
 
+def host_of(url: str) -> str:
+    """Return the host name of an http(s) URL, or an empty string when it has none."""
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return ""
+    if parts.scheme not in ("http", "https"):
+        return ""
+    return parts.hostname or ""
+
+
+def judge_provider(environ: Mapping[str, str]) -> str:
+    """Return the judge provider: ``SKILL_EVAL_LLM_PROVIDER``, else the one the Job's keys imply.
+
+    Without ``SKILL_EVAL_LLM_PROVIDER`` (a Job from a controller that predates
+    SkillCIConfig ``spec.judge``) the judge is ``anthropic`` when there is an Anthropic key,
+    else ``openai`` when there is an OpenAI key, else none (empty string).
+    """
+    if provider := (environ.get("SKILL_EVAL_LLM_PROVIDER") or "").strip().lower():
+        return provider
+    if (environ.get("ANTHROPIC_API_KEY") or "").strip():
+        return "anthropic"
+    if (environ.get("OPENAI_API_KEY") or "").strip():
+        return "openai"
+    return ""
+
+
+@dataclass(frozen=True)
+class Judge:
+    """The LLM judge of Tier 3 as SkillEvaluator will resolve it from the Job's environment.
+
+    ``key_env`` names the variable the key is read from (empty when the Job has none), ``host``
+    the endpoint the judge calls (empty when the base URL has no host).
+    """
+
+    provider: str
+    key_env: str
+    host: str
+
+
+def judge_of(environ: Mapping[str, str]) -> Judge | None:
+    """Describe the judge of the Job ``environ`` (before ``tool_env``), or ``None`` without one.
+
+    The key: ``SKILL_EVAL_LLM_API_KEY`` stands in for the provider's own variable when that is
+    unset (``tool_env`` copies it there), except for ``openai``, where SkillEvaluator reads
+    ``OPENAI_API_KEY`` first. The host: ``SKILL_EVAL_LLM_BASE_URL`` when set, else the provider's
+    own base URL variable (``ANTHROPIC_BASE_URL``, ``OPENAI_BASE_URL``), else its public
+    endpoint; Bedrock's is ``bedrock-runtime.<AWS_REGION>.amazonaws.com``.
+    """
+    provider = judge_provider(environ)
+    if not provider:
+        return None
+
+    def value(name: str) -> str:
+        return (environ.get(name) or "").strip()
+
+    base_url = value("SKILL_EVAL_LLM_BASE_URL")
+    native = JUDGE_PROVIDERS.get(provider, "")
+    key_env = native if native and value(native) else ""
+    if provider == "anthropic":
+        base_url = base_url or value("ANTHROPIC_BASE_URL") or ANTHROPIC_DEFAULT_BASE_URL
+    elif provider == "openai":
+        base_url = base_url or value("OPENAI_BASE_URL") or OPENAI_DEFAULT_BASE_URL
+    elif provider == "nv_build":
+        base_url = base_url or NVIDIA_DEFAULT_BASE_URL
+    elif provider == "bedrock":
+        region = value("AWS_REGION") or BEDROCK_DEFAULT_REGION
+        base_url = f"https://bedrock-runtime.{region}.amazonaws.com"
+        if not key_env and not value(JUDGE_KEY_ENV):
+            key_env = next((name for name in BEDROCK_CREDENTIAL_ENV if value(name)), "")
+    if not key_env and native and value(JUDGE_KEY_ENV):
+        key_env = JUDGE_KEY_ENV if provider in ("openai", "openai-compatible") else native
+    return Judge(provider, key_env, host_of(base_url))
+
+
+def check_judge(config: Mapping[str, str], environ: Mapping[str, str]) -> Judge:
+    """Fail before any work when the Tier 3 judge cannot run; return it otherwise.
+
+    The judge's key is required, whatever the provider (SkillCIConfig ``spec.judge``: the Job
+    gets ``SKILL_EVAL_LLM_PROVIDER`` and the key from llm-keys/<secretKey> as
+    ``SKILL_EVAL_LLM_API_KEY``), and the judge must be one the agent can run under
+    (``AGENT_JUDGES``). The agent's own key is checked too, since the Anthropic key is no longer
+    implied by the judge: Claude Code and OpenCode on ``anthropic/...`` need ``ANTHROPIC_API_KEY``,
+    Codex needs ``OPENAI_API_KEY`` (``agent_route`` checks the gateway keys), unless the judge is
+    of the same provider, whose key SkillEvaluator then gives the agent.
+    """
+    judge = judge_of(environ)
+    if judge is None:
+        raise EvalError(
+            "no judge for Tier 3: set SkillCIConfig spec.judge (SKILL_EVAL_LLM_PROVIDER and the "
+            "llm-keys key spec.judge.secretKey), or the llm-keys key anthropic"
+        )
+    if judge.provider not in JUDGE_PROVIDERS:
+        raise EvalError(
+            f"SKILL_EVAL_LLM_PROVIDER must be one of: {', '.join(sorted(JUDGE_PROVIDERS))}, "
+            f"got {judge.provider!r}"
+        )
+    if judge.provider == "openai-compatible" and not environ.get("SKILL_EVAL_LLM_BASE_URL"):
+        raise EvalError(
+            "the openai-compatible judge needs SKILL_EVAL_LLM_BASE_URL (SkillCIConfig "
+            "spec.judge.baseURL)"
+        )
+    if not judge.host:
+        raise EvalError(
+            f"the {judge.provider} judge needs an http(s) base URL with a host "
+            "(SKILL_EVAL_LLM_BASE_URL, SkillCIConfig spec.judge.baseURL)"
+        )
+    if not judge.key_env:
+        native = JUDGE_PROVIDERS[judge.provider]
+        names = " or ".join(dict.fromkeys((JUDGE_KEY_ENV, native)))
+        if judge.provider == "bedrock":
+            names += " (or AWS credentials)"
+        raise EvalError(
+            f"the {judge.provider} judge needs its key: {names} in the Job, from the llm-keys "
+            "key named by SkillCIConfig spec.judge.secretKey"
+        )
+    agent = config["AGENT"]
+    allowed = AGENT_JUDGES.get(agent)
+    if allowed is not None and judge.provider not in allowed:
+        raise EvalError(
+            f"{agent} cannot run under the {judge.provider} judge (SkillEvaluator would route the "
+            f"agent through the judge's provider); use one of: {', '.join(allowed)}"
+        )
+    route = agent_route(agent, config["MODEL"], environ)
+    agent_key = "" if route.gateway else {"codex": "OPENAI_API_KEY"}.get(agent, "ANTHROPIC_API_KEY")
+    # Under the judge of the agent's own provider SkillEvaluator hands the agent the judge's key.
+    shared = agent_key == JUDGE_PROVIDERS[judge.provider]
+    if (
+        agent in AGENT_JUDGES
+        and agent_key
+        and not shared
+        and not (environ.get(agent_key) or "").strip()
+    ):
+        source = "openai" if agent_key == "OPENAI_API_KEY" else "anthropic"
+        raise EvalError(f"{agent} needs {agent_key} (llm-keys key {source}) in the Job")
+    native = JUDGE_PROVIDERS[judge.provider]
+    given = (environ.get(JUDGE_KEY_ENV) or "").strip()
+    native_value = (environ.get(native) or "").strip()
+    if given and native != JUDGE_KEY_ENV and judge.key_env == native and given != native_value:
+        print(
+            f"skill-eval: the {judge.provider} judge reads {native}; {JUDGE_KEY_ENV} holds "
+            "another key and is not used",
+            file=sys.stderr,
+        )
+    return judge
+
+
 def registry_flags(config: Mapping[str, str]) -> list[str]:
     """Return the oras flags that select the registry credentials and transport."""
     flags = []
@@ -391,8 +612,14 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
     profile sizes the pods and the size variables are not set. ``SKILLEVAL_NAME`` (set by the
     controller) goes through as it is; the environment labels the trial pods with it.
 
-    The judge stays on Anthropic whatever agent runs: ``SKILL_EVAL_LLM_PROVIDER`` is
-    ``anthropic`` whenever the Job has an Anthropic key. Codex needs ``OPENAI_API_KEY`` together
+    The judge is the Job's ``SKILL_EVAL_LLM_PROVIDER`` (SkillCIConfig ``spec.judge``), with its
+    optional ``SKILL_EVAL_LLM_MODEL`` and ``SKILL_EVAL_LLM_BASE_URL``; a blank one is dropped,
+    because SkillEvaluator refuses an empty model. SkillEvaluator reads the anthropic, nv_build
+    and bedrock keys only under their own names, so ``SKILL_EVAL_LLM_API_KEY`` is copied to
+    ``ANTHROPIC_API_KEY``, ``NVIDIA_API_KEY`` or ``AWS_BEARER_TOKEN_BEDROCK`` when that is unset.
+    Without ``SKILL_EVAL_LLM_PROVIDER`` the judge is ``anthropic`` whenever the Job has an
+    Anthropic key, else ``openai`` with an OpenAI key (``judge_provider``). Codex needs
+    ``OPENAI_API_KEY`` together
     with ``OPENAI_BASE_URL`` (the OpenAI endpoint unless the Job says otherwise). OpenCode behind
     a gateway (``agent_route``) gets the gateway key as ``OPENAI_API_KEY``, so Tier 2 embeddings
     keep the real OpenAI key through ``SKILL_EVAL_EMBEDDING_*``. The requested agent release
@@ -442,11 +669,18 @@ def tool_env(environ: Mapping[str, str]) -> dict[str, str]:
         ):
             if not env.get(name):
                 env[name] = env.get(source) or DEFAULTS[source]
-    if not env.get("SKILL_EVAL_LLM_PROVIDER"):
-        if env.get("ANTHROPIC_API_KEY"):
-            env["SKILL_EVAL_LLM_PROVIDER"] = "anthropic"
-        elif environ.get("OPENAI_API_KEY"):
-            env["SKILL_EVAL_LLM_PROVIDER"] = "openai"
+    for name in ("SKILL_EVAL_LLM_PROVIDER", "SKILL_EVAL_LLM_MODEL", "SKILL_EVAL_LLM_BASE_URL"):
+        if name in env and not env[name].strip():
+            del env[name]
+    if JUDGE_KEY_ENV in env and not env[JUDGE_KEY_ENV].strip():
+        del env[JUDGE_KEY_ENV]
+    # Decided on the Job's own keys, before a gateway route takes the OPENAI_API_KEY name.
+    if provider := judge_provider(environ):
+        env["SKILL_EVAL_LLM_PROVIDER"] = provider
+        native = JUDGE_PROVIDERS.get(provider, "")
+        own_name = native not in ("", "OPENAI_API_KEY", JUDGE_KEY_ENV)
+        if own_name and not env.get(native) and (key := env.get(JUDGE_KEY_ENV)):
+            env[native] = key
     return env
 
 
@@ -757,7 +991,7 @@ def prepare_catalog(
     finding says why. ``catalog`` is ``None`` when there are no other skills to compare with.
     """
     if not env.get("SKILL_EVAL_EMBEDDING_PROVIDER"):
-        reason = "no embeddings provider: Anthropic has none, set OPENAI_API_KEY in llm-keys"
+        reason = "no embeddings provider: set OPENAI_API_KEY (or NVIDIA_API_KEY) in llm-keys"
         return False, None, [finding_text("tier2", "embeddings", reason)]
     catalog_dir = work / "catalog" / "skills"
     if not pull_catalog(config, catalog_dir):
@@ -866,8 +1100,8 @@ def tier3_tier(results: Path) -> TierResult:
     return TierResult("incomplete", [finding_text("tier3", "execution", errors)])
 
 
-def build_bundle(bundle: Path, report: ValidateReport, run_dir: Path | None) -> list[str]:
-    """Copy the reports of the last ``validate`` run into ``bundle``; return the file names.
+def collect_report(directory: Path, report: ValidateReport, run_dir: Path | None) -> list[str]:
+    """Copy the reports of the last ``validate`` run into ``directory``; return the file names.
 
     ``report.html`` and ``BENCHMARK.md`` are the combined SkillEvaluator report (with its
     publication assessment) of that run. With Tier 3, ``result.json`` is the Tier 3 result the
@@ -875,7 +1109,7 @@ def build_bundle(bundle: Path, report: ValidateReport, run_dir: Path | None) -> 
     the combined JSON and the Tier 3 report; without it ``result.json`` is the combined JSON,
     so a Rejected run shows the failing checks.
     """
-    bundle.mkdir(parents=True, exist_ok=True)
+    directory.mkdir(parents=True, exist_ok=True)
     sources: dict[str, Path | None] = {
         "report.html": report.html_path,
         "result.json": report.json_path,
@@ -890,37 +1124,349 @@ def build_bundle(bundle: Path, report: ValidateReport, run_dir: Path | None) -> 
         }
     for name, src in sources.items():
         if src is not None and src.is_file():
-            shutil.copy(src, bundle / name)
-    return [name for name in REPORT_FILES if (bundle / name).is_file()]
+            shutil.copy(src, directory / name)
+    return [name for name in REPORT_FILES if (directory / name).is_file()]
 
 
-def attach_report(
-    config: Mapping[str, str], bundle: Path, files: list[str], annotations: Mapping[str, str]
+def attach(
+    config: Mapping[str, str],
+    directory: Path,
+    artifact_type: str,
+    annotations: Mapping[str, str],
+    files: Iterable[str],
+    what: str,
 ) -> str | None:
-    """Attach the report files in ``bundle`` to the evaluated skill digest in Harbor.
+    """Attach ``files`` (``<name>:<media type>``) in ``directory`` to the evaluated skill digest.
 
-    SKILL_REF is already pinned to a digest, so the report becomes an OCI referrer
-    of exactly the version that was checked. Returns the report digest, or ``None``
-    when attaching fails: a missing report must not fail the eval.
+    SKILL_REF is already pinned to a digest, so the artifact becomes an OCI referrer of exactly
+    the version that was checked. Returns its digest, or ``None`` when attaching fails: a
+    missing ``what`` (report, trial bundle) must not fail the eval.
     """
+    files = list(files)
     if not files:
         return None
-    cmd = ["oras", "attach", "--artifact-type", REPORT_TYPE, *registry_flags(config)]
+    cmd = ["oras", "attach", "--artifact-type", artifact_type, *registry_flags(config)]
     for key, value in annotations.items():
         cmd += ["--annotation", f"{key}={value}"]
-    cmd += [config["SKILL_REF"], *(f"{n}:{MEDIA_TYPES[Path(n).suffix]}" for n in files)]
+    cmd += [config["SKILL_REF"], *files]
     try:
-        # oras rejects absolute file paths, so run it inside the report directory.
-        proc = run_oras(cmd, cwd=bundle)
+        # oras rejects absolute file paths, so run it inside the directory.
+        proc = run_oras(cmd, cwd=directory)
     except OSError as err:
-        print(f"skill-eval: report not attached: {err}", file=sys.stderr)
+        print(f"skill-eval: {what} not attached: {err}", file=sys.stderr)
         return None
     found = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", proc.stdout + proc.stderr)
     if proc.returncode != 0 or not found:
-        detail = (proc.stderr or proc.stdout).strip()
-        print(f"skill-eval: report not attached ({proc.returncode}): {detail}", file=sys.stderr)
+        detail = redact((proc.stderr or proc.stdout).strip())
+        print(f"skill-eval: {what} not attached ({proc.returncode}): {detail}", file=sys.stderr)
         return None
     return found.group(1)
+
+
+def attach_report(
+    config: Mapping[str, str], directory: Path, files: list[str], annotations: Mapping[str, str]
+) -> str | None:
+    """Attach the report files in ``directory`` as the report referrer; return its digest."""
+    typed = [f"{name}:{MEDIA_TYPES[Path(name).suffix]}" for name in files]
+    return attach(config, directory, REPORT_TYPE, annotations, typed, "report")
+
+
+def optional_module(name: str) -> Any | None:
+    """Import ``name`` (``trial_bundle``, ``flows``), or return ``None`` and log why it failed.
+
+    The bundle and the flows never fail a run, not even when their module is broken.
+    """
+    try:
+        return importlib.import_module(name)
+    except Exception as err:
+        print(f"skill-eval: module {name} unavailable: {redact(str(err))}", file=sys.stderr)
+        return None
+
+
+def bundle_enabled(environ: Mapping[str, str]) -> bool:
+    """Return whether ``TRIAL_BUNDLE`` allows a trial bundle (``trial_bundle.enabled``).
+
+    A module that cannot answer counts as enabled: the build then fails and the report says so
+    (``build-failed``).
+    """
+    module = optional_module(BUNDLE_MODULE)
+    try:
+        return module is None or bool(module.enabled(environ))
+    except Exception as err:
+        print(f"skill-eval: TRIAL_BUNDLE not readable: {redact(str(err))}", file=sys.stderr)
+        return True
+
+
+def unavailable(reason: str) -> dict[str, str]:
+    """Return the index's run-level network state ``unavailable`` with ``reason``."""
+    return {"state": "unavailable", "reason": redact(reason)[:300]}
+
+
+def parse_time(value: Any) -> datetime | None:
+    """Parse an ISO 8601 time from Harbor's ``result.json`` (UTC when it has no zone)."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def trial_windows(run_dir: Path, agent: str, window: Callable[..., Any]) -> dict[str, Any]:
+    """Return ``window(start, end)`` of every trial under ``run_dir``, by trial id.
+
+    From ``<agent>/<arm>/trials/<trial id>/result.json`` (``started_at``, ``finished_at``); a
+    trial that has not finished ends now, an unreadable one is left out.
+    """
+    windows: dict[str, Any] = {}
+    for path in sorted(run_dir.glob(f"{agent}/*/trials/*/result.json")):
+        try:
+            result = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(result, dict) or not (start := parse_time(result.get("started_at"))):
+            continue
+        end = parse_time(result.get("finished_at")) or datetime.now(UTC)
+        windows[path.parent.name] = window(start, end)
+    return windows
+
+
+class FlowWatch:
+    """The network flows of one Tier 3 run (``flows.py``). Nothing here ever raises.
+
+    ``start`` runs ``flows.start_from_env`` right before the Tier 3 ``validate``, ``stop``
+    stops the collector after it, and ``summarize`` maps the flows to the trials. Without
+    ``HUBBLE_SERVER`` the state is ``off``; a collector that fails is ``unavailable``.
+    """
+
+    def __init__(self, environ: Mapping[str, str], eval_name: str, work: Path) -> None:
+        """Prepare the watch for the trial pods of ``eval_name``; nothing starts yet."""
+        self.environ = environ
+        self.eval_name = eval_name
+        self.work = work
+        self.collector: Any = None
+        self.collection: Any = None
+        self.network: dict[str, str] = dict(NETWORK_OFF)
+
+    def start(self) -> None:
+        """Start collecting when the Job has ``HUBBLE_SERVER``; record why when it cannot."""
+        if not (self.environ.get("HUBBLE_SERVER") or "").strip():
+            return
+        if not self.eval_name:
+            self.network = unavailable("SKILLEVAL_NAME is not set, so no trial pod label to watch")
+            return
+        if (module := optional_module(FLOWS_MODULE)) is None:
+            self.network = unavailable("the flows module cannot be imported")
+            return
+        try:
+            self.collector = module.start_from_env(self.environ, self.eval_name, self.work)
+        except Exception as err:
+            self.network = unavailable(f"flow collector did not start: {err}")
+            print(f"skill-eval: {self.network['reason']}", file=sys.stderr)
+
+    def stop(self) -> None:
+        """Stop the collector, if one runs, and keep what it collected."""
+        collector, self.collector = self.collector, None
+        if collector is None:
+            return
+        try:
+            self.collection = collector.stop()
+        except Exception as err:
+            self.network = unavailable(f"flow collector did not stop cleanly: {err}")
+            print(f"skill-eval: {self.network['reason']}", file=sys.stderr)
+
+    def summarize(
+        self, run_dir: Path, agent: str, max_rows: int
+    ) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        """Return the index's run-level ``network`` and the per-trial sections (or ``None``)."""
+        if self.collection is None:
+            return dict(self.network), None
+        module = optional_module(FLOWS_MODULE)
+        try:
+            windows = trial_windows(run_dir, agent, module.Window)
+            network, trials = module.summarize(self.collection, windows, max_rows=max_rows)
+        except Exception as err:
+            print(f"skill-eval: flows not summarized: {redact(str(err))}", file=sys.stderr)
+            return unavailable(f"flows could not be summarized: {err}"), None
+        return dict(network), dict(trials)
+
+
+def find_run_dir(results: Path) -> Path | None:
+    """Return SkillEvaluator's run directory under ``results``, or ``None`` when there is none.
+
+    The parent of the newest ``result.json``; a run that died before writing one still leaves
+    its newest ``<skill>/<run id>/`` directory, which may hold trials.
+    """
+    try:
+        return newest_result(results).parent
+    except EvalError:
+        pass
+    runs = sorted((p for p in results.glob("*/*") if p.is_dir()), key=lambda p: p.stat().st_mtime)
+    return runs[-1] if runs else None
+
+
+def credentials(
+    config: Mapping[str, str], environ: Mapping[str, str]
+) -> list[tuple[str, str, str]]:
+    """Return the provider routes of the run as ``(role, env, host)``: the agent's, the judge's.
+
+    Names only, never values (the index's ``credentials``). The agent: Claude Code and OpenCode
+    on ``anthropic/...`` use ``ANTHROPIC_API_KEY`` (under the anthropic judge SkillEvaluator
+    hands them the judge's endpoint), Codex ``OPENAI_API_KEY``, an OpenCode gateway route its
+    provider's key and endpoint. The judge: ``judge_of``.
+    """
+    agent, model = config["AGENT"], config["MODEL"]
+    judge = judge_of(environ)
+    route = agent_route(agent, model, environ)
+    if route.gateway:
+        key_env = GATEWAY_PROVIDERS[model.partition("/")[0]][0]
+        agent_cred = (key_env, host_of(route.env["OPENAI_BASE_URL"]))
+    elif agent == "codex":
+        base_url = environ.get("OPENAI_BASE_URL") or OPENAI_DEFAULT_BASE_URL
+        agent_cred = ("OPENAI_API_KEY", host_of(base_url))
+    elif judge is not None and judge.provider == "anthropic":
+        agent_cred = ("ANTHROPIC_API_KEY", judge.host)
+    else:
+        base_url = environ.get("ANTHROPIC_BASE_URL") or ANTHROPIC_DEFAULT_BASE_URL
+        agent_cred = ("ANTHROPIC_API_KEY", host_of(base_url))
+    routes = [("agent", *agent_cred)]
+    if judge is not None and judge.key_env and judge.host:
+        routes.append(("judge", judge.key_env, judge.host))
+    return [route for route in routes if route[2]]
+
+
+def bundle_config(config: Mapping[str, str]) -> dict[str, str]:
+    """Return the runner settings the trial bundle index records."""
+    names = ("SKILL_NAME", "SKILL_REF", "AGENT", "MODEL", "ATTEMPTS", "SKILLEVAL_NAME")
+    settings = {name: config[name] for name in names}
+    if config.get("SKILL_VERSION"):
+        settings["SKILL_VERSION"] = config["SKILL_VERSION"]
+    return settings
+
+
+def attach_trials(
+    config: Mapping[str, str],
+    environ: Mapping[str, str],
+    work: Path,
+    run_dir: Path | None,
+    agent_version: str,
+    flows: FlowWatch,
+) -> tuple[str, str]:
+    """Build and attach the trial bundle; return the report annotation that pairs with it.
+
+    ``(skillci.dev/trials, <digest>)`` when the bundle is attached, else
+    ``(skillci.dev/trials-withheld, <reason>)``: ``disabled``, ``no-trials``, a reason of
+    ``trial_bundle.NotBuilt``, ``build-failed`` or ``attach-failed``. Never raises.
+    """
+    if not bundle_enabled(environ):
+        return WITHHELD_ANNOTATION, WITHHELD_DISABLED
+    if run_dir is None:
+        return WITHHELD_ANNOTATION, WITHHELD_NO_TRIALS
+    if (module := optional_module(BUNDLE_MODULE)) is None:
+        return WITHHELD_ANNOTATION, WITHHELD_BUILD_FAILED
+    try:
+        try:
+            max_rows = module.limits_from_env(environ).flow_rows
+        except Exception as err:
+            print(f"skill-eval: bundle limits not readable: {redact(str(err))}", file=sys.stderr)
+            max_rows = DEFAULT_FLOW_ROWS
+        network, trial_networks = flows.summarize(run_dir, config["AGENT"], max_rows)
+        routes = [module.Credential(*route) for route in credentials(config, environ)]
+        built = module.build(
+            run_dir,
+            work / "trials",
+            environ=environ,
+            config=bundle_config(config),
+            agent_version=agent_version,
+            credentials=routes,
+            network=network,
+            trial_networks=trial_networks,
+            auth_config=Path(config["REGISTRY_CONFIG"]),
+        )
+        if isinstance(built, module.NotBuilt):
+            detail = f": {built.detail}" if built.detail else ""
+            print(f"skill-eval: no trial bundle ({built.reason}){redact(detail)}", file=sys.stderr)
+            return WITHHELD_ANNOTATION, built.reason
+        files = module.oras_files(built)
+        annotations = {
+            "skillci.dev/eval": config["SKILLEVAL_NAME"],
+            "skillci.dev/agent": config["AGENT"],
+            "skillci.dev/agent-version": agent_version,
+            "skillci.dev/model": config["MODEL"],
+            "skillci.dev/trials-schema": str(module.SCHEMA_MAJOR),
+            "skillci.dev/redaction": str(module.REDACTION_VERSION),
+            **built.annotations,
+        }
+        annotations = {key: value for key, value in annotations.items() if value}
+        artifact_type = getattr(module, "ARTIFACT_TYPE", BUNDLE_TYPE)
+    except Exception as err:
+        print(f"skill-eval: trial bundle not built: {redact(str(err))}", file=sys.stderr)
+        return WITHHELD_ANNOTATION, WITHHELD_BUILD_FAILED
+    digest = attach(config, built.directory, artifact_type, annotations, files, "trial bundle")
+    if digest is None:
+        return WITHHELD_ANNOTATION, WITHHELD_ATTACH_FAILED
+    return TRIALS_ANNOTATION, digest
+
+
+def redact_report(
+    config: Mapping[str, str], environ: Mapping[str, str], directory: Path, files: list[str]
+) -> list[str]:
+    """Run the bundle's redaction and fail-closed scan over the report files.
+
+    Returns the files that may be attached (``trial_bundle.redact_report_files``). Fails
+    closed: when the redaction cannot run, no report file is attached.
+    """
+    if not files:
+        return []
+    if (module := optional_module(BUNDLE_MODULE)) is None:
+        print("skill-eval: report not attached: redaction unavailable", file=sys.stderr)
+        return []
+    try:
+        auth_config = Path(config["REGISTRY_CONFIG"])
+        redactor = module.Redactor(module.secret_values(environ, auth_config))
+        allowed = set(module.redact_report_files(directory, files, redactor))
+    except Exception as err:
+        detail = redact(str(err))
+        print(f"skill-eval: report not attached: redaction failed: {detail}", file=sys.stderr)
+        return []
+    return [name for name in files if name in allowed]
+
+
+def publish(
+    config: Mapping[str, str],
+    environ: Mapping[str, str],
+    work: Path,
+    report: ValidateReport,
+    run_dir: Path | None,
+    *,
+    publication: str,
+    agent_version: str,
+    lift: float | None,
+    flows: FlowWatch,
+) -> str | None:
+    """Attach the trial bundle, then the report that names it; return the report digest.
+
+    The report carries model, agent, agent version, lift, publication and either
+    ``skillci.dev/trials`` or ``skillci.dev/trials-withheld``; its files go through the
+    bundle's redaction first. Never raises: ``None`` means no report was attached.
+    """
+    try:
+        trials = attach_trials(config, environ, work, run_dir, agent_version, flows)
+        annotations = {"skillci.dev/model": config["MODEL"], "skillci.dev/agent": config["AGENT"]}
+        if agent_version:
+            annotations["skillci.dev/agent-version"] = agent_version
+        if lift is not None:
+            annotations["skillci.dev/lift"] = f"{lift:+.2f}"
+        annotations["skillci.dev/publication"] = publication
+        annotations[trials[0]] = trials[1]
+        directory = work / "report"
+        files = collect_report(directory, report, run_dir)
+        files = redact_report(config, environ, directory, files)
+        return attach_report(config, directory, files, annotations)
+    except Exception as err:
+        print(f"skill-eval: report not attached: {redact(str(err))}", file=sys.stderr)
+        return None
 
 
 def final_publication(report: ValidateReport, tiers: Mapping[str, str]) -> str:
@@ -945,8 +1491,13 @@ def gate_findings(findings: list[str], notes: list[str], tier2: bool) -> list[st
 
 
 def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
-    """Pull the skill, run Tiers 1 to 3 and return the termination payload."""
+    """Pull the skill, run Tiers 1 to 3, attach the trial bundle and the report.
+
+    Returns the termination payload. An error raised once Tier 3 started still attaches the
+    bundle and the report (best effort) and carries the report digest (``EvalError.report``).
+    """
     config = load_config(environ)
+    check_judge(config, environ)
     if config["AGENT"] == "opencode":
         check_gateway_key(config["MODEL"], environ)
     with tempfile.TemporaryDirectory(prefix="skill-eval-") as tmp:
@@ -961,12 +1512,15 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         cmd = validate_command(config, skill_dir, out, tiers=static, catalog=catalog)
         report = read_validate(out, run_static(cmd, env))
         payload: dict[str, Any] = {"agent": config["AGENT"], "model": config["MODEL"]}
-        agent_ver = config[
-            "AGENT_VERSION"
-        ]  # what was asked for; replaced by what the trials report
+        # What was asked for; replaced by what the trials report.
+        agent_ver = config["AGENT_VERSION"]
         run_dir: Path | None = None
         tiers = {**report.tiers, "tier3": "skipped"}
         findings = report.findings
+        flows = FlowWatch(environ, config["SKILLEVAL_NAME"], work / "flows")
+        results = work / "results"
+        full_out = work / "validate"
+        tier3_started = False
         try:
             if "failed" in (report.tiers["tier1"], report.tiers["tier2"]):
                 print("skill-eval: Tier 1 or Tier 2 failed, skipping Tier 3", flush=True)
@@ -978,14 +1532,19 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
                 # One validate run over every tier: its report carries SkillEvaluator's own
                 # publication assessment. Output streams straight to the container log. A
                 # non-zero exit is not fatal: a failed trial can still leave scores for the
-                # other arm.
+                # other arm. The network flows are collected for exactly that run.
                 tiers = {**report.tiers, "tier3": "incomplete"}  # until Tier 3 reports
-                results = work / "results"
-                out = work / "validate"
                 cmd = validate_command(
-                    config, skill_dir, out, tiers=f"{static},3", catalog=catalog, results=results
-                )
-                proc = subprocess.run(cmd, check=False, env=env)
+                    config, skill_dir, full_out, tiers=f"{static},3", catalog=catalog,
+                    results=results,
+                )  # fmt: skip
+                tier3_started = True
+                if bundle_enabled(environ):
+                    flows.start()
+                try:
+                    proc = subprocess.run(cmd, check=False, env=env)
+                finally:
+                    flows.stop()
                 try:
                     payload = read_scores(results, config["AGENT"])
                 except EvalError as err:
@@ -993,7 +1552,7 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
                 run_dir = newest_result(results).parent
                 payload["model"] = config["MODEL"]  # not the gateway form SkillEvaluator ran
                 agent_ver = used_agent_version(run_dir) or agent_ver
-                full = read_validate(out, proc)
+                full = read_validate(full_out, proc)
                 if full.json_path is None:  # Tier 3 left scores but no combined report
                     full = ValidateReport(
                         report.tiers, full.findings, "incomplete", None, None, None
@@ -1005,23 +1564,36 @@ def evaluate(environ: Mapping[str, str]) -> dict[str, Any]:
         except Exception as err:
             # The gate ran, so the error keeps its tiers and findings (CONTRACT.md, Job contract).
             gate = gate_findings(findings, notes, tier2)[:MAX_FINDINGS]
-            if not isinstance(err, EvalError):
-                raise EvalError(str(err) or type(err).__name__, tiers, gate) from err
-            if err.tiers is None:
-                err.tiers, err.findings = dict(tiers), gate
-            raise
+            failure = err if isinstance(err, EvalError) else None
+            if failure is None:
+                failure = EvalError(str(err) or type(err).__name__, tiers, gate)
+            elif failure.tiers is None:
+                failure.tiers, failure.findings = dict(tiers), gate
+            if tier3_started:
+                # A failed run keeps what Tier 3 left: its trials and its report.
+                failed_dir = run_dir or find_run_dir(results)
+                last = read_validate(full_out, None)
+                last = last if last.json_path is not None else report
+                failure.report = publish(
+                    config, environ, work, last, failed_dir,
+                    publication=final_publication(last, failure.tiers),
+                    agent_version=(failed_dir and used_agent_version(failed_dir)) or agent_ver,
+                    lift=None,
+                    flows=flows,
+                )  # fmt: skip
+            if failure is err:
+                raise
+            raise failure from err
         findings = gate_findings(findings, notes, tier2)
         publication = final_publication(report, tiers)
-        annotations = {"skillci.dev/model": config["MODEL"], "skillci.dev/agent": config["AGENT"]}
         if agent_ver:
-            annotations["skillci.dev/agent-version"] = agent_ver
             payload["agentVersion"] = agent_ver
-        if "lift" in payload:
-            annotations["skillci.dev/lift"] = f"{payload['lift']:+.2f}"
-        annotations["skillci.dev/publication"] = publication
-        bundle = work / "bundle"
-        files = build_bundle(bundle, report, run_dir)
-        if digest := attach_report(config, bundle, files, annotations):
+        digest = publish(
+            config, environ, work, report, run_dir,
+            publication=publication, agent_version=agent_ver, lift=payload.get("lift"),
+            flows=flows,
+        )  # fmt: skip
+        if digest:
             payload["report"] = digest
         payload |= {"tiers": tiers, "publication": publication, "findings": findings[:MAX_FINDINGS]}
         return payload
@@ -1049,18 +1621,21 @@ def error_payload(err: Exception) -> dict[str, Any]:
 
     ``{"error": ...}`` alone when the run failed before the Tier 1 + 2 gate; otherwise also
     ``tiers`` (Tier 3 ``skipped``, or ``incomplete`` when it started) and the gate's
-    ``findings``, so the controller can still show the gate's outcome.
+    ``findings``, so the controller can still show the gate's outcome; ``report`` when Tier 3
+    started and its report was attached anyway.
     """
     payload: dict[str, Any] = {"error": redact(str(err))}
     if isinstance(err, EvalError) and err.tiers is not None:
         payload["tiers"] = err.tiers
         payload["findings"] = [redact(f) for f in err.findings[:MAX_FINDINGS]]
+    if isinstance(err, EvalError) and err.report:
+        payload["report"] = err.report
     return payload
 
 
 def redact(text: str) -> str:
     """Remove API key values from ``text`` so they never reach logs or the message."""
-    for name in SECRET_ENV:
+    for name in REDACTED_ENV:
         if value := os.environ.get(name):
             text = text.replace(value, "[redacted]")
     return text
