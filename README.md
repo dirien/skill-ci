@@ -1,266 +1,108 @@
-# Skills Are Packages Now: test stack
+# skill-ci
 
-Proof that the skill CI loop from the talk runs on generic Kubernetes (DOKS), built from open source parts:
+skill-ci is continuous integration for agent skills on Kubernetes. You publish a skill as an OCI artifact to Harbor (goharbor), and skill-ci evaluates every new version against a list of agents and models, with and without the skill, using NVIDIA SkillEvaluator. The results decide which version carries the `beta` and `stable` tags in the registry, so whoever pulls `stable` gets a version that measurably helps and has not regressed against the stable version before it.
+
+What a skill does for an agent depends on the agent, its release and the model, and one run is noisy: the same skill version scored 0.95 on one run and 0.87 on the next. A new version can also score higher than no skill at all while being worse than the current stable version. skill-ci runs every trial in its own Agent Sandbox pod, keeps the per-trial scores, and promotes a version only when the confidence interval of its lift is above zero on every required model.
+
+## How it works
+
+1. `oras push` publishes a skill version (`vX.Y.Z`) to the Harbor project `skills`. Harbor sends a `PUSH_ARTIFACT` webhook to the skill-ci controller.
+2. The controller creates one `SkillEval` per skill digest and model list entry (agent, agent version, model), resolves the network mode and sandbox profile, and starts a runner Job for each.
+3. The runner pulls the skill with ORAS and runs SkillEvaluator: Tier 1 static and security checks and Tier 2 deduplication first, then the live Tier 3 trials with and without the skill, each trial in an Agent Sandbox from a warm pool.
+4. The runner attaches the SkillEvaluator report to the skill digest in Harbor and hands the scores back to the controller.
+5. The controller computes the lift and its confidence interval, applies the tag policy (`beta`, `stable`, regression gate) through the Harbor API, and exports metrics.
+6. A change to the model list (a new model, a new agent release) evaluates every `beta` and `stable` version again.
+
+[docs/architecture.md](docs/architecture.md) describes the parts and the flow in more detail.
+
+## Requirements
+
+skill-ci runs on any conformant Kubernetes cluster. The Pulumi program in [infra/](infra/) creates a reference cluster on DigitalOcean (DOKS), but nothing in the controller, the runner or the chart depends on DigitalOcean.
+
+- Kubernetes 1.30 or newer for the full install in [deploy/README.md](deploy/README.md). The controller chart itself declares `kubeVersion: >=1.27.0-0`. The reference DOKS cluster runs the newest 1.36 patch release.
+- [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) v1.0.9, CRDs and controller, installed from its `sandbox-with-extensions.yaml` release manifest. Without the extensions CRDs (`SandboxTemplate`, `SandboxWarmPool`, `SandboxClaim`) every trial starts a bare `Sandbox` instead of a warm pod.
+- A Harbor (goharbor) registry that the controller and the runner Jobs can reach, with a project `skills` and a `PUSH_ARTIFACT` webhook policy pointing at the controller. The defaults assume Harbor in the cluster at `http://harbor.harbor.svc.cluster.local` (`controller.harborUrl`). [deploy/README.md](deploy/README.md) installs Harbor chart 1.19.4 and a Job that creates the project and the webhook.
+- In the controller namespace: the Secrets `harbor-credentials`, `harbor-pull`, `harbor-webhook` (optional) and `llm-keys`, and the model list ConfigMap `skill-ci-models`. `llm-keys` needs at least the key `anthropic`, because Anthropic is the judge of every run. Keys for OpenAI, OpenRouter, Ollama Cloud and NVIDIA are optional and add Codex and OpenCode models.
+- Outbound internet access from the nodes to GHCR and the LLM APIs. All images are public on GHCR, and nothing builds images in the cluster.
+- Optional: [Cilium](https://cilium.io) as the CNI, for the network modes `none` and `allowlist`. Without it only `full` runs (the internet, never the cluster), and a skill that asks for another mode fails with a message that says so. See [CONTRACT.md, "Network modes"](CONTRACT.md).
+- Optional: the Prometheus Operator CRDs for the chart's `ServiceMonitor`, and any OTLP backend for the OpenTelemetry export.
+
+If you install Harbor and Prometheus in the cluster as deploy/README.md does, you also need a default StorageClass with `ReadWriteOnce` volumes and room for several sandbox pods of 1 vCPU and 2 GiB each. [deploy/README.md](deploy/README.md) lists sizes and platform notes for DOKS, EKS, GKE, AKS, kind and minikube.
+
+## Quick start
+
+Install everything (Agent Sandbox, Harbor, Secrets, model list, optional Prometheus and Grafana, the controller) on the cluster in your current `KUBECONFIG`:
+
+```bash
+git clone https://github.com/dirien/skill-ci.git
+cd skill-ci
+export ANTHROPIC_API_KEY=sk-ant-...      # required
+deploy/install.sh
+make seed                                # push the sample skills as v1.0.0
+make status                              # SkillEvals and the tags per skill in Harbor
+```
+
+If Harbor, Agent Sandbox, the Secrets and the model list are already in place, install only the controller from the OCI chart:
+
+```bash
+helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version 0.10.1 -n skill-ci --create-namespace
+kubectl -n skill-ci get skillevals
+```
+
+[deploy/README.md](deploy/README.md) walks through every step of the install with expected output, OpenTelemetry settings, troubleshooting and teardown. [docs/reference-stack.md](docs/reference-stack.md) describes the Pulumi stack in [infra/](infra/) that builds a DOKS cluster with all of the above.
+
+## Versions
 
 | Part | Role | Version |
 | --- | --- | --- |
-| [goharbor](https://goharbor.io) | Stores skills as OCI artifacts, fires `PUSH_ARTIFACT` webhooks | 2.15.4 (chart 1.19.4) |
+| skill-ci controller | Receives pushes, watches the model list, runs SkillEvals as Jobs, moves `beta` and `stable` | 0.10.1 (chart `charts/skill-ci-controller`) |
+| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.10.1 |
+| skill-ci sandbox image | The image every trial sandbox starts from: Python, the verifier packages, and the Claude Code, Codex and OpenCode CLIs at their pins | 0.10.1 |
+| [goharbor](https://goharbor.io) | Stores skills as OCI artifacts, sends `PUSH_ARTIFACT` webhooks | 2.15.4 (chart 1.19.4) |
 | [ORAS](https://oras.land) | Pushes, pulls and tags skills | 1.3.0 |
 | [NVIDIA SkillEvaluator](https://github.com/NVIDIA/SkillEvaluator) | Live with/without-skill runs, lift scoring | 0.6.0 + [patch](skillevaluator-patch/) |
 | [Harbor framework](https://harborframework.com) | Runs agent trials | 0.24.0 (pinned by SkillEvaluator) |
-| [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) | One `Sandbox` per trial | v1.0.9 |
-| DOKS | The cluster. The images come from GHCR, no registry of its own | Kubernetes 1.36.5 |
-| [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics | chart 92.10.1 |
-| skill-ci controller | Watches pushes and the model list, runs SkillEvals as Jobs, moves `beta`/`stable` | 0.10.1 (Helm chart `charts/skill-ci-controller`) |
-| skill-ci runner | One Job per SkillEval: ORAS pull, SkillEvaluator Tier 1, 2 and 3, per-trial scores, report upload | 0.10.1 |
-| skill-ci sandbox image | The one image every trial sandbox starts from: Python, the verifier packages and the Claude Code, Codex and OpenCode CLIs at their pins. Built once per release, never in the cluster | 0.10.1 |
+| [Agent Sandbox](https://github.com/kubernetes-sigs/agent-sandbox) | One sandbox per trial, warm pools | v1.0.9 |
+| [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts) | Prometheus and Grafana for the controller metrics (optional) | chart 92.10.1 |
 
-The interfaces between the parts are in [CONTRACT.md](CONTRACT.md). The stage script for the talk is [DEMO.md](DEMO.md).
+The controller, runner, sandbox image and chart always share one version. [deploy/versions.env](deploy/versions.env) is the single source of the versions for the install path, and `deploy/check-versions.sh` checks that `infra/Pulumi.yaml` uses the same ones.
 
-Slides: the talk deck is in [slides/](slides/) (Slidev; `cd slides && npm ci && npm run dev`, diagrams in `slides/diagrams/`).
+## Documentation
 
-## Layout
+| Document | Contents |
+| --- | --- |
+| [docs/architecture.md](docs/architecture.md) | The parts, the flow from push to tag, triggers, eval reports, the sandbox image |
+| [docs/agents-and-models.md](docs/agents-and-models.md) | The model list, agent releases, required and optional entries, LLM keys |
+| [docs/gate.md](docs/gate.md) | SkillEvaluator tiers and scanners, the statistical gate, the tag policy |
+| [docs/network-and-sandboxes.md](docs/network-and-sandboxes.md) | Network modes, `SkillCIConfig`, `SandboxProfile`, warm pools, sandbox sizing |
+| [docs/observability.md](docs/observability.md) | SkillEval status, the reporting site, eval reports, Prometheus metrics, the Grafana dashboard, OTLP export |
+| [docs/sample-skills.md](docs/sample-skills.md) | The sample skills and a walkthrough of the loop with the `make` targets |
+| [docs/reference-stack.md](docs/reference-stack.md) | The Pulumi reference stack on DOKS in `infra/` |
+| [docs/releasing.md](docs/releasing.md) | Releases, published artifacts, the Helm chart, CI |
+| [docs/design-notes.md](docs/design-notes.md) | Why things are built the way they are |
+| [CONTRACT.md](CONTRACT.md) | The specification: names, CRDs, the runner Job contract, statistics, policy, metrics |
+| [deploy/README.md](deploy/README.md) | Step-by-step install on your own cluster with Helm and kubectl |
+| [charts/skill-ci-controller/README.md](charts/skill-ci-controller/README.md) | Chart values, CRD handling, adopting an existing install |
+
+## Repository layout
 
 ```text
-infra/                 Pulumi YAML: DOKS, Agent Sandbox, goharbor, secrets, Harbor setup Job, toolbox, model list, Prometheus + Grafana
-infra/dashboards/      Grafana dashboard JSON (provisioned through a ConfigMap)
-skills/                Sample skills with evals (demo material, see below)
-demo/                  Shell scripts behind the Makefile targets, skill version variants, initial model list
 controller/            The skill-ci controller (Go)
+runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
+sandbox/               Dockerfile of the trial sandbox image (Python, verifier packages, agent CLIs) and the script that installs the CLIs
+harbor-agent-sandbox/  Harbor framework environment that runs each trial as an agents.x-k8s.io Sandbox from the sandbox image
+skillevaluator-patch/  Patch for SkillEvaluator 0.6.0: that environment, its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
 charts/                Helm chart of the controller, published as oci://ghcr.io/dirien/charts/skill-ci-controller
 config/                Controller manifests (CRD source, RBAC, Deployment, Service), plain `kubectl apply -k` alternative
+deploy/                Install path with Helm and kubectl: install and uninstall scripts, manifests, values, versions.env
+infra/                 Pulumi YAML reference stack: DOKS, Agent Sandbox, goharbor, secrets, Harbor setup Job, toolbox, model list, Prometheus + Grafana
+infra/dashboards/      Grafana dashboard JSON (provisioned through a ConfigMap)
+skills/                Sample skills with evals
+demo/                  Shell scripts behind the Makefile targets, skill version variants, initial model list
+tools/                 Generator of the offline report page (`make report-page`)
 reports/               Eval reports downloaded by `make report`
-harbor-agent-sandbox/  Harbor environment that runs each trial as an agents.x-k8s.io Sandbox from the generic sandbox image
-sandbox/               Dockerfile of that image (Python, verifier packages, agent CLIs) and the script that installs the CLIs
-skillevaluator-patch/  Twelve-hunk patch: that environment and its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
-runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
-.github/               CI and release workflows, Dependabot (see Releases)
+.github/               CI and release workflows, Dependabot
 .goreleaser.yaml       Controller binaries and image of a release
 ```
 
-## Helm chart
-
-`charts/skill-ci-controller/` packages the controller (CRD, RBAC, runner ServiceAccount, Deployment, Service, optional ServiceMonitor) as a Helm 4 chart, published to GHCR as an OCI artifact on every release. On the Pulumi stack the release is a resource of `infra/Pulumi.yaml` (the published chart, with the CRD applied separately because Helm never upgrades `crds/`), installed by `make up` or `make deploy`; `kubectl apply -k config/` still works as a plain-manifest alternative. `make chart-crds` copies `config/crd/` into the chart, `make chart-lint` runs `helm lint --strict`, kubeconform, yamllint and a packaging check. See [the chart README](charts/skill-ci-controller/README.md) for values, adopting an existing install with `--take-ownership` and pushing the chart to an OCI registry.
-
-## Releases
-
-Pushing a tag `vX.Y.Z` runs `.github/workflows/release.yaml` and publishes everything from the tag with the workflow's `GITHUB_TOKEN` (no other secret). Tags with a suffix (`v0.7.0-rc.1`) are pre-releases and do not move `latest`.
-
-| What | Where | Built by |
-| ---- | ----- | -------- |
-| Controller binaries (linux, darwin; amd64, arm64), checksums, SBOMs, release notes | GitHub release | GoReleaser (`.goreleaser.yaml`) |
-| Controller image, linux/amd64 and linux/arm64 | `ghcr.io/dirien/skill-ci-controller:X.Y.Z` | GoReleaser, `controller/Dockerfile.goreleaser` |
-| Runner image, linux/amd64 | `ghcr.io/dirien/skill-ci-runner:X.Y.Z` | `docker/build-push-action`, `runner/Dockerfile` |
-| Sandbox image, linux/amd64 | `ghcr.io/dirien/skill-ci-sandbox:X.Y.Z` | `docker/build-push-action`, `sandbox/Dockerfile` |
-| Helm chart, version and appVersion `X.Y.Z` | `oci://ghcr.io/dirien/charts/skill-ci-controller` | `helm package` + `helm push` |
-
-The checksums file and the three images are signed with Cosign (keyless, the workflow identity); the runner and sandbox images carry an SBOM and provenance attestation.
-
-The chart in the repository and the published chart are the same: the default images are `ghcr.io/dirien/skill-ci-controller`, `skill-ci-runner` and `skill-ci-sandbox`, tagged with the chart's `appVersion` (which `helm package --app-version X.Y.Z` sets from the release tag), and `imagePullSecrets` is empty.
-
-```bash
-helm install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller --version X.Y.Z \
-  --namespace skill-ci --create-namespace
-```
-
-The GHCR packages of a private repository are private. Make the four packages (three images and the chart) public in the package settings, which is how they are meant to be used, or give the cluster pull credentials: a `docker-registry` Secret in the namespace and `--set 'imagePullSecrets[0].name=ghcr'`, which the chart uses for the controller and passes to the controller for the runner Jobs and the sandboxes. Helm never upgrades `crds/`, so apply the CRD of the new version before an upgrade: `helm show crds oci://ghcr.io/dirien/charts/skill-ci-controller --version X.Y.Z | kubectl apply --server-side -f -`.
-
-The demo flow: tag a release, then `make deploy` installs it with `pulumi up`: the published OCI chart of the stack's `skillCiVersion` (default in `infra/Pulumi.yaml`, the same as `SKILL_CI_VERSION` in `deploy/versions.env`) and the controller, runner and sandbox images of that release (`make deploy TAG=0.8.1` sets the version first). Nothing is built in the cluster. `make release-snapshot` dry-runs the GoReleaser build locally (needs `goreleaser` and Docker), `make sandbox-image` builds the sandbox image locally.
-
-### CI
-
-| Workflow | Trigger | Checks |
-| -------- | ------- | ------ |
-| `ci.yaml` | push and PR on main | `go vet`, `go test -race`, `go build`; pytest; Docker build of the controller, runner and sandbox images (no push; the sandbox build installs and version-checks the three agent CLIs); `goreleaser check` and a snapshot release |
-| `lint.yaml` | push and PR on main | golangci-lint; ruff check and format; `make lint` (shellcheck, yamllint, markdownlint, JSON, sample skills); actionlint |
-| `chart.yaml` | push and PR on main | generated code and CRDs up to date; `make chart-lint`; the chart packages and renders with the GHCR images of its appVersion and no pull secret |
-| `release.yaml` | tag `v*` | tests, then GoReleaser, runner image, sandbox image and chart as above |
-
-Dependabot (`.github/dependabot.yaml`) keeps the actions, Go modules, Python pins and Dockerfile base images current.
-
-## Run the demo
-
-Everything goes through `make` (`make help` lists the targets). Scripts print what they do in plain words.
-
-| Target | What it does |
-| --- | --- |
-| `make up` | `pulumi up`: cluster, Harbor, secrets, project and webhook, toolbox, model list, Prometheus and Grafana |
-| `make deploy` | `pulumi up` with the stack's skill-ci release: the SkillEval CRD and the controller from the OCI chart `oci://ghcr.io/dirien/charts/skill-ci-controller`, with the GHCR images of the same release (`TAG=0.8.1` sets the stack config `skillCiVersion` first). The OTLP export is stack config too: `pulumi config set otlpEndpoint ...` (see `infra/Pulumi.yaml`) |
-| `make sandbox-image` | Builds the sandbox image locally as `skill-ci-sandbox:local` (needs Docker) |
-| `make seed` | Pushes every skill under `skills/` as `v1.0.0` through the toolbox pod. Skips tags that exist. `RETRIGGER=1` re-fires the push webhook for existing tags |
-| `make demo-push` | Pushes a new version of a skill (`SKILL=acme-release-notes VERSION=v1.1.0`) |
-| `make demo-model-swap` | Changes the model list live: `MODE=add` adds an optional model, `swap` replaces the Claude model, `bump [TO=2.1.308]` moves Claude Code to another release (the harness changed), `require AGENT=codex` / `optional AGENT=codex` flips whether an agent gates promotion, `restore` resets |
-| `make status` | `kubectl get skillevals -o wide` plus tags and digests per skill from the Harbor API |
-| `make report` | Downloads the eval reports attached to a skill version in Harbor (`SKILL=acme-release-notes VERSION=v1.1.0 [MODEL=...] OUT=reports/`) |
-| `make reports-ui` | Port-forwards the controller's reporting site to `localhost:8082` and prints the URL |
-| `make dashboard` | Port-forwards Grafana to `localhost:3000` and prints the login hint |
-| `make reset` | Deletes SkillEvals and Jobs, removes `beta`/`stable` tags and demo versions from Harbor, restores the model list |
-| `make down` | Refuses on purpose. Destroying the stack deletes the cluster, run `pulumi destroy` by hand |
-| `make lint` | shellcheck, yamllint, markdownlint, JSON checks and the dataset check of the skills |
-| `make chart-lint` | `helm lint --strict`, kubeconform, yamllint and a packaging check of the chart |
-
-Suggested order on a fresh checkout, once a release is tagged: `make up` (cluster, Harbor, monitoring and the controller of the stack's release), `make seed RETRIGGER=1`, `make status`; `make deploy TAG=...` later moves the stack to another release. The retrigger matters when the skills were pushed before the controller existed, because Harbor retries a failed webhook delivery only a few times.
-
-Demo beats after that (a SkillEval takes 11 to 13 minutes and three run at a time, so [DEMO.md](DEMO.md) pre-bakes the results and uses at most one live trigger):
-
-1. **Push a better version.** `make demo-push` publishes `acme-release-notes:v1.1.0`. The controller evaluates it against every model on the list.
-2. **Push a regression.** `make demo-push VERSION=v1.2.0` publishes a version whose rules contradict its own evals. The regression gate holds it at `beta` (see below). A drop that is within noise is held back too, as `Inconclusive` rather than `Regressed`.
-3. **Change the model list.** `make demo-model-swap` adds a model. The controller evaluates the current `beta`/`stable` digests against it.
-4. **Change the harness.** `make demo-model-swap MODE=bump` moves Claude Code to a newer release. A new agent version is a new model list entry, so every `beta` and `stable` skill version runs again on it.
-5. **Show the metrics and reports.** `make dashboard`, then open the `skill-ci` dashboard. `make report SKILL=acme-release-notes VERSION=v1.1.0` pulls the SkillEvaluator reports attached to that version.
-
-## Agents and their versions
-
-The harness is part of the measurement, so skill-ci treats the agent and its release like the model. An entry of the model list is agent + `agentVersion` + model (`demo/models.yaml` has one for each supported agent):
-
-| Agent | Pinned release | Model | Needs in `llm-keys` |
-| --- | --- | --- | --- |
-| `claude-code` | 2.1.292 (SkillEvaluator's pin) | `claude-opus-5-5` | `anthropic` |
-| `codex` | 0.161.0 (SkillEvaluator's pin) | `openai/<id>` | `openai`, optionally `openai-base-url` |
-| `opencode` | 1.19.1 (skill-ci's pin: upstream pins none, 1.19.1 was published on 2026-10-15) | `ollama-cloud/gpt-oss:120b`, `anthropic/<model>`, ... | `ollama` (or `openrouter`, `nvidia`, `anthropic`) |
-
-- **A new agent version is a new entry**, so bumping a version re-evaluates every `beta` and `stable` digest on it. Results stay per entry: the regression gate compares a candidate with the stable version on the same `agent@version/model`, never across harnesses.
-- **`required` per entry decides what gates promotion.** The demo list gates on Claude Code and runs Codex and OpenCode as optional, so they show up everywhere without holding a skill back. `make demo-model-swap MODE=require AGENT=codex` makes Codex gate (the runs that already exist are re-judged at once); `MODE=optional AGENT=codex` undoes it.
-- **The judge is always Anthropic**, whatever agent runs. Codex gets `OPENAI_API_KEY` and `OPENAI_BASE_URL`; OpenCode models other than `anthropic/...` run through the provider's OpenAI-compatible endpoint (patch hunks 6 and 8 to 12). The routes and the checks are in [CONTRACT.md](CONTRACT.md) ("Agent versions", "LLM keys").
-- Upgrading from 0.5: runs created before agent versions have no `agent-version` label and count as the entries without `agentVersion`. Pinned entries are new entries, so applying the pinned list re-evaluates the `beta` and `stable` digests; keep an unpinned entry in the list, or delete the old SkillEvals (`make reset`), to avoid mixing.
-
-## Reporting site
-
-The controller serves a read-only reporting site on port 8082 (`--reports-addr`, empty disables it; Helm `reports.enabled`). `make reports-ui` port-forwards it to <http://localhost:8082>.
-
-- `/` lists every run (SkillEval) newest first, with release channels per skill and filters (`?skill=`, `?agent=claude-code@2.1.292`, `?model=`, `?verdict=`, `?phase=`).
-- `/skills/<skill>` shows versions against model list entries (one column per `agent@version` and model) with the lift (and its confidence interval and n), the channel tags and the policy decision per version in plain words.
-- `/runs/<name>` shows one run: scores with the lift interval and n, conditions and, when a report is stored, the six SkillEvaluator dimensions with and without the skill. The full SkillEvaluator report and `result.json` open from there.
-
-Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. `make report-page` builds the offline equivalent.
-
-## How the gate decides
-
-A fixed number is a bad gate for a noisy measurement. The same skill version scored 0.95 on one run and 0.87 on the next, and a rule of "more than 0.05 below stable is a regression" held a good version back. Evidence-based evaluation does not do that: SWE-Skills-Bench, for one, found that 92 of 98 skills had no statistically significant effect. So the gate asks for evidence.
-
-Each run has 3 eval cases x 3 attempts per arm, so up to 9 trial scores with the skill and 9 without. The runner sends them (`samples` in the termination message), the controller computes a confidence interval (Welch's t, 95% by default) and decides:
-
-| Question | Rule |
-| --- | --- |
-| Does the skill help? | Lift is at least +0.10 **and** the lift interval is entirely above 0, on every required model. Otherwise the version is not promoted. |
-| Did the new version get worse than stable? | With-skill score is more than 0.05 below stable on a required model **and** the interval of the difference is entirely below 0: `Regressed`. |
-| Is the drop only maybe real? | More than 0.05 below, but the interval includes 0: `Inconclusive`. Not promoted, stable stays, `beta` is kept, and the numbers are in the condition. |
-| Do older runs still work? | A run without trial scores (runner before 0.5.1) uses the fixed thresholds above and says so in its condition. |
-
-`--confidence` (Helm `controller.thresholds.confidence`, default 0.95) sets the level: a higher value asks for more evidence both to promote and to call a regression. Worked example, stable `v1.0.0` at 0.95 on a required model:
-
-- `v1.2.0` scores 0.70 with tight trials: difference -0.25, 95% CI [-0.26, -0.24], `Regressed`.
-- `v1.2.0` scores 0.87 with spread-out trials: difference -0.08, 95% CI [-0.18, +0.03], `Inconclusive`. The drop is bigger than the tolerance, but noise could explain it.
-
-The formulas and the exact rules are in [CONTRACT.md](CONTRACT.md) ("Statistics" and "Policy").
-
-## Policy in short
-
-Per SkillEval, the lift over the no-skill run gives the verdict (`Helps` from +0.05, `Hurts` at -0.10 or lower, each only when the lift interval clears 0; `Obsolete` when a neutral skill has a no-skill score of 0.80 or more). Per skill digest, once every required model has a result:
-
-- The newest evaluated digest gets `beta`.
-- A digest with lift of at least +0.10 on every required model (interval above 0) gets `stable`, unless it fails the **regression gate**: its with-skill score on a required model is more than 0.05 below the current stable digest's score and the interval of that difference is below 0. Then it keeps `beta`, its SkillEvals get a `Regressed` condition (with the models, scores and interval in the message) and the verdict `Regressed` on the models that dropped. When the interval includes 0 the verdict is `Inconclusive` instead, with the same consequences for the tags. Optional models never gate.
-- An older version does not take `stable` from a newer one unless the newer one scores worse than it.
-- Verdicts depend on other digests, so when a SkillEval succeeds or the policy changes a tag, the controller re-runs the policy for the other finished SkillEvals of the same skill.
-
-The details and the flags are in [CONTRACT.md](CONTRACT.md).
-
-## Infrastructure notes
-
-- **Harbor** has `externalURL: http://harbor.harbor.svc.cluster.local`, so pods can reach its token service. From outside the cluster, reach it only through in-cluster tooling: the toolbox pod or `kubectl -n harbor port-forward svc/harbor`.
-- **Setup Job.** `harbor-setup-<id>` waits for Harbor, creates the private project `skills` if it is missing, and creates or updates the webhook policy `skill-ci` (`PUSH_ARTIFACT`, payload `Default`, `Authorization: Bearer <harbor-webhook token>`) pointing at the controller Service. It also removes policies that still point at the old debug receiver. The script is `infra/harbor-setup.sh`. The Job name carries a random id that changes when the script, the image, the admin password or the token change, so every relevant `pulumi up` runs a fresh, idempotent Job.
-- **Secrets** in `skill-ci`: `harbor-credentials` (user `admin` and the generated admin password), `harbor-pull` (Docker config for `harbor.harbor.svc.cluster.local`, same credentials), `harbor-webhook` (random token). A project-scoped Harbor robot account is the production choice. Admin keeps the demo reproducible from one `pulumi up`. `llm-keys` is not managed by Pulumi. Create it by hand and never commit key values: `kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$ANTHROPIC_API_KEY"`. Only `anthropic` is required (it is the judge). Add the keys of the agents you evaluate: `openai` (Codex, Tier 2 embeddings), `ollama`, `openrouter`, `nvidia` (OpenCode models behind those providers), `openai-base-url` (a Codex endpoint other than api.openai.com); see [the agent section](#agents-and-their-versions).
-- **Toolbox.** Deployment `toolbox` has two containers: `oras` (pinned image, the `harbor-pull` secret at `/auth/config.json`) and `harbor-api` (curl with the admin password in its env). The scripts copy a skill directory in with `tar` over `kubectl exec` and run `oras push --plain-http --registry-config /auth/config.json`.
-- **Sandbox sizing.** Each trial runs in one Agent Sandbox. The runner image defaults are `SANDBOX_CPUS=1`, `SANDBOX_MEMORY_MB=2048` (per sandbox) and `TRIAL_CONCURRENCY=2` (trials at once per Job); `SANDBOX_NAMESPACE` and `SANDBOX_IMAGE` (the sandbox image of the runner's release) are set there too; the controller overrides `SANDBOX_IMAGE` from `--sandbox-image` (Helm `controller.sandboxImage`). Override them as env vars on the runner container (the manual Job in `runner/job.yaml` shows where). The controller caps the Jobs: Helm value `controller.maxConcurrentJobs` (`--max-concurrent-jobs`, deployed with 3) and `controller.trialBudget` (`--trial-budget`, 200). Three Jobs at two trials each is up to 6 sandboxes of 1 vCPU and 2 GiB at a time.
-- **Model list.** ConfigMap `skill-ci-models` (an entry is agent + agent version + model, see [the agent section](#agents-and-their-versions)) is seeded from `demo/models.yaml` and has `ignoreChanges: [data]` in Pulumi, so demo edits survive later `pulumi up` runs. `make reset` restores it from the same file.
-- **Monitoring.** `kube-prometheus-stack` in namespace `monitoring`: Prometheus (24h retention) and Grafana, with Alertmanager, node exporter, kube-state-metrics, default rules and the control-plane scrape jobs switched off. A `ServiceMonitor` in `skill-ci` scrapes Service `skill-ci-controller` (port `metrics`, label `app.kubernetes.io/name=skill-ci-controller`). The controller can also push the same `skillci_*` metrics over OpenTelemetry (OTLP) to a Collector, Grafana Alloy or a vendor backend: Helm values `otlp.*`, off by default (CONTRACT.md, "OpenTelemetry export"). The dashboard `infra/dashboards/skill-ci.json` is a ConfigMap with the `grafana_dashboard` label. It shows the lift matrix per skill version, `agent@version` and model (`skillci_lift`; every per-run series has `agent` and `agent_version` labels), the lift with its confidence interval (`skillci_lift_ci_lower`, `skillci_lift_ci_upper`), scores with and without the skill, `skillci_stable`, `skillci_obsolete`, the Inconclusive and Regressed counts and `skillci_skillevals_total`. The Grafana admin password is generated and exported as the secret stack output `grafanaAdminPassword`.
-- **Sandbox image.** `sandbox/Dockerfile` is one image for every trial, built once per release by the release workflow: no registry to pay for, no builder in the cluster, no build before the first trial. It is about 3 GB on disk (1 GB compressed), so the first trial on a new autoscaled node waits for the pull (the sandbox waits up to 10 minutes to become ready) and later ones start from the node's cache. How it stands in for the per-task Dockerfiles, and what happens to a skill whose Dockerfile needs more, is in [CONTRACT.md](CONTRACT.md) ("Sandbox image").
-- **Cost.** There is no registry or builder to run: the images are public GHCR packages. Prometheus and Grafana run on the existing two nodes (requests of about 0.2 vCPU and 0.6 GiB in total). Live evals cost LLM tokens, see the cost guard flags in `CONTRACT.md`.
-
-## Network modes and sandbox profiles
-
-Each skill declares what its trials may reach, in the `metadata` of its `SKILL.md` (`skillci.dev/network: none | allowlist | full`, `skillci.dev/network-allow` with domains and bundles like `@python`); the push carries it as OCI annotations. A skill that declares nothing gets `full`: the internet, never the cluster. On a Cilium cluster (DOKS) the controller enforces the mode with one `CiliumNetworkPolicy` per evaluation, the same for both arms; the platform sets the default, the allowed modes and the bundles in the `SkillCIConfig` resource (`kubectl -n skill-ci edit scc default`). Trials run in pre-started sandboxes from Agent Sandbox warm pools, described by the skill-ci CRD `SandboxProfile` (image, CPU, memory, warm pool size). The chart creates both resources once and never overwrites them, so they are managed with kubectl or GitOps. Details in CONTRACT.md ("SkillCIConfig", "SandboxProfile", "Network modes") and deploy/README.md.
-
-## Sample skills
-
-The skills under `skills/` are demo material written for this talk, not production skills. Each has three eval cases in the agentskills.io format (3 attempts per arm when deployed, so 9 trials per arm: a small sample, which is why the gate uses confidence intervals). The datasets were checked with SkillEvaluator's dataset loader and `skillevaluator tier1`. Live results on the cluster (2026-10-31, release 0.7.x, lift over no skill for Claude Code + Opus 5.5 / Codex + gpt-6.1-sol / OpenCode + Qwen 3.8 Flash; only Claude Code is required, the other two never gate):
-
-| Skill | What it encodes | Measured lift and outcome |
-| --- | --- | --- |
-| `acme-release-notes` | A made-up release note format (`ACME-RN/2`) | v1.0.0 +0.59 / +0.25 / +0.57, with-skill 0.95 / 0.72 / 0.96. No model can know the format without the skill |
-| `k8s-resource-naming` | A team-specific naming and labelling convention for Kubernetes resources | v1.0.0 +0.57 / +0.20 / +0.54, `stable`. The conventions (`prd` instead of `prod`, `-cfg` and `-sec` suffixes, `acme.io/*` labels) are arbitrary, so a model cannot guess them |
-| `python-docstrings` | Google-style docstrings | v1.0.0 +0.38 / +0.13 / +0.39, `stable`. The baseline is higher (0.46 to 0.58) because models half know the convention. Not Obsolete, because the no-skill scores are below 0.80. On the earlier list with Haiku required it gained only +0.03 there and stayed on `beta` |
-
-Versions of `acme-release-notes` for the push beat live in `demo/variants/acme-release-notes/`:
-
-- `v1.1.0` adds two rules (sort bullets by ticket ID, `- None [ACME-0]` for an empty section) and matching assertions. Measured: with-skill 0.98 / 0.72 / 0.95, lift +0.61 / +0.27 / +0.57, so it takes over `stable`.
-- `v1.2.0` is a deliberate regression. Its rules (a `# Release` heading, friendly summary, `## Features`/`## Bug fixes`, emojis) contradict the unchanged evals. Measured on Claude Code: with-skill 0.69, still a positive lift (+0.33) over no skill, but -0.29 against stable v1.1.0 (95% CI [-0.31, -0.27]). The regression gate marks it `Regressed` and keeps the version at `beta`. The optional entries drop too (Codex 0.47, `Neutral` at +0.01; OpenCode 0.72, still `Helps` at +0.35) and gate nothing.
-
-`demo/push-skill.sh <skill> <version> [dir]` publishes any directory as a version, so more variants are a directory away. A variant at `demo/variants/<skill>/<version>/` is picked up automatically.
-
-Check the datasets without any LLM call: `make check-skills` (a case whose `expected_skill` is null is a negative, off-skill case).
-
-A skill needs test cases before the live evaluation can run: without `evals/evals.json` it gets Tier 1 and 2 only, and the run fails with "no eval dataset". To start one, `make draft-evals SKILL=<name>` (or `DIR=<skill dir>`) runs SkillEvaluator's `create-eval-dataset --full` in a short-lived pod from the runner image with the Anthropic key of `llm-keys`: one LLM request, about 20 seconds, four cases (explicit, implicit, contextual, negative). It never overwrites an existing file unless `FORCE=1`, fails instead of writing SkillEvaluator's generic template when the LLM call did not happen, and prints a review checklist. Review the draft: the generator reads `SKILL.md`, so its assertions repeat the skill's own wording and cannot catch a rule the skill forgot, and it only checks the reply, so add assertions on files the agent has to write. skill-ci never drafts or regenerates test cases inside the gate.
-
-### Tiers and scanners in the runner
-
-The runner image evaluates every skill version through all three SkillEvaluator tiers (see `CONTRACT.md`, "All tiers and publication"). The gate is `skillevaluator validate <skill> --tiers 1,2 --no-llm --profile external --continue-on-failure --catalog <catalog.json>` (Tier 1 static and security checks, Tier 2 deduplication; the catalog holds the other skills of the Harbor project at `stable`, else at their newest `vX.Y.Z`); a failure there skips Tier 3. Otherwise one more `validate --tiers 1,2,3` run adds the live Tier 3 evaluation, so SkillEvaluator's own report (`report.html`, `BENCHMARK.md`) carries a complete publication assessment, which the runner reads from `publication.status`. Two patch hunks make that possible: `validate --catalog`, and the sandbox size (`SANDBOX_CPUS`, `SANDBOX_MEMORY_MB`) reaching the sandbox environment as `HARBOR_SANDBOX_CPUS` and `HARBOR_SANDBOX_MEMORY_MB`, because `validate` has no `--override-cpus`. Tier 1 is only trustworthy with its scanners, so the image pins them: Gitleaks 8.30.1 (binary, sha256-checked), SkillSpector v2.12.0 and Semgrep 1.183.0 (each in its own virtualenv, they pin conflicting click versions), Bandit 1.9.4 and pip-audit 2.10.1 (SkillEvaluator's `security` extra). Without them SkillEvaluator marks Tier 1 `incomplete`. Tier 2 needs an embeddings provider, and Anthropic has none: put an `openai` key into secret `llm-keys` or Tier 2 reports `incomplete`.
-
-The profile is SkillEvaluator's built-in `external`, the only one it ships. For skills published to an internal platform it asks for nothing the demo skills lack (a `Name <email>` author, a permissive license, no blocked licenses) and keeps license findings blocking. Override with `TIER1_PROFILE`.
-
-`demo/variants/k8s-resource-naming/v1.1.0` is a deliberately unsafe variant that Tier 1 rejects, see `demo/variants/README.md`. To run the checks locally, install the same scanners and run `skillevaluator validate skills/<name> --tiers 1,2`; the skill directory must be named like the skill.
-
-## What was tested
-
-### 2026-10-31: both deploy paths and three agents
-
-1. **Pulumi path.** `pulumi up` on the DOKS stack removed the in-cluster builder and the private registry; `make deploy` installs each release from GHCR (0.7.0 to 0.7.3 in turn). A second `pulumi preview` shows no changes.
-2. **Vanilla path.** On a fresh DOKS cluster: `deploy/install.sh` from the published OCI chart (about 20 minutes), re-runs that keep every Secret and skip an unchanged Harbor (under a minute), the upgrade from 0.7.0 to 0.7.2, a pushed skill evaluated end to end with the same numbers as the Pulumi cluster, then `deploy/uninstall.sh --yes --purge-crds` twice, leaving no namespace, CRD, release or volume.
-3. **Three agents.** Claude Code 2.1.292 + Opus 5.5, Codex 0.161.0 + gpt-6.1-sol and OpenCode 1.19.1 + Qwen 3.8 Flash (through OpenRouter) on every sample skill and the demo variants: 9 trials per arm, results in "Sample skills" above and in DEMO.md.
-
-### 2026-10-30: the pilot
-
-1. **Trials in Agent Sandbox on DOKS.** SkillEvaluator ran from a Kubernetes Job with in-cluster credentials. Each trial was an Agent Sandbox; no sandboxes were left behind. (That run built a task image per trial in the cluster. The sandbox image replaced the builder afterwards, see "Findings".)
-2. **Model matrix.** Same skill, three pinned models, three parallel Jobs:
-
-   | Model | With skill | Without | Lift | Job time |
-   | --- | --- | --- | --- | --- |
-   | claude-haiku-5-5 | 0.95 | 0.36 | +0.59 | 4m07s |
-   | claude-sonnet-5-5 | 0.95 | 0.32 | +0.64 | 6m52s |
-   | claude-opus-5-5 | 0.95 | 0.36 | +0.58 | 7m59s |
-
-   The test skill (`acme-release-notes`) teaches a made-up format, so no model knows it without the skill. It proved the pipeline, not a regression. The regression gate is exercised by `acme-release-notes` v1.2.0, which was written to fail (see above).
-3. **Registry trigger.** `oras push` fires `PUSH_ARTIFACT`. `oras tag` (promotion) fires `PUSH_ARTIFACT` again with the same digest. Deleting a tag through the Harbor API (demotion) fires nothing.
-
-## Findings that shape the build
-
-- **Harbor's generic Kubernetes backend (`ack`) is thin.** In DinD mode it ships only the Dockerfile to the build Job, so every `COPY` fails. Its context archive drops empty directories, which breaks the no-skill baseline. It has no Harbor network or resource policy support. `harbor-agent-sandbox` fixes the build context and swaps the privileged pod for an unprivileged `Sandbox`.
-- **SkillEvaluator hard-codes Harbor environments** and filters the environment variables it passes to Harbor. The patch adds `SKILLEVALUATOR_ACK_ENV_IMPORT_PATH` and lets `HARBOR_SANDBOX_IMAGE` (and the size variables) through. Both changes are upstream PR candidates.
-- **Harbor's task image names say nothing about the skill version.** SkillEvaluator names the task `skillevaluator-<eval case>-with-skill`, Harbor's `ack` backend turns that into `<registry>/skillevaluator-<eval case>-with-skill:latest`, and it builds only when an existence check says the image is missing. Two versions of one skill (or two skills with an eval case of the same name) share the image name, and the `COPY skills/` that carries the skill is baked into it. On the private registry the demo cluster used, the check always answered "missing" (an unauthenticated `HEAD` gets 401 and Harbor reads that as absent, and the runner image has neither `docker` nor `crane`), so every trial rebuilt and pushed `:latest`, which hid the problem and cost a build per trial; on a registry that answers the check, a later version is evaluated with an earlier version's skill. The sandbox image removes the build and with it the question: the skill is uploaded into the sandbox of each trial.
-- **The generated Dockerfiles are the same list of steps for every plain skill.** For a plain skill (no `requirements.txt` or `apt-packages.txt`, no custom `evals/environment/Dockerfile`), SkillEvaluator 0.6.0 writes byte-identical Dockerfiles with and without the skill, for every skill and eval case (the skill is in the build context, not in the Dockerfile; the three demo skills are plain). That is what makes one generic image possible; a skill with `requirements.txt` or a custom environment Dockerfile is not covered and fails with an error that names the step.
-- **Harbor skips the agent install for Claude Code and Codex, but not for OpenCode.** The first two compare `--version` with the requested release; OpenCode reinstalls nvm, Node and its npm package in every sandbox. `harbor_agent_sandbox.preinstalled` gives it the same check.
-- **SkillEvaluator rejects symlinked eval directories**, so skills can't be mounted from a ConfigMap. Pull them with ORAS into an `emptyDir` instead, which is the design anyway.
-- **The controller must deduplicate by digest, not tag**, or every promotion triggers a new eval.
-- **A lift above zero is not enough to promote.** v1.2.0 of the sample skill still beats no skill by +0.33 or more. Only the comparison with the stable version catches that, hence the regression gate.
-- **Verdicts depend on the other versions.** Results arrive in any order (a SkillEval takes 11 to 13 minutes and they run three at a time), so the stable version can finish after the candidate. The controller re-runs the policy for the sibling SkillEvals of a skill when one succeeds or a tag moves, and an older version never takes `stable` from a newer one that is not worse. Without the second rule two equally good versions swap the tag on every reconcile.
-- **OpenCode behind a gateway needed two more patch hunks.** SkillEvaluator refuses an agent import path outside `docker`, `kata` and `local` unless it is allow-listed, and the gateway OpenCode wrapper was not (hunk 6), so Tier 3 was skipped. The wrapper also renames the model to `skillevaluator-gateway/<id>`, a provider Harbor does not know, so the key never reached the sandbox (hunk 12). `runner/check_patch.py` checks both at image build.
-- **An OpenRouter provisioning key looks valid and is not.** It passes `GET /api/v1/key`, but every chat call answers 401 "User not found.". The runner now asks for the key type before any work.
-- **The Harbor chart restarts Harbor on every `helm upgrade`.** It renders new internal secrets each time, and their checksums are pod annotations. `deploy/install.sh` upgrades Harbor only when its chart version or values change.
-- **Tag changes and webhooks.** Tag changes through the Harbor API do not fire webhooks; `oras tag` does. The controller uses the API.
-
-## Reproduce
-
-```bash
-# Infra (local state in ~/.pulumi-local; the sandbox proxy breaks Pulumi Cloud update tokens)
-. ~/.pulumi-local/skill-ci-env.sh
-make up                       # or: cd infra && pulumi up
-
-# Images, controller, skills
-make deploy                   # the stack's skillCiVersion, or TAG=0.8.1
-kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$ANTHROPIC_API_KEY"
-make seed RETRIGGER=1
-make status
-
-# Tear down: deletes the cluster. Run it by hand.
-cd infra && pulumi destroy
-```
+`make help` lists the Makefile targets.

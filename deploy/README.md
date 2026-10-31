@@ -1,8 +1,8 @@
 # Run skill-ci on your own cluster
 
-This is the follow-along path: plain Helm charts and Kubernetes manifests, no Pulumi, no cloud account beyond the
-cluster itself. You end up with the same setup as the demo: skills pushed to Harbor are evaluated by a controller, and
-the results decide which version gets the `beta` and `stable` tags.
+This guide installs skill-ci with plain Helm charts and Kubernetes manifests, with no Pulumi and no cloud account beyond
+the cluster itself. You end up with the full setup: skills pushed to Harbor are evaluated by a controller, and the
+results decide which version gets the `beta` and `stable` tags.
 
 All images come from GHCR and need no pull secret, and nothing builds images in the cluster.
 
@@ -78,7 +78,7 @@ secrets on every render and each upgrade restarts Harbor's core, jobservice and 
 upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana. To also push the controller's metrics
 over OpenTelemetry, set `OTLP_ENDPOINT` and the other `OTLP_*` variables of
 [OpenTelemetry export](#opentelemetry-export-optional) before the run, and on every later run.
-Then go to [Run the demo](#run-the-demo). Read on for what each step does and how to check it.
+Then go to [Try the loop](#try-the-loop). Read on for what each step does and how to check it.
 
 ## Step 1: namespace
 
@@ -395,9 +395,9 @@ kubectl -n skill-ci get servicemonitor,skillevals
 Everything should be `Running` or `Completed`, and `kubectl get skillevals` returns "No resources found" until you
 push a skill. If you skipped monitoring, there is no ServiceMonitor.
 
-## Run the demo
+## Try the loop
 
-The demo scripts in [`demo/`](../demo/) talk to the cluster with `kubectl` only, so the same `make` targets work here.
+The scripts in [`demo/`](../demo/) talk to the cluster with `kubectl` only, so the same `make` targets work here.
 Run them from the repository root with `KUBECONFIG` exported. The Pulumi targets (`make up`, `make preview`,
 `make down`) and `make deploy` are replaced by this guide.
 
@@ -446,7 +446,8 @@ kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-passwor
 ```
 
 `make dashboard` prints the same `kubectl` command and a `pulumi stack output` alternative. Ignore the Pulumi line,
-there is no stack in this setup. The [stage runbook](../DEMO.md) walks through the beats.
+there is no stack in this setup. [docs/sample-skills.md](../docs/sample-skills.md) walks through the loop with the sample
+skills.
 
 ## Network modes and sandbox profiles
 
