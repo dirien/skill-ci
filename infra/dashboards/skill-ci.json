@@ -832,7 +832,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "skillci_lift",
+          "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift)",
           "refId": "A",
           "legendFormat": "",
           "format": "table",
@@ -844,7 +844,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "skillci_lift_ci_lower",
+          "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_lower)",
           "refId": "B",
           "legendFormat": "",
           "format": "table",
@@ -856,7 +856,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "skillci_lift_ci_upper",
+          "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_upper)",
           "refId": "C",
           "legendFormat": "",
           "format": "table",
