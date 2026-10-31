@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -295,5 +297,72 @@ func TestRetriedCounterReasons(t *testing.T) {
 		if _, ok := retryCounts(t)[string(r)]; !ok {
 			t.Errorf("skillci_retries_total{reason=%q} is not published at zero", r)
 		}
+	}
+}
+
+func TestFailedRunKeepsItsReport(t *testing.T) {
+	e := retryEnv(t, 0, 200)
+	se := e.create("acme", "v1.0.0", digestA, haiku)
+	e.reconcile(se)
+	report := "sha256:" + strings.Repeat("c", 64)
+	e.finishJob(se, `{"error":"no scores in result.json: AgentTimeoutError: Agent execution timed out after 900.0 seconds",`+
+		`"tiers":{"tier1":"passed","tier2":"passed","tier3":"incomplete"},"report":"`+report+`"}`, true)
+	e.reconcile(se)
+	got := e.get(se).Status
+	if got.Phase != v1alpha1.PhaseFailed || got.ReportDigest != report || len(got.Attempts) != 0 {
+		t.Fatalf("phase=%s reportDigest=%q attempts=%v, want Failed with the report and no attempts", got.Phase, got.ReportDigest, got.Attempts)
+	}
+	if got.Tiers == nil || got.Tiers.Tier3 != v1alpha1.TierIncomplete {
+		t.Errorf("tiers %+v, want tier3 incomplete", got.Tiers)
+	}
+}
+
+func TestRetryMovesTheReportToAttempts(t *testing.T) {
+	e := retryEnv(t, 2, 200)
+	se := e.create("acme", "v1.0.0", digestA, haiku)
+	e.reconcile(se)
+	first := "sha256:" + strings.Repeat("1", 64)
+	e.finishJob(se, `{"error":"no scores in result.json: EnvironmentStartTimeoutError: Environment start timed out after 600.0 seconds","report":"`+first+`"}`, true)
+	e.reconcile(se) // retried: the report of the first Job moves to attempts
+	got := e.get(se).Status
+	want := []v1alpha1.RunAttempt{{JobName: se.Name, ReportDigest: first,
+		Message: "no scores in result.json: EnvironmentStartTimeoutError: Environment start timed out after 600.0 seconds"}}
+	if got.ReportDigest != "" || got.JobName != se.Name+"-r1" || !slices.Equal(got.Attempts, want) {
+		t.Fatalf("after retry 1: reportDigest=%q job=%s attempts=%+v, want none, %s-r1, %+v", got.ReportDigest, got.JobName, got.Attempts, se.Name, want)
+	}
+
+	e.finishJob(se, envTimeout, true) // no report this time
+	e.reconcile(se)
+	got = e.get(se).Status
+	want = append(want, v1alpha1.RunAttempt{JobName: se.Name + "-r1",
+		Message: "no scores in result.json: EnvironmentStartTimeoutError: Environment start timed out after 600.0 seconds"})
+	if !slices.Equal(got.Attempts, want) || got.JobName != se.Name+"-r2" {
+		t.Fatalf("after retry 2: job=%s attempts=%+v, want %+v", got.JobName, got.Attempts, want)
+	}
+
+	final := "sha256:" + strings.Repeat("3", 64)
+	e.finishJob(se, `{"withSkill":0.95,"withoutSkill":0.36,"lift":0.59,"report":"`+final+`"}`, false)
+	e.reconcile(se)
+	got = e.get(se).Status
+	if got.Phase != v1alpha1.PhaseSucceeded || got.ReportDigest != final || !slices.Equal(got.Attempts, want) {
+		t.Errorf("final: phase=%s reportDigest=%q attempts=%+v", got.Phase, got.ReportDigest, got.Attempts)
+	}
+}
+
+func TestRecordAttempt(t *testing.T) {
+	st := &v1alpha1.SkillEvalStatus{}
+	for i := range v1alpha1.MaxAttempts + 2 {
+		st.ReportDigest = fmt.Sprintf("sha256:%064d", i)
+		recordAttempt(st, fmt.Sprintf("job-r%d", i), "failed")
+	}
+	if len(st.Attempts) != v1alpha1.MaxAttempts || st.Attempts[0].JobName != "job-r2" || st.Attempts[v1alpha1.MaxAttempts-1].JobName != "job-r11" {
+		t.Errorf("attempts %v, want the newest %d", st.Attempts, v1alpha1.MaxAttempts)
+	}
+	if st.ReportDigest != "" {
+		t.Errorf("reportDigest %q, want it cleared for the next Job", st.ReportDigest)
+	}
+	recordAttempt(st, "long", strings.Repeat("é", 2000))
+	if n := len([]rune(st.Attempts[len(st.Attempts)-1].Message)); n != v1alpha1.MaxAttemptMessageLength {
+		t.Errorf("message has %d characters, want %d", n, v1alpha1.MaxAttemptMessageLength)
 	}
 }

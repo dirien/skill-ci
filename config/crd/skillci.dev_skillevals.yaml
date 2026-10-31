@@ -196,6 +196,36 @@ spec:
                   AgentVersion is the agent CLI release the trials ran, as the runner
                   reported it; until then the release the spec asks for.
                 type: string
+              attempts:
+                description: |-
+                  Attempts are the earlier Jobs of a retried run, oldest first, at most
+                  10. The current Job is JobName and ReportDigest and is not listed.
+                items:
+                  description: |-
+                    RunAttempt is an earlier Job of a retried run. Its report and trial bundle
+                    stay reachable after status.reportDigest moved on to the next Job.
+                  properties:
+                    jobName:
+                      description: JobName is the Job of the attempt.
+                      maxLength: 63
+                      type: string
+                    message:
+                      description: Message says why the attempt ended, at most 1024
+                        characters.
+                      maxLength: 1024
+                      type: string
+                    reportDigest:
+                      description: |-
+                        ReportDigest is the report the attempt attached, with its trial bundle;
+                        empty when it attached none.
+                      maxLength: 71
+                      type: string
+                  required:
+                  - jobName
+                  type: object
+                maxItems: 10
+                type: array
+                x-kubernetes-list-type: atomic
               completedAt:
                 description: CompletedAt is when the eval reached Succeeded or Failed.
                 format: date-time
@@ -328,8 +358,10 @@ spec:
                   passed, failed or incomplete.'
                 type: string
               reportDigest:
-                description: ReportDigest is the digest of the eval report attached
-                  to the skill in the registry.
+                description: |-
+                  ReportDigest is the digest of the eval report attached to the skill in
+                  the registry by the current Job, also for a Failed run whose Tier 3
+                  started.
                 type: string
               retries:
                 description: |-

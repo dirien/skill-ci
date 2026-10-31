@@ -85,6 +85,71 @@ type PlatformNetwork struct {
 	AgentInstallHosts []Host `json:"agentInstallHosts,omitempty"`
 }
 
+// Observability holds where the runner reads the trials' network flows.
+type Observability struct {
+	// HubbleRelay is host:port of a Hubble Relay the runner pods can reach,
+	// for example hubble-relay.kube-system.svc.cluster.local:80: a hostname
+	// or IP and a port from 1 to 65535, no scheme. The controller passes it
+	// to new runner Jobs as HUBBLE_SERVER. Empty (the default) collects no
+	// network flows.
+	// +optional
+	// +kubebuilder:default=""
+	// +kubebuilder:validation:MaxLength=255
+	// +kubebuilder:validation:Pattern=`^$|^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*|\[[0-9a-fA-F:.]+\]):[0-9]{1,5}$`
+	HubbleRelay string `json:"hubbleRelay,omitempty"`
+}
+
+// Judge providers skill-ci supports (SKILL_EVAL_LLM_PROVIDER). SkillEvaluator
+// also knows bedrock, which no agent of the runner can be scored with.
+const (
+	// JudgeAnthropic is the Anthropic Messages API, the default judge.
+	JudgeAnthropic = "anthropic"
+	// JudgeOpenAI is the OpenAI Chat Completions API.
+	JudgeOpenAI = "openai"
+	// JudgeOpenAICompatible is any OpenAI-compatible endpoint at judge.baseURL.
+	JudgeOpenAICompatible = "openai-compatible"
+	// JudgeNVBuild is NVIDIA's build.nvidia.com endpoint.
+	JudgeNVBuild = "nv_build"
+)
+
+// DefaultJudgeSecretKey is the llm-keys key of the default judge's API key.
+const DefaultJudgeSecretKey = "anthropic"
+
+// Judge is the LLM judge that scores every trial, whatever the agent under
+// test. The controller passes it to new runner Jobs as SKILL_EVAL_LLM_PROVIDER,
+// SKILL_EVAL_LLM_MODEL, SKILL_EVAL_LLM_BASE_URL and SKILL_EVAL_LLM_API_KEY
+// (from llm-keys/<secretKey>), and allows its host in the network modes none
+// and allowlist.
+// +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'openai-compatible' || (has(self.baseURL) && size(self.baseURL) > 0)",message="judge.baseURL is required for provider openai-compatible"
+// +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'nv_build' || !has(self.baseURL) || size(self.baseURL) == 0",message="judge.baseURL is used only with the providers anthropic, openai and openai-compatible"
+type Judge struct {
+	// Provider is the judge's API: anthropic (default), openai,
+	// openai-compatible (needs baseURL) or nv_build.
+	// +optional
+	// +kubebuilder:default=anthropic
+	// +kubebuilder:validation:Enum=anthropic;openai;openai-compatible;nv_build
+	Provider string `json:"provider,omitempty"`
+	// Model is the judge model; empty means SkillEvaluator's default for the provider.
+	// +optional
+	// +kubebuilder:validation:MaxLength=256
+	// +kubebuilder:validation:Pattern=`^$|^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$`
+	Model string `json:"model,omitempty"`
+	// BaseURL is the API root of the judge, an http or https URL without
+	// credentials, query or fragment. Required for openai-compatible, optional
+	// for anthropic and openai, not used by nv_build.
+	// +optional
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:Pattern=`^$|^https?://[^\s?#@]+$`
+	BaseURL string `json:"baseURL,omitempty"`
+	// SecretKey is the key of the llm-keys Secret that holds the judge's API key.
+	// +optional
+	// +kubebuilder:default=anthropic
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:Pattern=`^[-._a-zA-Z0-9]+$`
+	SecretKey string `json:"secretKey,omitempty"`
+}
+
 // SkillCIConfigSpec holds the platform settings of a skill-ci install.
 type SkillCIConfigSpec struct {
 	// DefaultSandboxProfile is the SandboxProfile of a model list entry that
@@ -99,6 +164,14 @@ type SkillCIConfigSpec struct {
 	// +optional
 	// +kubebuilder:default={}
 	Network PlatformNetwork `json:"network,omitempty"`
+	// Observability says where the runner reads network flows.
+	// +optional
+	// +kubebuilder:default={}
+	Observability Observability `json:"observability,omitempty"`
+	// Judge is the LLM judge of every run (default: anthropic, its key in llm-keys anthropic).
+	// +optional
+	// +kubebuilder:default={}
+	Judge Judge `json:"judge,omitempty"`
 }
 
 // EffectiveNetwork summarises the network policy in force.
@@ -130,6 +203,32 @@ type EffectiveNetwork struct {
 	AgentInstallHosts []string `json:"agentInstallHosts,omitempty"`
 }
 
+// EffectiveObservability is the observability setting in force.
+type EffectiveObservability struct {
+	// HubbleRelay is the HUBBLE_SERVER of new runner Jobs; empty collects no flows.
+	// +optional
+	HubbleRelay string `json:"hubbleRelay,omitempty"`
+}
+
+// EffectiveJudge is the judge in force.
+type EffectiveJudge struct {
+	// Provider is the judge's API.
+	// +optional
+	Provider string `json:"provider,omitempty"`
+	// Model is the judge model; empty means SkillEvaluator's default.
+	// +optional
+	Model string `json:"model,omitempty"`
+	// BaseURL is the judge's API root; empty means the provider's default.
+	// +optional
+	BaseURL string `json:"baseURL,omitempty"`
+	// SecretKey is the llm-keys key of the judge's API key.
+	// +optional
+	SecretKey string `json:"secretKey,omitempty"`
+	// Host is the judge host allowed in the network modes none and allowlist.
+	// +optional
+	Host string `json:"host,omitempty"`
+}
+
 // EffectiveConfig is the configuration the controller applies.
 type EffectiveConfig struct {
 	// Source is SkillCIConfig (this spec), LastValid (this spec is invalid,
@@ -145,6 +244,12 @@ type EffectiveConfig struct {
 	// Network is the network policy in force.
 	// +optional
 	Network EffectiveNetwork `json:"network,omitempty"`
+	// Observability is the observability setting in force.
+	// +optional
+	Observability EffectiveObservability `json:"observability,omitempty"`
+	// Judge is the judge in force.
+	// +optional
+	Judge EffectiveJudge `json:"judge,omitempty"`
 }
 
 // SkillCIConfigStatus is the observed state of a SkillCIConfig.
@@ -163,7 +268,8 @@ type SkillCIConfigStatus struct {
 }
 
 // SkillCIConfig holds the platform settings of a skill-ci install: the
-// default SandboxProfile and the network policy of the trial sandboxes. The
+// default SandboxProfile, the network policy of the trial sandboxes, the
+// Hubble Relay of the network flows and the LLM judge. The
 // controller reads only the object named default in its own namespace and
 // applies a change to the runs it resolves afterwards, without a restart.
 // +kubebuilder:object:root=true
@@ -172,6 +278,7 @@ type SkillCIConfigStatus struct {
 // +kubebuilder:printcolumn:name="Default-Network",type=string,JSONPath=`.status.effective.network.default`
 // +kubebuilder:printcolumn:name="Enforcement",type=string,JSONPath=`.status.effective.network.enforcedBy`
 // +kubebuilder:printcolumn:name="Default-Profile",type=string,JSONPath=`.status.effective.defaultSandboxProfile`
+// +kubebuilder:printcolumn:name="Judge",type=string,JSONPath=`.status.effective.judge.provider`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type SkillCIConfig struct {

@@ -14,6 +14,11 @@
 #   CONTROLLER_CHART   chart to install (default oci://ghcr.io/dirien/charts/skill-ci-controller),
 #                      for example ./charts/skill-ci-controller to test an unreleased chart
 #   KUBECONFIG, KUBE_CONTEXT   as for kubectl (KUBE_CONTEXT selects a context for kubectl and helm)
+#   HUBBLE_RELAY       host:port of the Hubble Relay the runner reads network flows from (SkillCIConfig
+#                      spec.observability.hubbleRelay). Default: hubble-relay.kube-system.svc.cluster.local
+#                      with its Service port when Cilium with Hubble Relay is found (DOKS: port 80);
+#                      "off" collects no flows. It is set on the SkillCIConfig default only while that
+#                      field is empty, so a value you edited is kept.
 # Optional OpenTelemetry (OTLP) push of the controller's skillci_* metrics, off unless OTLP_ENDPOINT is set.
 # Each variable maps to one chart value and is passed only when set. Set them on every run: a run without
 # OTLP_ENDPOINT installs the chart without them, which turns the export off again.
@@ -72,6 +77,23 @@ otlp_set_args() {
   return 0
 }
 
+# hubble_relay prints the Hubble Relay address: HUBBLE_RELAY, or the Service hubble-relay in kube-system
+# when Cilium is installed, or nothing.
+hubble_relay() {
+  case "${HUBBLE_RELAY:-}" in
+    off) return 0 ;;
+    "") ;;
+    *)
+      printf '%s\n' "${HUBBLE_RELAY}"
+      return 0
+      ;;
+  esac
+  kc get crd ciliumnetworkpolicies.cilium.io >/dev/null 2>&1 || return 0
+  local port
+  port="$(kc -n kube-system get service hubble-relay -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || true)"
+  [[ -z "${port}" ]] || printf 'hubble-relay.kube-system.svc.cluster.local:%s\n' "${port}"
+}
+
 step_no=0
 step() {
   step_no=$((step_no + 1))
@@ -121,6 +143,12 @@ if [[ -n "${OTLP_HEADERS_SECRET:-}" ]] && ! kc -n "${ns}" get secret "${OTLP_HEA
 fi
 if [[ "${OTLP_ENDPOINT:-}" == *kps-kube-prometheus-stack-prometheus* && "${SKIP_MONITORING:-0}" != 1 ]]; then
   echo "warning: OTLP_ENDPOINT is the Prometheus that scrapes the controller already; every series would be stored twice" >&2
+fi
+relay="$(hubble_relay)"
+if [[ -n "${relay}" ]]; then
+  echo "hubble relay: ${relay} (network flows of the trials)"
+else
+  echo "hubble relay: none found, the trials' network flows are not collected (set HUBBLE_RELAY=host:port)"
 fi
 
 step "Namespaces"
@@ -225,9 +253,16 @@ hm upgrade --install skill-ci "${controller_chart}" ${chart_version[@]+"${chart_
   --set-string "image.tag=${SKILL_CI_VERSION}" \
   --set-string "controller.runnerImage.tag=${SKILL_CI_VERSION}" \
   --set-string "controller.sandboxImage.tag=${SKILL_CI_VERSION}" \
+  --set-string "config.observability.hubbleRelay=${relay}" \
   ${otlp_args[@]+"${otlp_args[@]}"} \
   --wait --timeout 5m
 kc -n "${ns}" get deployment skill-ci-controller
+# The chart creates the SkillCIConfig default only once; an older install has no relay yet.
+if [[ -n "${relay}" ]] && kc -n "${ns}" get skillciconfig default >/dev/null 2>&1 &&
+  [[ -z "$(kc -n "${ns}" get skillciconfig default -o jsonpath='{.spec.observability.hubbleRelay}')" ]]; then
+  kc -n "${ns}" patch skillciconfig default --type merge \
+    -p "{\"spec\":{\"observability\":{\"hubbleRelay\":\"${relay}\"}}}"
+fi
 
 step "Harbor setup Job (project skills, webhook policy)"
 kc -n "${ns}" delete job harbor-setup --ignore-not-found --wait=true

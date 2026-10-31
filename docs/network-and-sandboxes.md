@@ -16,13 +16,15 @@ metadata:
 
 | Mode | Trials can reach |
 | --- | --- |
-| `none` | DNS, the model API of the agent and the judge (`api.anthropic.com`; the Tier 3 verifier calls it from the trial pod) |
+| `none` | DNS, the model API of the agent and the judge's API (`api.anthropic.com` by default, see `spec.judge`; the Tier 3 verifier calls it from the trial pod) |
 | `allowlist` | the same, plus the listed domains and bundles, TCP 443 |
 | `full` (the default when the skill declares nothing) | the internet, never the cluster (no Harbor, no Kubernetes API) |
 
 The same policy applies to both arms of a run, with and without the skill. With Cilium the controller creates one `CiliumNetworkPolicy` per evaluation (`skillci-net-<run>`) and a baseline policy that leaves unclaimed warm sandboxes without egress. Without Cilium only `full` runs, through Agent Sandbox's own policy, and a skill that asks for `none` or `allowlist` fails before any Job with `network mode "none" needs Cilium`. Check for Cilium with `kubectl get crd ciliumnetworkpolicies.cilium.io`.
 
-The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o jsonpath='{.status.network}'` and on its page of the reporting site. If an agent cannot reach a host it needs, `hubble observe -n skill-ci --verdict DROPPED` shows the blocked lookups; add the domain or a bundle to `skillci.dev/network-allow`.
+The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o jsonpath='{.status.network}'` and on its page of the reporting site. With `spec.observability.hubbleRelay` set, the trial session of the reporting site shows the DNS names and connections of every trial, forwarded and dropped. Without it, `hubble observe -n skill-ci --verdict DROPPED` shows the blocked lookups. Add the domain or a bundle to `skillci.dev/network-allow`.
+
+Only trial pods are restricted. Neither policy of skill-ci selects the runner pod of a Job (the baseline selects `skillci.dev/component: trial-sandbox`, the eval policy `sandbox.users.io/skillci-eval` and `sandbox.users.io/skillci-role: trial`, labels the runner pod does not carry), and the chart creates no NetworkPolicy, so the runner reaches Harbor, the LLM APIs and Hubble Relay on any cluster that has no default-deny policy of its own. A cluster that has one must allow the runner pods (label `batch.kubernetes.io/job-name`, ServiceAccount `skill-eval-runner`) those destinations.
 
 ## SkillCIConfig
 
@@ -37,6 +39,8 @@ The effective hosts of a run are in `kubectl -n skill-ci get skilleval <name> -o
 | `spec.network.alwaysAllow` | empty | Hosts added to `none` and `allowlist`, for example a proxy |
 | `spec.network.bundles` | `@apt`, `@github`, `@node`, `@python` | Named host lists a skill can use in `skillci.dev/network-allow` |
 | `spec.network.agentInstallHosts` | `[registry.npmjs.org]` | Hosts added for an agent version that is not preinstalled |
+| `spec.observability.hubbleRelay` | empty | `host:port` of the Hubble Relay the runner reads network flows from; empty collects none. See [Observability](observability.md#network-flows) |
+| `spec.judge` | `{provider: anthropic, secretKey: anthropic}` | The LLM judge of every run and its key in `llm-keys`. See [Agents and models](agents-and-models.md#the-judge) |
 
 The controller reads the object whenever it resolves a `Pending` run, so an edit applies to the next run without a restart. A run that is already running keeps its settings. An invalid edit leaves `Ready` `False` with the reason, and the controller keeps the last valid spec (or the built-in defaults after a restart).
 

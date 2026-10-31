@@ -172,6 +172,29 @@ func TestResolve(t *testing.T) {
 			message: `no model API host is known for agent "opencode" with model "mistral/large", so it cannot run with network none or allowlist`,
 		},
 		{
+			name: "an openai judge replaces the anthropic judge host",
+			in: Input{Spec: spec("none"), Entry: Entry{Agent: "codex", Model: "openai/gpt-6.1-sol"},
+				Judge: Judge{Provider: "openai", SecretKey: "openai"}, CiliumCRD: true},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.openai.com"}},
+		},
+		{
+			name: "an openai judge without baseURL follows openai-base-url",
+			in: Input{Spec: spec("none"), Entry: claude, Judge: Judge{Provider: "openai"},
+				OpenAIBaseURL: "https://gateway.example.com/v1", CiliumCRD: true},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "gateway.example.com"}},
+		},
+		{
+			name: "an openai-compatible judge allows the host of its baseURL",
+			in: Input{Spec: spec("allowlist", "@node"), Entry: claude,
+				Judge: Judge{Provider: "openai-compatible", BaseURL: "https://LLM.example.com:8443/v1"}, CiliumCRD: true},
+			want: Effective{Mode: "allowlist", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "llm.example.com", "registry.npmjs.org"}},
+		},
+		{
+			name: "an nv_build judge allows integrate.api.nvidia.com",
+			in:   Input{Spec: spec("none"), Entry: claude, Judge: Judge{Provider: "nv_build"}, CiliumCRD: true},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "integrate.api.nvidia.com"}},
+		},
+		{
 			name: "an unknown model provider runs with full",
 			in:   Input{Spec: spec("full"), Entry: Entry{Agent: "opencode", Model: "mistral/large"}, CiliumCRD: true},
 			want: Effective{Mode: "full", Source: "skill", Cilium: true},

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"time"
 
@@ -87,10 +88,14 @@ func (h *Handler) handle(ctx context.Context, p Payload) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("reading the platform settings: %w", err)
 	}
+	c := h.Client
+	if by := PushedBy(p); by != "" {
+		c = annotatingClient{Client: h.Client, annotations: map[string]string{v1alpha1.AnnotationPushedBy: by}}
+	}
 	created := 0
 	for _, push := range pushes {
 		for _, m := range list {
-			ok, err := evals.Ensure(ctx, h.Client, h.Namespace, evals.Request{
+			ok, err := evals.Ensure(ctx, c, h.Namespace, evals.Request{
 				Skill: push.Skill, Version: push.Version, Digest: push.Digest,
 				Model: m, Attempts: h.Attempts, Trigger: v1alpha1.TriggerPush,
 				DefaultSandboxProfile: settings.DefaultSandboxProfile,
@@ -104,6 +109,29 @@ func (h *Handler) handle(ctx context.Context, p Payload) (int, error) {
 		}
 	}
 	return created, nil
+}
+
+// annotatingClient adds annotations to every SkillEval it creates, so the
+// object is created with them in one write.
+type annotatingClient struct {
+	client.Client
+	annotations map[string]string
+}
+
+// Create adds the annotations to a SkillEval and creates the object.
+func (c annotatingClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	if se, ok := obj.(*v1alpha1.SkillEval); ok {
+		a := se.GetAnnotations()
+		if a == nil {
+			a = map[string]string{}
+		}
+		maps.Copy(a, c.annotations)
+		se.SetAnnotations(a)
+	}
+	if err := c.Client.Create(ctx, obj, opts...); err != nil {
+		return fmt.Errorf("creating %s: %w", obj.GetName(), err)
+	}
+	return nil
 }
 
 func (h *Handler) authorized(r *http.Request) bool {

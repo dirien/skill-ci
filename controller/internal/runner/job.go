@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/network"
 )
 
 // SafeToEvictAnnotation tells the cluster autoscaler not to evict a pod during scale-down.
@@ -24,6 +25,8 @@ const (
 	// ServiceAccount is the account the runner Job uses to create Sandboxes.
 	ServiceAccount = "skill-eval-runner"
 	authMount      = "/auth"
+	// llmKeysSecret holds the model and judge API keys.
+	llmKeysSecret = "llm-keys"
 )
 
 // llmKey maps an entry of the llm-keys Secret to an environment variable.
@@ -36,13 +39,15 @@ type llmKey struct {
 	Optional bool
 }
 
-// LLMKeys are the llm-keys entries every runner Job receives. anthropic is
-// required: it is the judge whatever agent runs. The others are optional and
-// only matter for the agent under test: openai (and openai-base-url) for
-// Codex and for Tier 2 embeddings; ollama, openrouter and nvidia for OpenCode
-// models that live there (ollama-cloud/..., openrouter/..., nvidia/...).
+// LLMKeys are the llm-keys entries every runner Job receives, all optional
+// here. NewJob makes anthropic required when the agent's route is Anthropic
+// (claude-code, opencode anthropic/...); the judge's own key is
+// SKILL_EVAL_LLM_API_KEY, which is always required. openai (and
+// openai-base-url) serve Codex and Tier 2 embeddings; ollama, openrouter and
+// nvidia serve OpenCode models that live there (ollama-cloud/...,
+// openrouter/..., nvidia/...).
 var LLMKeys = []llmKey{
-	{"ANTHROPIC_API_KEY", "anthropic", false},
+	{"ANTHROPIC_API_KEY", "anthropic", true},
 	{"OPENAI_API_KEY", "openai", true},
 	{"OPENAI_BASE_URL", "openai-base-url", true},
 	{"NVIDIA_API_KEY", "nvidia", true},
@@ -64,6 +69,13 @@ type Config struct {
 	// ImagePullSecrets name the Secrets that pull the runner image and, as SANDBOX_PULL_SECRETS,
 	// the sandbox image. None by default: the images are public.
 	ImagePullSecrets []string
+	// HubbleServer is the Hubble Relay (host:port) the runner reads network
+	// flows from, the SkillCIConfig spec.observability.hubbleRelay in force
+	// when the Job is created; empty sets no HUBBLE_SERVER.
+	HubbleServer string
+	// Judge is the LLM judge of the run, the SkillCIConfig spec.judge in force
+	// when the Job is created; the zero value is the default judge (Anthropic).
+	Judge network.Judge
 }
 
 // ParsePullSecrets splits a comma separated list of Secret names, as the --image-pull-secrets
@@ -123,6 +135,11 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 		{Name: "ATTEMPTS", Value: strconv.Itoa(se.Spec.Attempts)},
 		// The runner labels its trial pods with it, which the eval's network policy selects.
 		{Name: "SKILLEVAL_NAME", Value: se.Name},
+		// Written into the trial bundle index.
+		{Name: "SKILL_VERSION", Value: se.Spec.Version},
+	}
+	if cfg.HubbleServer != "" { // without it the runner collects no network flows
+		env = append(env, corev1.EnvVar{Name: "HUBBLE_SERVER", Value: cfg.HubbleServer})
 	}
 	if se.Status.WarmPool != "" { // without it the runner starts a bare Sandbox per trial
 		env = append(env, corev1.EnvVar{Name: "SANDBOX_WARM_POOL", Value: se.Status.WarmPool})
@@ -137,12 +154,10 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 		env = append(env, corev1.EnvVar{Name: "SANDBOX_PULL_SECRETS", Value: strings.Join(cfg.ImagePullSecrets, ",")})
 	}
 	for _, k := range LLMKeys {
-		env = append(env, corev1.EnvVar{Name: k.Env, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			Name:     "llm-keys",
-			Key:      k.Key,
-			Optional: new(k.Optional),
-		}}})
+		optional := k.Optional && (k.Key != "anthropic" || !anthropicRoute(se))
+		env = append(env, secretEnv(k.Env, k.Key, optional))
 	}
+	env = append(env, JudgeEnv(cfg.Judge)...)
 	labels := map[string]string{
 		v1alpha1.LabelSkill:  se.Labels[v1alpha1.LabelSkill],
 		v1alpha1.LabelDigest: se.Labels[v1alpha1.LabelDigest],
@@ -194,4 +209,36 @@ func NewJob(se *v1alpha1.SkillEval, cfg Config) *batchv1.Job {
 			},
 		},
 	}
+}
+
+// secretEnv is an environment variable from a key of the llm-keys Secret.
+func secretEnv(name, key string, optional bool) corev1.EnvVar {
+	return corev1.EnvVar{Name: name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: llmKeysSecret},
+		Key:                  key,
+		Optional:             new(optional),
+	}}}
+}
+
+// anthropicRoute reports whether the agent under test talks to Anthropic, so
+// the Job cannot run without llm-keys anthropic.
+func anthropicRoute(se *v1alpha1.SkillEval) bool {
+	return se.Spec.Agent == "claude-code" || (se.Spec.Agent == "opencode" && strings.HasPrefix(se.Spec.Model, "anthropic/"))
+}
+
+// JudgeEnv returns the judge's environment variables: SKILL_EVAL_LLM_PROVIDER,
+// SKILL_EVAL_LLM_MODEL and SKILL_EVAL_LLM_BASE_URL (each only when set; the
+// provider is always set) and SKILL_EVAL_LLM_API_KEY from llm-keys/<secretKey>,
+// required, so a Job whose judge key is missing does not start. SkillEvaluator
+// treats an empty SKILL_EVAL_LLM_MODEL as an error, so an unset model leaves
+// the variable out.
+func JudgeEnv(j network.Judge) []corev1.EnvVar {
+	env := []corev1.EnvVar{{Name: "SKILL_EVAL_LLM_PROVIDER", Value: j.ProviderName()}}
+	if j.Model != "" {
+		env = append(env, corev1.EnvVar{Name: "SKILL_EVAL_LLM_MODEL", Value: j.Model})
+	}
+	if j.BaseURL != "" {
+		env = append(env, corev1.EnvVar{Name: "SKILL_EVAL_LLM_BASE_URL", Value: j.BaseURL})
+	}
+	return append(env, secretEnv("SKILL_EVAL_LLM_API_KEY", j.Key(), false))
 }

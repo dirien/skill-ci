@@ -26,6 +26,9 @@ spec:
     - jsonPath: .status.effective.defaultSandboxProfile
       name: Default-Profile
       type: string
+    - jsonPath: .status.effective.judge.provider
+      name: Judge
+      type: string
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
@@ -37,7 +40,8 @@ spec:
       openAPIV3Schema:
         description: |-
           SkillCIConfig holds the platform settings of a skill-ci install: the
-          default SandboxProfile and the network policy of the trial sandboxes. The
+          default SandboxProfile, the network policy of the trial sandboxes, the
+          Hubble Relay of the network flows and the LLM judge. The
           controller reads only the object named default in its own namespace and
           applies a change to the runs it resolves afterwards, without a restart.
         properties:
@@ -72,6 +76,53 @@ spec:
                 minLength: 1
                 pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
+              judge:
+                default: {}
+                description: 'Judge is the LLM judge of every run (default: anthropic,
+                  its key in llm-keys anthropic).'
+                properties:
+                  baseURL:
+                    description: |-
+                      BaseURL is the API root of the judge, an http or https URL without
+                      credentials, query or fragment. Required for openai-compatible, optional
+                      for anthropic and openai, not used by nv_build.
+                    maxLength: 2048
+                    pattern: ^$|^https?://[^\s?#@]+$
+                    type: string
+                  model:
+                    description: Model is the judge model; empty means SkillEvaluator's
+                      default for the provider.
+                    maxLength: 256
+                    pattern: ^$|^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$
+                    type: string
+                  provider:
+                    default: anthropic
+                    description: |-
+                      Provider is the judge's API: anthropic (default), openai,
+                      openai-compatible (needs baseURL) or nv_build.
+                    enum:
+                    - anthropic
+                    - openai
+                    - openai-compatible
+                    - nv_build
+                    type: string
+                  secretKey:
+                    default: anthropic
+                    description: SecretKey is the key of the llm-keys Secret that
+                      holds the judge's API key.
+                    maxLength: 253
+                    minLength: 1
+                    pattern: ^[-._a-zA-Z0-9]+$
+                    type: string
+                type: object
+                x-kubernetes-validations:
+                - message: judge.baseURL is required for provider openai-compatible
+                  rule: '!has(self.provider) || self.provider != ''openai-compatible''
+                    || (has(self.baseURL) && size(self.baseURL) > 0)'
+                - message: judge.baseURL is used only with the providers anthropic,
+                    openai and openai-compatible
+                  rule: '!has(self.provider) || self.provider != ''nv_build'' || !has(self.baseURL)
+                    || size(self.baseURL) == 0'
               network:
                 default: {}
                 description: Network is the network policy of the trial sandboxes.
@@ -185,6 +236,22 @@ spec:
                 - message: network.default must be one of network.modes
                   rule: '!has(self.modes) || !has(self.default) || self.default in
                     self.modes'
+              observability:
+                default: {}
+                description: Observability says where the runner reads network flows.
+                properties:
+                  hubbleRelay:
+                    default: ""
+                    description: |-
+                      HubbleRelay is host:port of a Hubble Relay the runner pods can reach,
+                      for example hubble-relay.kube-system.svc.cluster.local:80: a hostname
+                      or IP and a port from 1 to 65535, no scheme. The controller passes it
+                      to new runner Jobs as HUBBLE_SERVER. Empty (the default) collects no
+                      network flows.
+                    maxLength: 255
+                    pattern: ^$|^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*|\[[0-9a-fA-F:.]+\]):[0-9]{1,5}$
+                    type: string
+                type: object
             type: object
           status:
             description: SkillCIConfigStatus is the observed state of a SkillCIConfig.
@@ -263,6 +330,29 @@ spec:
                       zero for BuiltIn.
                     format: int64
                     type: integer
+                  judge:
+                    description: Judge is the judge in force.
+                    properties:
+                      baseURL:
+                        description: BaseURL is the judge's API root; empty means
+                          the provider's default.
+                        type: string
+                      host:
+                        description: Host is the judge host allowed in the network
+                          modes none and allowlist.
+                        type: string
+                      model:
+                        description: Model is the judge model; empty means SkillEvaluator's
+                          default.
+                        type: string
+                      provider:
+                        description: Provider is the judge's API.
+                        type: string
+                      secretKey:
+                        description: SecretKey is the llm-keys key of the judge's
+                          API key.
+                        type: string
+                    type: object
                   network:
                     description: Network is the network policy in force.
                     properties:
@@ -304,6 +394,14 @@ spec:
                           type: string
                         type: array
                         x-kubernetes-list-type: atomic
+                    type: object
+                  observability:
+                    description: Observability is the observability setting in force.
+                    properties:
+                      hubbleRelay:
+                        description: HubbleRelay is the HUBBLE_SERVER of new runner
+                          Jobs; empty collects no flows.
+                        type: string
                     type: object
                   source:
                     description: |-

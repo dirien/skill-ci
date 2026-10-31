@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"maps"
 	"reflect"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/dirien/skill-ci/controller/api/v1alpha1"
+	"github.com/dirien/skill-ci/controller/internal/network"
 )
 
 func TestParseResult(t *testing.T) {
@@ -206,7 +208,8 @@ func TestNewJob(t *testing.T) {
 	}
 	wantPlain := map[string]string{
 		"SKILL_REF": "harbor.harbor.svc.cluster.local/skills/acme@sha256:abc", "SKILL_NAME": "acme",
-		"AGENT": "claude-code", "MODEL": "haiku", "ATTEMPTS": "3",
+		"AGENT": "claude-code", "MODEL": "haiku", "ATTEMPTS": "3", "SKILL_VERSION": "v1.0.0",
+		"SKILL_EVAL_LLM_PROVIDER": "anthropic",
 	}
 	for k, v := range wantPlain {
 		if plain[k] != v {
@@ -438,26 +441,127 @@ func TestJobAgentVersion(t *testing.T) {
 }
 
 func TestJobPassesTheLLMKeys(t *testing.T) {
-	_, secrets := jobEnv(t, &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: "opencode", Model: "m", Attempts: 1}})
-	want := map[string]struct {
+	type ref struct {
 		key      string
 		optional bool
-	}{
-		"ANTHROPIC_API_KEY":  {"anthropic", false},
+	}
+	optionalKeys := map[string]ref{
 		"OPENAI_API_KEY":     {"openai", true},
 		"OPENAI_BASE_URL":    {"openai-base-url", true},
 		"NVIDIA_API_KEY":     {"nvidia", true},
 		"OLLAMA_API_KEY":     {"ollama", true},
 		"OPENROUTER_API_KEY": {"openrouter", true},
 	}
-	if len(secrets) != len(want) {
-		t.Errorf("got %d secret variables, want %d: %v", len(secrets), len(want), secrets)
+	tests := []struct {
+		name         string
+		agent, model string
+		judge        network.Judge
+		anthropic    ref
+		judgeKey     ref
+	}{
+		{name: "claude-code needs the anthropic key", agent: "claude-code", model: "claude-haiku-5-5",
+			anthropic: ref{"anthropic", false}, judgeKey: ref{"anthropic", false}},
+		{name: "opencode anthropic model needs it too", agent: "opencode", model: "anthropic/claude-haiku-5-5",
+			anthropic: ref{"anthropic", false}, judgeKey: ref{"anthropic", false}},
+		{name: "codex with the default judge", agent: "codex", model: "openai/gpt-6.1-sol",
+			anthropic: ref{"anthropic", true}, judgeKey: ref{"anthropic", false}},
+		{name: "opencode gateway model with an openai judge", agent: "opencode", model: "ollama-cloud/gpt-oss:120b",
+			judge:     network.Judge{Provider: "openai", SecretKey: "openai"},
+			anthropic: ref{"anthropic", true}, judgeKey: ref{"openai", false}},
 	}
-	for env, w := range want {
-		s, ok := secrets[env]
-		if !ok || s.Name != "llm-keys" || s.Key != w.key || *s.Optional != w.optional {
-			t.Errorf("%s = %+v, want llm-keys/%s optional=%v", env, s, w.key, w.optional)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: tt.agent, Model: tt.model, Attempts: 1}}
+			job := NewJob(se, Config{Image: "runner:1", Judge: tt.judge})
+			secrets := map[string]corev1.SecretKeySelector{}
+			for _, e := range job.Spec.Template.Spec.Containers[0].Env {
+				if e.ValueFrom != nil {
+					secrets[e.Name] = *e.ValueFrom.SecretKeyRef
+				}
+			}
+			want := maps.Clone(optionalKeys)
+			want["ANTHROPIC_API_KEY"], want["SKILL_EVAL_LLM_API_KEY"] = tt.anthropic, tt.judgeKey
+			if len(secrets) != len(want) {
+				t.Errorf("got %d secret variables, want %d: %v", len(secrets), len(want), secrets)
+			}
+			for env, w := range want {
+				s, ok := secrets[env]
+				if !ok || s.Name != "llm-keys" || s.Key != w.key || *s.Optional != w.optional {
+					t.Errorf("%s = %+v, want llm-keys/%s optional=%v", env, s, w.key, w.optional)
+				}
+			}
+		})
+	}
+}
+
+func TestJobJudgeEnv(t *testing.T) {
+	tests := []struct {
+		name  string
+		judge network.Judge
+		want  map[string]string // "" means absent
+		key   string
+	}{
+		{name: "zero value is the default judge", key: "anthropic",
+			want: map[string]string{"SKILL_EVAL_LLM_PROVIDER": "anthropic", "SKILL_EVAL_LLM_MODEL": "", "SKILL_EVAL_LLM_BASE_URL": ""}},
+		{name: "anthropic with a model", judge: network.Judge{Provider: "anthropic", Model: "claude-opus-5-5", SecretKey: "anthropic"}, key: "anthropic",
+			want: map[string]string{"SKILL_EVAL_LLM_PROVIDER": "anthropic", "SKILL_EVAL_LLM_MODEL": "claude-opus-5-5", "SKILL_EVAL_LLM_BASE_URL": ""}},
+		{name: "openai-compatible gateway", key: "judge",
+			judge: network.Judge{Provider: "openai-compatible", Model: "gpt-oss-120b", BaseURL: "https://llm.example.com/v1", SecretKey: "judge"},
+			want: map[string]string{"SKILL_EVAL_LLM_PROVIDER": "openai-compatible", "SKILL_EVAL_LLM_MODEL": "gpt-oss-120b",
+				"SKILL_EVAL_LLM_BASE_URL": "https://llm.example.com/v1"}},
+		{name: "nv_build", judge: network.Judge{Provider: "nv_build", SecretKey: "nvidia"}, key: "nvidia",
+			want: map[string]string{"SKILL_EVAL_LLM_PROVIDER": "nv_build", "SKILL_EVAL_LLM_MODEL": "", "SKILL_EVAL_LLM_BASE_URL": ""}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Agent: "claude-code", Model: "m", Attempts: 1}}
+			plain, secrets := map[string]string{}, map[string]corev1.SecretKeySelector{}
+			for _, e := range NewJob(se, Config{Judge: tt.judge}).Spec.Template.Spec.Containers[0].Env {
+				if e.ValueFrom != nil {
+					secrets[e.Name] = *e.ValueFrom.SecretKeyRef
+				} else {
+					plain[e.Name] = e.Value
+				}
+			}
+			for name, want := range tt.want {
+				got, present := plain[name]
+				if got != want || present != (want != "") {
+					t.Errorf("%s = %q (set: %v), want %q", name, got, present, want)
+				}
+			}
+			if s := secrets["SKILL_EVAL_LLM_API_KEY"]; s.Name != "llm-keys" || s.Key != tt.key || *s.Optional {
+				t.Errorf("SKILL_EVAL_LLM_API_KEY = %+v, want llm-keys/%s required", s, tt.key)
+			}
+		})
+	}
+}
+
+func TestJobHubbleServerAndSkillVersion(t *testing.T) {
+	tests := []struct {
+		name   string
+		hubble string
+		want   map[string]string // "" means absent
+	}{
+		{name: "no relay sets no HUBBLE_SERVER", want: map[string]string{"HUBBLE_SERVER": "", "SKILL_VERSION": "v1.1.0"}},
+		{name: "relay of the SkillCIConfig", hubble: "hubble-relay.kube-system.svc.cluster.local:80",
+			want: map[string]string{"HUBBLE_SERVER": "hubble-relay.kube-system.svc.cluster.local:80", "SKILL_VERSION": "v1.1.0"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			se := &v1alpha1.SkillEval{Name: "x", Spec: v1alpha1.SkillEvalSpec{Skill: "a", Version: "v1.1.0", Agent: "claude-code", Model: "m", Attempts: 1}}
+			plain := map[string]string{}
+			for _, e := range NewJob(se, Config{HubbleServer: tt.hubble}).Spec.Template.Spec.Containers[0].Env {
+				if e.ValueFrom == nil {
+					plain[e.Name] = e.Value
+				}
+			}
+			for name, want := range tt.want {
+				got, present := plain[name]
+				if got != want || present != (want != "") {
+					t.Errorf("%s = %q (set: %v), want %q", name, got, present, want)
+				}
+			}
+		})
 	}
 }
 
@@ -524,5 +628,32 @@ func TestParseResultErrorKeepsTheGate(t *testing.T) {
 				t.Fatalf("got tiers %+v findings %v", res.Tiers, res.Findings)
 			}
 		})
+	}
+}
+
+// TestRunnerPodsHaveNoEgressPolicy shows that neither network policy of
+// skill-ci selects the runner pod, so it reaches Harbor, the LLM APIs and the
+// Hubble Relay on any cluster; only trial pods are restricted.
+func TestRunnerPodsHaveNoEgressPolicy(t *testing.T) {
+	se := &v1alpha1.SkillEval{Name: "acme-v1-0-0-haiku", Namespace: "skill-ci",
+		Labels: map[string]string{v1alpha1.LabelSkill: "acme", v1alpha1.LabelDigest: "abc", v1alpha1.LabelModel: "haiku", v1alpha1.LabelAgent: "claude-code"},
+		Spec:   v1alpha1.SkillEvalSpec{Skill: "acme", Agent: "claude-code", Model: "haiku", Attempts: 1}}
+	podLabels := NewJob(se, Config{}).Spec.Template.Labels
+	policies := map[string]map[string]any{
+		"baseline": network.BaselinePolicy("skill-ci").Object,
+		"eval":     network.EvalPolicy("skill-ci", se.Name, network.Effective{Mode: v1alpha1.NetworkNone, Hosts: []string{"api.anthropic.com"}}).Object,
+	}
+	for name, obj := range policies {
+		sel, ok := obj["spec"].(map[string]any)["endpointSelector"].(map[string]any)["matchLabels"].(map[string]any)
+		if !ok || len(sel) == 0 {
+			t.Fatalf("%s policy has no matchLabels", name)
+		}
+		selected := true
+		for k, v := range sel {
+			selected = selected && podLabels[k] == v
+		}
+		if selected {
+			t.Errorf("the %s policy %v selects the runner pod %v", name, sel, podLabels)
+		}
 	}
 }

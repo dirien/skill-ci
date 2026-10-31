@@ -222,3 +222,91 @@ func TestHandlerDefaultProfileFromConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestPushedBy(t *testing.T) {
+	tests := []struct {
+		name, operator, want string
+	}{
+		{"harbor user", "admin", "admin"},
+		{"trimmed", "  robot$skills+ci  ", "robot$skills+ci"},
+		{"absent", "", ""},
+		{"blank", "   ", ""},
+		{"at the limit", strings.Repeat("a", 253), strings.Repeat("a", 253)},
+		{"too long is dropped", strings.Repeat("a", 254), ""},
+		{"control characters are dropped", "ad\nmin", ""},
+		{"invalid UTF-8 is dropped", "ad\xffmin", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PushedBy(Payload{Operator: tt.operator}); got != tt.want {
+				t.Errorf("PushedBy(%q) = %q, want %q", tt.operator, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandlerRecordsPushedBy(t *testing.T) {
+	tests := []struct {
+		name, operator string
+		want           string // "" means no annotation
+	}{
+		{"operator becomes the annotation", "dirien", "dirien"},
+		{"no operator, no annotation", "", ""},
+		{"an operator that is too long is dropped", strings.Repeat("x", 300), ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, c := newHandler(t, "")
+			p := payload("PUSH_ARTIFACT", "skills/acme", "v1.0.0")
+			p.Operator = tt.operator
+			if rec := post(h, "", p); rec.Code != http.StatusOK {
+				t.Fatalf("status %d", rec.Code)
+			}
+			var list v1alpha1.SkillEvalList
+			if err := c.List(context.Background(), &list, client.InNamespace("skill-ci")); err != nil {
+				t.Fatal(err)
+			}
+			if len(list.Items) != 2 {
+				t.Fatalf("%d skillevals, want 2", len(list.Items))
+			}
+			for _, se := range list.Items {
+				got, ok := se.Annotations[v1alpha1.AnnotationPushedBy]
+				if got != tt.want || ok != (tt.want != "") {
+					t.Errorf("%s: %s = %q (set: %v), want %q", se.Name, v1alpha1.AnnotationPushedBy, got, ok, tt.want)
+				}
+			}
+			// A Harbor retry by another user changes nothing: dedupe keeps the first SkillEvals.
+			p.Operator = "someone-else"
+			post(h, "", p)
+			if got := count(t, c); got != 2 {
+				t.Errorf("after the retry: %d skillevals, want 2", got)
+			}
+		})
+	}
+}
+
+func TestDecideRealPayloadOperator(t *testing.T) {
+	raw := `{"type":"PUSH_ARTIFACT","occur_at":1,"operator":"admin","event_data":{"resources":[{"digest":"` + digestA + `","tag":"v1.0.0"}],"repository":{"name":"acme","namespace":"skills","repo_full_name":"skills/acme"}}}`
+	var p Payload
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatal(err)
+	}
+	if got := PushedBy(p); got != "admin" {
+		t.Errorf("PushedBy() = %q, want admin", got)
+	}
+}
+
+func TestHandlerPushedByKeepsAlreadyExists(t *testing.T) {
+	// An object of the same name without the dedupe labels makes Create fail
+	// with AlreadyExists, which the annotating client must pass through.
+	existing := &v1alpha1.SkillEval{ObjectMeta: metav1.ObjectMeta{Name: "acme-v1-0-0-claude-code-claude-haiku-5-5", Namespace: "skill-ci"}}
+	h, c := newHandler(t, "", existing)
+	p := payload("PUSH_ARTIFACT", "skills/acme", "v1.0.0")
+	p.Operator = "dirien"
+	if rec := post(h, "", p); rec.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200: AlreadyExists is not an error", rec.Code)
+	}
+	if got := count(t, c); got != 2 {
+		t.Errorf("%d skillevals, want 2", got)
+	}
+}

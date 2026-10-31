@@ -52,7 +52,7 @@ Changing `required` on an existing entry updates `spec.required` of its existing
 
 ## Models per agent and LLM keys
 
-The judge that scores every run is always Anthropic, whatever agent runs. That is why `anthropic` is the only required key in the Secret `llm-keys`. SkillEvaluator hands the agent only the credentials of its own route, never the judge key.
+Each agent needs the key of its own route, and the judge (see [The judge](#the-judge)) needs its key, Anthropic's `anthropic` by default. SkillEvaluator hands the agent the credentials of its own route: under a judge of the agent's own provider (Claude Code under `anthropic`, Codex under `openai`) that is the judge's key and endpoint, under any other judge the agent never sees the judge's key.
 
 | Agent | `model` | Provider route |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ The keys of `llm-keys`:
 
 | Key | Needed for |
 | --- | --- |
-| `anthropic` | Required: the judge, Claude Code, OpenCode `anthropic/...` models |
+| `anthropic` | The default judge, Claude Code, OpenCode `anthropic/...` models. Required for those; a Job of such an agent does not start without it |
 | `openai` | Codex, Tier 2 embeddings |
 | `openai-base-url` | Codex against a compatible endpoint; defaults to `https://api.openai.com/v1` |
 | `openrouter` | OpenCode `openrouter/...` models. An API key, not a provisioning key: the runner fails the run when it gets one |
@@ -78,6 +78,51 @@ kubectl -n skill-ci create secret generic llm-keys --from-literal=anthropic="$AN
 ```
 
 An optional entry whose key is missing fails that run before any work and, being optional, never gates, so with only an Anthropic key the Claude Code entry still decides. OpenCode models other than `anthropic/...` use the OpenAI-compatible gateway route that patch hunks 6 and 8 to 12 open. The routes and the checks are in [CONTRACT.md](../CONTRACT.md), "Agent versions" and "LLM keys".
+
+## The judge
+
+An LLM judge scores every trial, whatever agent is under test. It is a platform setting: `spec.judge` of the `SkillCIConfig` `default`, seeded by the chart value `config.judge`.
+
+```yaml
+spec:
+  judge:
+    provider: anthropic     # anthropic | openai | openai-compatible | nv_build
+    model: ""               # empty: SkillEvaluator's default model of the provider
+    baseURL: ""             # API root; required for openai-compatible
+    secretKey: anthropic    # the key of llm-keys that holds the judge's API key
+```
+
+The default is Anthropic with the key `anthropic`, so an install that sets nothing scores as before. The controller passes the judge in force to every new runner Job: `SKILL_EVAL_LLM_PROVIDER`, `SKILL_EVAL_LLM_MODEL` and `SKILL_EVAL_LLM_BASE_URL` (the last two only when set, since SkillEvaluator rejects an empty model) and `SKILL_EVAL_LLM_API_KEY` from `llm-keys/<secretKey>`. That key is required: a Job whose judge key is missing does not start. An edit applies to runs that start after it, without a restart. The `Ready` condition of the `SkillCIConfig` and `status.effective.judge` show the judge in force; an invalid judge (an unknown provider, `openai-compatible` without `baseURL`, a `baseURL` with credentials or a query) leaves `Ready` `False` and keeps the last valid spec.
+
+| `provider` | Endpoint | Host allowed with network `none` and `allowlist` |
+| --- | --- | --- |
+| `anthropic` | The Anthropic Messages API, or `baseURL` (an API root such as a proxy) | `api.anthropic.com`, or the host of `baseURL` |
+| `openai` | `https://api.openai.com/v1`, or `llm-keys` `openai-base-url`, or `baseURL` | The host of `baseURL`, else of `openai-base-url`, else `api.openai.com` |
+| `openai-compatible` | Any OpenAI-compatible endpoint at `baseURL` (required) | The host of `baseURL` |
+| `nv_build` | NVIDIA Build (`baseURL` is not allowed) | `integrate.api.nvidia.com` |
+
+SkillEvaluator stages the judge's credentials into the Harbor verifier, which runs inside the trial pod, so the judge's host is allowed in the network modes `none` and `allowlist` next to the agent's model host.
+
+The runner hands `SKILL_EVAL_LLM_API_KEY` to SkillEvaluator under the variable the provider reads (`ANTHROPIC_API_KEY` or `NVIDIA_API_KEY` when that is unset; `openai` and `openai-compatible` read it directly), and it accepts only these agent and judge combinations:
+
+| Agent | Judge providers |
+| --- | --- |
+| `claude-code` | `anthropic`, `openai`, `openai-compatible`, `nv_build` |
+| `codex` | `anthropic`, `openai`, `nv_build` |
+| `opencode` | `anthropic` |
+
+The controller checks the combination before it creates a Job: a run whose agent the judge cannot score ends `Failed` with `judge provider "<p>" cannot score agent "<a>"` and no Job. SkillEvaluator also knows `bedrock`; skill-ci does not offer it, because no agent of the runner can be scored with it and its host depends on the runner's AWS region.
+
+A judge on another provider, with its key in `llm-keys` under the name `gateway`:
+
+```bash
+kubectl -n skill-ci patch secret llm-keys --type merge -p '{"stringData":{"gateway":"<key>"}}'
+kubectl -n skill-ci patch scc default --type merge \
+  -p '{"spec":{"judge":{"provider":"openai-compatible","baseURL":"https://llm.example.com/v1","model":"<model>","secretKey":"gateway"}}}'
+kubectl -n skill-ci get scc default -o jsonpath='{.status.effective.judge}'
+```
+
+Scores from different judges are not comparable. Changing the judge does not evaluate the digests again, and the regression gate compares a candidate with a stable version that a different judge may have scored, so change it between releases of your skills, not in the middle of one.
 
 ## Upgrading from 0.5
 

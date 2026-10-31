@@ -1,7 +1,8 @@
-# The platform settings of the controller (CONTRACT.md "SkillCIConfig"): the default SandboxProfile and
-# the network policy of the trial sandboxes. The controller reads only the object named default in its
-# namespace, whenever it resolves a run, so a change applies without a restart. These are the built-in
-# defaults; fields left out get the same values from the CRD.
+# The platform settings of the controller (CONTRACT.md "SkillCIConfig"): the default SandboxProfile, the
+# network policy of the trial sandboxes, the Hubble Relay of the network flows and the LLM judge. The
+# controller reads only the object named default in its namespace, whenever it resolves a run, so a change
+# applies without a restart. These are the built-in defaults; fields left out get the same values from the
+# CRD.
 apiVersion: skillci.dev/v1alpha1
 kind: SkillCIConfig
 metadata:
@@ -20,3 +21,12 @@ spec:
       node: [registry.npmjs.org]
       python: [pypi.org, files.pythonhosted.org]
     agentInstallHosts: [registry.npmjs.org]
+  observability:
+    # host:port of Hubble Relay (HUBBLE_SERVER of runner Jobs); empty collects no network flows. On Cilium
+    # with Hubble Relay (DOKS): hubble-relay.kube-system.svc.cluster.local:80
+    hubbleRelay: ""
+  judge:
+    provider: anthropic   # anthropic | openai | openai-compatible | nv_build
+    model: ""             # empty: SkillEvaluator's default model of the provider
+    baseURL: ""           # required for openai-compatible
+    secretKey: anthropic  # the llm-keys key with the judge's API key

@@ -67,8 +67,33 @@ func TestSkillCIConfigReconciler(t *testing.T) {
 		{
 			name: "valid with Cilium", obj: skillCIConfig("default", netSpec("none", []string{"none", "allowlist"}, "")), crds: allCRDs,
 			wantStatus: metav1.ConditionTrue, wantReason: ReasonConfigApplied,
-			wantMsg:    "applied: default network none, allowed modes none, allowlist, enforcement auto (cilium), bundles @apt, @github, @node, @python, default sandbox profile default",
+			wantMsg: "applied: default network none, allowed modes none, allowlist, enforcement auto (cilium), bundles @apt, @github, @node, @python, " +
+				"default sandbox profile default, hubble relay none, judge anthropic (default model, key llm-keys/anthropic)",
 			wantSource: v1alpha1.ConfigSourceSkillCIConfig, wantBy: v1alpha1.EnforcedByCilium, wantEvent: "Normal Applied",
+		},
+		{
+			name: "hubble relay and an openai-compatible judge",
+			obj: skillCIConfig("default", v1alpha1.SkillCIConfigSpec{
+				Observability: v1alpha1.Observability{HubbleRelay: "hubble-relay.kube-system.svc.cluster.local:80"},
+				Judge:         v1alpha1.Judge{Provider: "openai-compatible", Model: "gpt-oss-120b", BaseURL: "https://llm.example.com/v1", SecretKey: "gateway"},
+			}), crds: allCRDs,
+			wantStatus: metav1.ConditionTrue, wantReason: ReasonConfigApplied,
+			wantMsg: "hubble relay hubble-relay.kube-system.svc.cluster.local:80, " +
+				"judge openai-compatible at https://llm.example.com/v1 (model gpt-oss-120b, key llm-keys/gateway)",
+			wantSource: v1alpha1.ConfigSourceSkillCIConfig, wantBy: v1alpha1.EnforcedByCilium, wantEvent: "Normal Applied",
+		},
+		{
+			name: "bedrock is not a judge provider", obj: skillCIConfig("default", v1alpha1.SkillCIConfigSpec{Judge: v1alpha1.Judge{Provider: "bedrock"}}), crds: allCRDs,
+			wantStatus: metav1.ConditionFalse, wantReason: ReasonConfigInvalid,
+			wantMsg:    `invalid spec: invalid judge: judge.provider "bedrock" must be one of anthropic, openai, openai-compatible, nv_build`,
+			wantSource: v1alpha1.ConfigSourceBuiltIn, wantBy: v1alpha1.EnforcedByCilium, wantEvent: "Warning Invalid",
+		},
+		{
+			name: "an invalid hubble relay", obj: skillCIConfig("default", v1alpha1.SkillCIConfigSpec{
+				Observability: v1alpha1.Observability{HubbleRelay: "http://hubble-relay:80"}}), crds: allCRDs,
+			wantStatus: metav1.ConditionFalse, wantReason: ReasonConfigInvalid,
+			wantMsg:    `invalid spec: observability.hubbleRelay "http://hubble-relay:80" must be host:port`,
+			wantSource: v1alpha1.ConfigSourceBuiltIn, wantBy: v1alpha1.EnforcedByCilium, wantEvent: "Warning Invalid",
 		},
 		{
 			name: "valid without Cilium", obj: skillCIConfig("default", v1alpha1.SkillCIConfigSpec{}), crds: crds.Static{},
@@ -115,6 +140,12 @@ func TestSkillCIConfigReconciler(t *testing.T) {
 				t.Errorf("an ignored config has status.effective %+v", eff)
 			case tt.wantSource != "" && (eff == nil || eff.Source != tt.wantSource || eff.Network.EnforcedBy != tt.wantBy):
 				t.Errorf("status.effective %+v, want source %s enforcedBy %s", eff, tt.wantSource, tt.wantBy)
+			case eff != nil && tt.wantSource == v1alpha1.ConfigSourceSkillCIConfig:
+				j, o := tt.obj.Spec.Judge, tt.obj.Spec.Observability
+				if eff.Observability.HubbleRelay != o.HubbleRelay || (j.Provider != "" && eff.Judge.Provider != j.Provider) ||
+					(j.Provider == "" && eff.Judge.Provider != v1alpha1.JudgeAnthropic) {
+					t.Errorf("status.effective observability %+v judge %+v, want the spec's", eff.Observability, eff.Judge)
+				}
 			}
 			if evs := drain(rec); len(evs) != 1 || !strings.HasPrefix(evs[0], tt.wantEvent) {
 				t.Errorf("events %q, want one %q", evs, tt.wantEvent)

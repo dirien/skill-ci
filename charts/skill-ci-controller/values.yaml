@@ -139,6 +139,28 @@ config:
       python: [pypi.org, files.pythonhosted.org]
     # Hosts added to none and allowlist when an entry's agent version is not preinstalled.
     agentInstallHosts: [registry.npmjs.org]
+  # Network flows of the trials (CONTRACT.md "Trial bundles"). Runner pods have no egress policy, so they
+  # reach the relay on any cluster.
+  observability:
+    # host:port of a Hubble Relay, passed to runner Jobs as HUBBLE_SERVER, for example
+    # hubble-relay.kube-system.svc.cluster.local:80 (Cilium with Hubble Relay, as on DOKS). Empty collects
+    # no flows. infra/ and deploy/install.sh set it when they find Hubble Relay. Controller 0.10.1 and
+    # older ignore it.
+    hubbleRelay: ""
+  # The LLM judge that scores every trial, whatever agent is under test (CONTRACT.md "SkillCIConfig").
+  # Its host is allowed in the network modes none and allowlist. Controller 0.10.1 and older ignore it.
+  judge:
+    # anthropic, openai, openai-compatible (needs baseURL) or nv_build. The runner pairs openai and nv_build
+    # with claude-code and codex, openai-compatible with claude-code, opencode only with anthropic
+    # (docs/agents-and-models.md "The judge").
+    provider: anthropic
+    # Empty: SkillEvaluator's default model of the provider.
+    model: ""
+    # API root, for example https://llm.example.com/v1. Required for openai-compatible, optional for
+    # anthropic and openai, not allowed for nv_build.
+    baseURL: ""
+    # Key of the llm-keys Secret that holds the judge's API key (SKILL_EVAL_LLM_API_KEY of the runner).
+    secretKey: anthropic
 
 # SandboxProfiles the chart seeds in the controller namespace, name -> spec (CONTRACT.md
 # "SandboxProfile"). The controller keeps a SandboxTemplate and a SandboxWarmPool (Agent Sandbox

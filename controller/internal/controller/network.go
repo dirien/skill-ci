@@ -38,6 +38,10 @@ const (
 type runPlan struct {
 	// network is the effective network of the trials.
 	network network.Effective
+	// hubbleRelay is the HUBBLE_SERVER of the Job; empty collects no flows.
+	hubbleRelay string
+	// judge is the LLM judge of the Job.
+	judge network.Judge
 }
 
 // prepareRun resolves the network and the sandbox profile of a pending run
@@ -56,10 +60,13 @@ func (r *SkillEvalReconciler) prepareRun(ctx context.Context, se *v1alpha1.Skill
 	if err := r.declareNetwork(ctx, se, settings.Network); err != nil {
 		return runPlan{}, "", err
 	}
+	if err := settings.Judge.CheckAgent(se.Spec.Agent); err != nil {
+		return runPlan{}, err.Error(), nil // the runner would refuse it after starting
+	}
 	if failure, err := r.resolveProfile(ctx, se, settings.DefaultSandboxProfile); err != nil || failure != "" {
 		return runPlan{}, failure, err
 	}
-	eff, err := r.resolveNetwork(ctx, se, settings.Network)
+	eff, err := r.resolveNetwork(ctx, se, settings.Network, settings.Judge)
 	var nerr *network.Error
 	if errors.As(err, &nerr) {
 		se.Status.Network = &v1alpha1.NetworkStatus{Mode: se.Spec.Network.Mode}
@@ -83,7 +90,7 @@ func (r *SkillEvalReconciler) prepareRun(ctx context.Context, se *v1alpha1.Skill
 	}
 	se.Status.Network = st
 	meta.SetStatusCondition(&se.Status.Conditions, cond)
-	return runPlan{network: eff}, "", nil
+	return runPlan{network: eff, hubbleRelay: settings.HubbleRelay, judge: settings.Judge}, "", nil
 }
 
 // networkMessage says in a sentence what the trials may reach and what enforces it.
@@ -151,15 +158,15 @@ func (r *SkillEvalReconciler) resolveProfile(ctx context.Context, se *v1alpha1.S
 	return "", nil
 }
 
-// resolveNetwork computes the run's effective network.
-func (r *SkillEvalReconciler) resolveNetwork(ctx context.Context, se *v1alpha1.SkillEval, p network.Policy) (network.Effective, error) {
+// resolveNetwork computes the run's effective network, the judge's host included.
+func (r *SkillEvalReconciler) resolveNetwork(ctx context.Context, se *v1alpha1.SkillEval, p network.Policy, judge network.Judge) (network.Effective, error) {
 	cilium, err := crdPresent(ctx, r.CRDs, network.CiliumPolicyCRD)
 	if err != nil {
 		return network.Effective{}, err
 	}
 	entry := network.Entry{Agent: se.Spec.Agent, AgentVersion: se.Spec.AgentVersion, Model: se.Spec.Model}
-	in := network.Input{Spec: se.Spec.Network, Entry: entry, CiliumCRD: cilium}
-	if se.Spec.Network.Mode != v1alpha1.NetworkFull && network.NeedsOpenAIBaseURL(entry) {
+	in := network.Input{Spec: se.Spec.Network, Entry: entry, Judge: judge, CiliumCRD: cilium}
+	if se.Spec.Network.Mode != v1alpha1.NetworkFull && (network.NeedsOpenAIBaseURL(entry) || judge.NeedsOpenAIBaseURL()) {
 		if in.OpenAIBaseURL, err = r.openAIBaseURL(ctx, se.Namespace); err != nil {
 			return network.Effective{}, err
 		}

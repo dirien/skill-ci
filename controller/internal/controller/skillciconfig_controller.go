@@ -102,12 +102,34 @@ func configCondition(st platform.State, eff *v1alpha1.EffectiveConfig, ciliumCRD
 		return metav1.ConditionFalse, ReasonConfigInvalid, fmt.Sprintf("invalid spec: %s; %s", st.Invalid, kept)
 	}
 	n := eff.Network
-	msg := fmt.Sprintf("applied: default network %s, allowed modes %s, enforcement %s (%s), bundles %s, default sandbox profile %s",
-		n.Default, strings.Join(n.Modes, ", "), n.Enforcement, n.EnforcedBy, bundleList(n.Bundles), eff.DefaultSandboxProfile)
+	msg := fmt.Sprintf("applied: default network %s, allowed modes %s, enforcement %s (%s), bundles %s, default sandbox profile %s, hubble relay %s, judge %s",
+		n.Default, strings.Join(n.Modes, ", "), n.Enforcement, n.EnforcedBy, bundleList(n.Bundles), eff.DefaultSandboxProfile,
+		orNone(eff.Observability.HubbleRelay), judgeSummary(eff.Judge))
 	if n.Enforcement == string(network.EnforcementCilium) && !ciliumCRD {
 		msg += "; the CiliumNetworkPolicy CRD was not found, so every run fails until Cilium is installed"
 	}
 	return metav1.ConditionTrue, ReasonConfigApplied, msg
+}
+
+// judgeSummary renders the judge: "anthropic (default model, key llm-keys/anthropic)".
+func judgeSummary(j v1alpha1.EffectiveJudge) string {
+	model := "default model"
+	if j.Model != "" {
+		model = "model " + j.Model
+	}
+	at := ""
+	if j.BaseURL != "" {
+		at = " at " + j.BaseURL
+	}
+	return fmt.Sprintf("%s%s (%s, key llm-keys/%s)", j.Provider, at, model, j.SecretKey)
+}
+
+// orNone returns s, or "none" when it is empty.
+func orNone(s string) string {
+	if s == "" {
+		return "none"
+	}
+	return s
 }
 
 func bundleList(names []string) string {

@@ -10,6 +10,13 @@ kubectl -n skill-ci get skillevals -o wide
 
 The printer columns show skill, version, agent and agent version, model, phase, the scores with and without the skill, the lift, the verdict, the Tier 1 result and the network mode. `-o wide` adds the lift interval, the number of trials, the publication status and the report digest. `make status` prints the same list plus the tags and digests per skill from the Harbor API.
 
+`status.reportDigest` is the report (and, through it, the trial bundle) of the current Job. A run that failed after its live trials started keeps the report the runner attached, so the trials of a `Failed` run stay reachable. A run that was retried after an infrastructure failure lists its earlier Jobs in `status.attempts`, oldest first, each with its Job name, its report digest and why it ended (at most 10). A SkillEval created by a push has the annotation `skillci.dev/pushed-by` with the Harbor user who pushed the tag, when Harbor's webhook names one.
+
+```bash
+kubectl -n skill-ci get skilleval <name> -o jsonpath='{.status.attempts}'
+kubectl -n skill-ci get skilleval <name> -o jsonpath='{.metadata.annotations.skillci\.dev/pushed-by}'
+```
+
 ## Reporting site
 
 The controller serves a read-only reporting site on port 8082 (`--reports-addr`, empty disables it; Helm `reports.enabled`). `make reports-ui` port-forwards it to <http://localhost:8082>.
@@ -19,6 +26,20 @@ The controller serves a read-only reporting site on port 8082 (`--reports-addr`,
 - `/runs/<name>` shows one run: scores with the lift interval and n, the SkillEvaluator tiers and findings, the sandbox and the network of the run, conditions and, when a report is stored, the six SkillEvaluator dimensions with and without the skill. The full SkillEvaluator report and `result.json` open from there.
 
 Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. `make report-page` builds an offline page with every SkillEval and the SkillEvaluator reports (`OUT=reports/index.html`). The routes are listed in [CONTRACT.md, "Reporting site"](../CONTRACT.md).
+
+## Network flows
+
+With Hubble Relay configured, every trial bundle records what the trial reached: the DNS names it asked for and its connections, forwarded and dropped, with destination, port, count and drop reason. The setting is `spec.observability.hubbleRelay` of the `SkillCIConfig` `default`, `host:port` of a Hubble Relay (chart value `config.observability.hubbleRelay`, empty by default):
+
+```bash
+kubectl -n skill-ci patch scc default --type merge \
+  -p '{"spec":{"observability":{"hubbleRelay":"hubble-relay.kube-system.svc.cluster.local:80"}}}'
+kubectl -n skill-ci get scc default -o jsonpath='{.status.effective.observability}'
+```
+
+`deploy/install.sh` sets it when it finds Cilium with the Service `kube-system/hubble-relay` (DOKS: port 80), or from `HUBBLE_RELAY`; the Pulumi reference stack sets the DOKS address (stack config `hubbleRelay`). The controller passes the value to every new runner Job as `HUBBLE_SERVER`, and the runner follows the flows of its trial pods for the length of the live trials. An empty value collects nothing and the bundles say the network section is `off`. A relay that does not answer never fails a run: the bundle records why it has no flows. Hubble's ring buffer can drop flows on a busy node, so a section can be `partial`.
+
+The runner pod has no egress policy (only trial pods do, see [Network modes and sandboxes](network-and-sandboxes.md#network-modes)), so it reaches the relay on any cluster without a default-deny policy of its own. The flows exist only where Cilium runs with Hubble and Hubble Relay; on another CNI leave the field empty.
 
 ## Eval reports in Harbor
 

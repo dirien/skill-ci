@@ -14,4 +14,5 @@ keywords:
 sources:
   - https://github.com/dirien/skill-ci
 annotations:
+  artifacthub.io/license: Apache-2.0
   skillci.dev/crd-source: config/crd/skillci.dev_skillevals.yaml,config/crd/skillci.dev_sandboxprofiles.yaml,config/crd/skillci.dev_skillciconfigs.yaml

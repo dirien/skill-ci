@@ -133,6 +133,51 @@ func TestFromSpec(t *testing.T) {
 			wantErr: "network host lists hold at most 20 hosts, got 21",
 		},
 		{
+			name: "empty observability and judge are the defaults",
+			check: func(t *testing.T, s Settings) {
+				if s.HubbleRelay != "" || s.Judge != network.DefaultJudge() {
+					t.Errorf("hubble relay %q judge %+v, want none and the default judge", s.HubbleRelay, s.Judge)
+				}
+			},
+		},
+		{
+			name: "observability and judge set",
+			spec: v1alpha1.SkillCIConfigSpec{
+				Observability: v1alpha1.Observability{HubbleRelay: "hubble-relay.kube-system.svc.cluster.local:80"},
+				Judge:         v1alpha1.Judge{Provider: "openai-compatible", Model: "gpt-oss-120b", BaseURL: "https://llm.example.com/v1", SecretKey: "gateway"},
+			},
+			check: func(t *testing.T, s Settings) {
+				want := network.Judge{Provider: "openai-compatible", Model: "gpt-oss-120b", BaseURL: "https://llm.example.com/v1", SecretKey: "gateway"}
+				if s.HubbleRelay != "hubble-relay.kube-system.svc.cluster.local:80" || s.Judge != want {
+					t.Errorf("hubble relay %q judge %+v", s.HubbleRelay, s.Judge)
+				}
+			},
+		},
+		{
+			name: "a judge with only a model keeps the default provider and key",
+			spec: v1alpha1.SkillCIConfigSpec{Judge: v1alpha1.Judge{Model: "claude-opus-5-5"}},
+			check: func(t *testing.T, s Settings) {
+				if s.Judge != (network.Judge{Provider: "anthropic", Model: "claude-opus-5-5", SecretKey: "anthropic"}) {
+					t.Errorf("judge %+v", s.Judge)
+				}
+			},
+		},
+		{
+			name:    "hubble relay with a scheme",
+			spec:    v1alpha1.SkillCIConfigSpec{Observability: v1alpha1.Observability{HubbleRelay: "http://hubble-relay:80"}},
+			wantErr: `observability.hubbleRelay "http://hubble-relay:80" must be host:port`,
+		},
+		{
+			name:    "judge openai-compatible without base URL",
+			spec:    v1alpha1.SkillCIConfigSpec{Judge: v1alpha1.Judge{Provider: "openai-compatible"}},
+			wantErr: "invalid judge: judge.baseURL is required for provider openai-compatible",
+		},
+		{
+			name:    "unknown judge provider",
+			spec:    v1alpha1.SkillCIConfigSpec{Judge: v1alpha1.Judge{Provider: "gemini"}},
+			wantErr: `invalid judge: judge.provider "gemini" must be one of`,
+		},
+		{
 			name:    "invalid default profile",
 			spec:    v1alpha1.SkillCIConfigSpec{DefaultSandboxProfile: "Big_Trials"},
 			wantErr: `defaultSandboxProfile "Big_Trials" is not a valid object name`,
@@ -315,10 +360,62 @@ func TestEffective(t *testing.T) {
 		!slices.Equal(n.Bundles, []string{"apt", "github", "node", "python"}) || !slices.Equal(n.AgentInstallHosts, []string{"registry.npmjs.org"}) {
 		t.Errorf("effective %+v", eff)
 	}
+	if eff.Observability.HubbleRelay != "" || eff.Judge != (v1alpha1.EffectiveJudge{Provider: "anthropic", SecretKey: "anthropic", Host: "api.anthropic.com"}) {
+		t.Errorf("effective observability %+v judge %+v, want the defaults", eff.Observability, eff.Judge)
+	}
 	if got := EnforcedBy(network.Policy{Enforcement: network.EnforcementOff}, true); got != v1alpha1.EnforcedByNone {
 		t.Errorf("enforcement off resolves to %s", got)
 	}
 	if got := EnforcedBy(network.Policy{}, false); got != v1alpha1.EnforcedByNone {
 		t.Errorf("auto without Cilium resolves to %s", got)
+	}
+}
+
+func TestEffectiveJudge(t *testing.T) {
+	tests := []struct {
+		name  string
+		judge network.Judge
+		want  v1alpha1.EffectiveJudge
+	}{
+		{name: "zero value", want: v1alpha1.EffectiveJudge{Provider: "anthropic", SecretKey: "anthropic", Host: "api.anthropic.com"}},
+		{name: "gateway", judge: network.Judge{Provider: "openai-compatible", BaseURL: "https://llm.example.com/v1", SecretKey: "gw"},
+			want: v1alpha1.EffectiveJudge{Provider: "openai-compatible", BaseURL: "https://llm.example.com/v1", SecretKey: "gw", Host: "llm.example.com"}},
+		{name: "nv_build", judge: network.Judge{Provider: "nv_build", Model: "nvidia/judge", SecretKey: "nvidia"},
+			want: v1alpha1.EffectiveJudge{Provider: "nv_build", Model: "nvidia/judge", SecretKey: "nvidia", Host: "integrate.api.nvidia.com"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := EffectiveJudge(tt.judge); got != tt.want {
+				t.Errorf("EffectiveJudge() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateHubbleRelay(t *testing.T) {
+	tests := []struct {
+		addr string
+		ok   bool
+	}{
+		{"", true},
+		{"hubble-relay.kube-system.svc.cluster.local:80", true},
+		{"hubble-relay:4245", true},
+		{"10.0.0.7:4245", true},
+		{"[fd00::7]:4245", true},
+		{"hubble-relay.kube-system.svc.cluster.local", false},
+		{"http://hubble-relay:80", false},
+		{"hubble-relay:0", false},
+		{"hubble-relay:65536", false},
+		{"hubble-relay:080", false},
+		{"Hubble-Relay:80", false},
+		{"fd00::7:4245", false},
+		{"[10.0.0.7]:4245", false},
+		{"[hubble-relay]:80", false},
+		{strings.Repeat("a", 250) + ".io:80", false},
+	}
+	for _, tt := range tests {
+		if err := ValidateHubbleRelay(tt.addr); (err == nil) != tt.ok {
+			t.Errorf("ValidateHubbleRelay(%q) = %v, want ok=%v", tt.addr, err, tt.ok)
+		}
 	}
 }

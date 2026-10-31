@@ -29,6 +29,21 @@ const (
 	LabelAgentVersion = "skillci.dev/agent-version"
 )
 
+// AnnotationPushedBy holds the Harbor user who pushed the tag that created
+// the SkillEval (the operator of the webhook payload), at most
+// MaxPushedByLength characters. SkillEvals created by a model list change or
+// by hand have none.
+const AnnotationPushedBy = "skillci.dev/pushed-by"
+
+// MaxPushedByLength caps the value of AnnotationPushedBy; a longer operator is dropped.
+const MaxPushedByLength = 253
+
+// MaxAttempts caps status.attempts; the oldest attempts go first.
+const MaxAttempts = 10
+
+// MaxAttemptMessageLength caps the message of one entry of status.attempts.
+const MaxAttemptMessageLength = 1024
+
 // Phase is the lifecycle phase of a SkillEval.
 type Phase string
 
@@ -222,6 +237,23 @@ type Samples struct {
 	WithoutSkill []string `json:"withoutSkill,omitempty"`
 }
 
+// RunAttempt is an earlier Job of a retried run. Its report and trial bundle
+// stay reachable after status.reportDigest moved on to the next Job.
+type RunAttempt struct {
+	// JobName is the Job of the attempt.
+	// +kubebuilder:validation:MaxLength=63
+	JobName string `json:"jobName"`
+	// ReportDigest is the report the attempt attached, with its trial bundle;
+	// empty when it attached none.
+	// +optional
+	// +kubebuilder:validation:MaxLength=71
+	ReportDigest string `json:"reportDigest,omitempty"`
+	// Message says why the attempt ended, at most 1024 characters.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
+	Message string `json:"message,omitempty"`
+}
+
 // SkillEvalStatus is the observed state of a SkillEval.
 type SkillEvalStatus struct {
 	// Phase is the lifecycle phase.
@@ -270,8 +302,16 @@ type SkillEvalStatus struct {
 	// +optional
 	// +listType=atomic
 	Findings []string `json:"findings,omitempty"`
-	// ReportDigest is the digest of the eval report attached to the skill in the registry.
+	// ReportDigest is the digest of the eval report attached to the skill in
+	// the registry by the current Job, also for a Failed run whose Tier 3
+	// started.
 	ReportDigest string `json:"reportDigest,omitempty"`
+	// Attempts are the earlier Jobs of a retried run, oldest first, at most
+	// 10. The current Job is JobName and ReportDigest and is not listed.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MaxItems=10
+	Attempts []RunAttempt `json:"attempts,omitempty"`
 	// Retries counts the times the controller started a fresh Job after an
 	// infrastructure failure. The first Job is not a retry; the Job of retry n
 	// is named <skilleval>-rn. See the Retried condition for the failure.

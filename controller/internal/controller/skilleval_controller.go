@@ -175,7 +175,9 @@ func (r *SkillEvalReconciler) reconcilePending(ctx context.Context, se *v1alpha1
 		return ctrl.Result{}, r.setMessage(ctx, se, "trial budget exhausted")
 	}
 
-	job := runner.NewJob(se, r.Config.Runner)
+	cfg := r.Config.Runner
+	cfg.HubbleServer, cfg.Judge = plan.hubbleRelay, plan.judge // the SkillCIConfig in force now
+	job := runner.NewJob(se, cfg)
 	if err := r.Create(ctx, job); err != nil {
 		// Either way no new trials started: a retry after a lost status write
 		// finds the Job it already created.
@@ -215,6 +217,9 @@ func (r *SkillEvalReconciler) reconcileRunning(ctx context.Context, se *v1alpha1
 		return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, parseErr.Error())
 	case res.Error != "":
 		recordGate(se, res) // the Tier 1 + 2 gate may have run before the error
+		// Tier 3 started and failed: the runner attached what it had. A retry
+		// moves the digest into status.attempts.
+		se.Status.ReportDigest = res.Report
 		// Scores or a rejection next to an error are a result, not a lost run.
 		if res.HasScores() || res.Rejected() {
 			return ctrl.Result{}, r.setPhase(ctx, se, v1alpha1.PhaseFailed, res.Error)

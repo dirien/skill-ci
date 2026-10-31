@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +52,7 @@ func (r *SkillEvalReconciler) fail(ctx context.Context, se *v1alpha1.SkillEval, 
 func (r *SkillEvalReconciler) retryRun(ctx context.Context, se *v1alpha1.SkillEval, reason retry.Reason, failure string) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	oldJob := se.Status.JobName
+	recordAttempt(&se.Status, oldJob, failure)
 	se.Status.Retries++
 	// The next Job reports its own gate.
 	se.Status.Tiers, se.Status.Publication, se.Status.Findings = nil, "", nil
@@ -75,4 +77,18 @@ func (r *SkillEvalReconciler) retryRun(ctx context.Context, se *v1alpha1.SkillEv
 		log.Error(err, "deleting the failed job", "job", types.NamespacedName{Namespace: job.Namespace, Name: oldJob})
 	}
 	return r.reconcilePending(ctx, se)
+}
+
+// recordAttempt appends the Job that just failed to status.attempts, with the
+// report it attached, and clears status.reportDigest for the next Job. The
+// list keeps the newest v1alpha1.MaxAttempts entries.
+func recordAttempt(st *v1alpha1.SkillEvalStatus, jobName, failure string) {
+	if r := []rune(failure); len(r) > v1alpha1.MaxAttemptMessageLength {
+		failure = string(r[:v1alpha1.MaxAttemptMessageLength-1]) + "…"
+	}
+	st.Attempts = append(st.Attempts, v1alpha1.RunAttempt{JobName: jobName, ReportDigest: st.ReportDigest, Message: failure})
+	if n := len(st.Attempts); n > v1alpha1.MaxAttempts {
+		st.Attempts = slices.Clone(st.Attempts[n-v1alpha1.MaxAttempts:])
+	}
+	st.ReportDigest = ""
 }

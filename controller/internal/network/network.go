@@ -256,7 +256,11 @@ type Input struct {
 	Spec *v1alpha1.NetworkSpec
 	// Entry is the model list entry of the run.
 	Entry Entry
+	// Judge is the run's LLM judge; the zero value is the default judge (Anthropic).
+	Judge Judge
 	// OpenAIBaseURL is the llm-keys openai-base-url value, empty when unset.
+	// It decides the host of codex, of opencode openai/... models and of an
+	// openai judge without a baseURL.
 	OpenAIBaseURL string
 	// CiliumCRD reports whether the CiliumNetworkPolicy CRD exists.
 	CiliumCRD bool
@@ -292,7 +296,11 @@ func Resolve(p Policy, in Input) (Effective, error) {
 		return Effective{}, err
 	}
 	// The Tier 3 verifier runs in the trial pod and calls the judge from there.
-	hosts = append(hosts, JudgeHost)
+	judge, err := judgeHost(in.Judge, in.OpenAIBaseURL)
+	if err != nil {
+		return Effective{}, err
+	}
+	hosts = append(hosts, judge)
 	hosts = append(hosts, p.AlwaysAllow...)
 	if !p.preinstalled(in.Entry) {
 		hosts = append(hosts, p.InstallHosts...)
@@ -367,26 +375,29 @@ const (
 	hostNvidia     = "integrate.api.nvidia.com"
 )
 
-// JudgeHost is the API host of the LLM judge, allowed in none and allowlist
-// whatever the agent. The runner keeps the judge on Anthropic (llm-keys
-// anthropic is required), and SkillEvaluator stages the judge's credentials
-// into the Harbor verifier, which runs inside the trial pod.
-const JudgeHost = hostAnthropic
+// DefaultJudgeHost is the API host of the default LLM judge (Anthropic).
+// The judge's host is allowed in none and allowlist whatever the agent,
+// because SkillEvaluator stages the judge's credentials into the Harbor
+// verifier, which runs inside the trial pod. See Judge.Host.
+const DefaultJudgeHost = hostAnthropic
+
+// openAIHost returns the host of llm-keys openai-base-url, api.openai.com when it is empty.
+func openAIHost(openAIBaseURL string) ([]string, error) {
+	if strings.TrimSpace(openAIBaseURL) == "" {
+		return []string{hostOpenAI}, nil
+	}
+	u, err := url.Parse(strings.TrimSpace(openAIBaseURL))
+	if err != nil || u.Hostname() == "" {
+		return nil, &Error{Reason: ReasonUnknownModelHost, Message: fmt.Sprintf(
+			"llm-keys openai-base-url %q has no host", openAIBaseURL)}
+	}
+	return []string{strings.ToLower(u.Hostname())}, nil
+}
 
 // ModelHosts returns the model API host the entry's agent talks to.
 // openAIBaseURL replaces api.openai.com when it is set.
 func ModelHosts(e Entry, openAIBaseURL string) ([]string, error) {
-	openai := func() ([]string, error) {
-		if strings.TrimSpace(openAIBaseURL) == "" {
-			return []string{hostOpenAI}, nil
-		}
-		u, err := url.Parse(strings.TrimSpace(openAIBaseURL))
-		if err != nil || u.Hostname() == "" {
-			return nil, &Error{Reason: ReasonUnknownModelHost, Message: fmt.Sprintf(
-				"llm-keys openai-base-url %q has no host", openAIBaseURL)}
-		}
-		return []string{strings.ToLower(u.Hostname())}, nil
-	}
+	openai := func() ([]string, error) { return openAIHost(openAIBaseURL) }
 	switch e.Agent {
 	case "claude-code":
 		return []string{hostAnthropic}, nil

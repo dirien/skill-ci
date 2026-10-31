@@ -3,7 +3,10 @@ package webhook
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/dirien/skill-ci/controller/api/v1alpha1"
 	"github.com/dirien/skill-ci/controller/internal/semver"
 )
 
@@ -12,7 +15,9 @@ const eventPushArtifact = "PUSH_ARTIFACT"
 
 // Payload is the part of Harbor's "Default" webhook payload we use.
 type Payload struct {
-	Type      string `json:"type"`
+	Type string `json:"type"`
+	// Operator is the Harbor user who triggered the event, for a push the one who pushed.
+	Operator  string `json:"operator"`
 	EventData struct {
 		Resources  []Resource `json:"resources"`
 		Repository struct {
@@ -61,4 +66,21 @@ func Decide(p Payload, project string) []Push {
 		}
 	}
 	return pushes
+}
+
+// PushedBy returns the payload's operator as the value of the SkillEval
+// annotation skillci.dev/pushed-by: trimmed, at most
+// v1alpha1.MaxPushedByLength characters of printable UTF-8. Anything else,
+// and an empty operator, gives "" (no annotation).
+func PushedBy(p Payload) string {
+	op := strings.TrimSpace(p.Operator)
+	if op == "" || len(op) > v1alpha1.MaxPushedByLength || !utf8.ValidString(op) {
+		return ""
+	}
+	for _, r := range op {
+		if !unicode.IsPrint(r) {
+			return ""
+		}
+	}
+	return op
 }

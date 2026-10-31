@@ -48,6 +48,12 @@ config:
   otlpHeadersSecret:
     type: string
     default: ""
+  # Hubble Relay the runner reads the trials' network flows from (SkillCIConfig
+  # spec.observability.hubbleRelay, HUBBLE_SERVER of the runner Jobs). DOKS runs Cilium with Hubble Relay
+  # at this address. Set it to "" to collect no flows.
+  hubbleRelay:
+    type: string
+    default: hubble-relay.kube-system.svc.cluster.local:80
 
 variables:
   # The Harbor setup script is also a Job input, so editing it re-runs the Job.
@@ -508,6 +514,10 @@ resources:
           interval: ${otlpInterval}
           headersSecret:
             name: ${otlpHeadersSecret}
+        # Seeds a new SkillCIConfig default; skillCiConfigHubbleRelay below sets it on an existing one.
+        config:
+          observability:
+            hubbleRelay: ${hubbleRelay}
     options:
       provider: ${k8s}
       dependsOn:
@@ -519,6 +529,27 @@ resources:
         - ${harborWebhookSecret}
         - ${modelsConfigMap}
         - ${harborSetup}
+
+  # The chart creates the SkillCIConfig default only once, so an install made before
+  # observability.hubbleRelay existed keeps an empty value. This patch owns that one field (server-side
+  # apply, forced past the chart's field manager); every other field stays as edited with kubectl.
+  skillCiConfigHubbleRelay:
+    type: kubernetes:apiextensions.k8s.io:CustomResourcePatch
+    properties:
+      apiVersion: skillci.dev/v1alpha1
+      kind: SkillCIConfig
+      metadata:
+        name: default
+        namespace: ${ns.metadata.name}
+        annotations:
+          pulumi.com/patchForce: "true"
+      spec:
+        observability:
+          hubbleRelay: ${hubbleRelay}
+    options:
+      provider: ${k8s}
+      dependsOn:
+        - ${skillCiController}
 
   # Picked up by the Grafana sidecar through the grafana_dashboard label.
   skillCiDashboardConfigMap:

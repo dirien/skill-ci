@@ -1,5 +1,6 @@
 // Package platform holds the platform settings of a skill-ci install (the
-// default SandboxProfile and the network policy) and looks them up in the
+// default SandboxProfile, the network policy, the Hubble Relay and the LLM
+// judge) and looks them up in the
 // SkillCIConfig named default. Precedence: a valid SkillCIConfig default,
 // else the last valid spec of that object this process saw, else the
 // built-in defaults.
@@ -9,8 +10,10 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -32,6 +35,11 @@ type Settings struct {
 	DefaultSandboxProfile string
 	// Network is the network policy of the trial sandboxes.
 	Network network.Policy
+	// HubbleRelay is host:port of the Hubble Relay new runner Jobs read
+	// network flows from (HUBBLE_SERVER); empty collects none.
+	HubbleRelay string
+	// Judge is the LLM judge of new runs.
+	Judge network.Judge
 }
 
 // Defaults returns the built-in settings. preinstalled are the agent@version
@@ -47,6 +55,7 @@ func Defaults(preinstalled []string) Settings {
 			Preinstalled: slices.Clone(preinstalled),
 			InstallHosts: slices.Clone(network.DefaultAgentInstallHosts),
 		},
+		Judge: network.DefaultJudge(),
 	}
 }
 
@@ -79,6 +88,15 @@ func FromSpec(spec v1alpha1.SkillCIConfigSpec, preinstalled []string) (Settings,
 	if n.AgentInstallHosts != nil {
 		s.Network.InstallHosts = v1alpha1.HostStrings(n.AgentInstallHosts)
 	}
+	s.HubbleRelay = spec.Observability.HubbleRelay
+	j := spec.Judge
+	if j.Provider != "" {
+		s.Judge.Provider = j.Provider
+	}
+	if j.SecretKey != "" {
+		s.Judge.SecretKey = j.SecretKey
+	}
+	s.Judge.Model, s.Judge.BaseURL = j.Model, j.BaseURL
 	if err := s.Validate(); err != nil {
 		return Settings{}, err
 	}
@@ -109,6 +127,46 @@ func (s Settings) Validate() error {
 	}
 	if err := s.Network.Validate(); err != nil {
 		return fmt.Errorf("invalid network settings: %w", err)
+	}
+	if err := ValidateHubbleRelay(s.HubbleRelay); err != nil {
+		return err
+	}
+	if err := s.Judge.Validate(); err != nil {
+		return fmt.Errorf("invalid judge: %w", err)
+	}
+	return nil
+}
+
+// maxHubbleRelay is the longest observability.hubbleRelay the CRD allows.
+const maxHubbleRelay = 255
+
+// ValidateHubbleRelay checks observability.hubbleRelay: empty, or host:port
+// with a hostname (lowercase RFC 1123) or an IP (IPv6 in brackets), a port
+// from 1 to 65535 and no scheme, at most 255 characters.
+func ValidateHubbleRelay(addr string) error {
+	if addr == "" {
+		return nil
+	}
+	bad := fmt.Errorf("observability.hubbleRelay %q must be host:port (a hostname or IP and a port from 1 to 65535, no scheme, at most %d characters)", addr, maxHubbleRelay)
+	if len(addr) > maxHubbleRelay {
+		return bad
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return bad
+	}
+	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 || strconv.Itoa(n) != port {
+		return bad
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		// An IPv6 address must be in brackets, which SplitHostPort removed.
+		if strings.Contains(host, ":") != strings.HasPrefix(addr, "[") {
+			return bad
+		}
+		return nil
+	}
+	if strings.HasPrefix(addr, "[") || len(nameErrors(host)) > 0 {
+		return bad
 	}
 	return nil
 }
@@ -268,6 +326,22 @@ func Effective(st State, enforcedBy string) *v1alpha1.EffectiveConfig {
 			Bundles:           BundleNames(p.Bundles),
 			AgentInstallHosts: slices.Clone(p.InstallHosts),
 		},
+		Observability: v1alpha1.EffectiveObservability{HubbleRelay: st.Settings.HubbleRelay},
+		Judge:         EffectiveJudge(st.Settings.Judge),
+	}
+}
+
+// EffectiveJudge summarises the judge for status.effective.judge. Its host
+// is the one allowed in none and allowlist; an openai judge without a
+// baseURL shows api.openai.com, which llm-keys openai-base-url replaces when
+// a run is resolved.
+func EffectiveJudge(j network.Judge) v1alpha1.EffectiveJudge {
+	host, err := j.Host("")
+	if err != nil {
+		host = "" // an invalid judge never gets here: Validate rejects it
+	}
+	return v1alpha1.EffectiveJudge{
+		Provider: j.ProviderName(), Model: j.Model, BaseURL: j.BaseURL, SecretKey: j.Key(), Host: host,
 	}
 }
 

@@ -167,6 +167,10 @@ keys are rejected.
 | `config.network.alwaysAllow` | `[]` | Seed of `spec.network.alwaysAllow`: hosts added to `none` and `allowlist`, for example a proxy |
 | `config.network.bundles` | `apt`, `github`, `node`, `python` | Seed of `spec.network.bundles`: name to hosts, named as `@<name>` in `skillci.dev/network-allow`. A map that merges with the defaults; `null` drops a bundle |
 | `config.network.agentInstallHosts` | `[registry.npmjs.org]` | Seed of `spec.network.agentInstallHosts`: added to `none` and `allowlist` for an entry whose agent version is not preinstalled |
+| `config.observability.hubbleRelay` | `""` | Seed of `spec.observability.hubbleRelay`: `host:port` of a Hubble Relay (`hubble-relay.kube-system.svc.cluster.local:80` on DOKS), passed to runner Jobs as `HUBBLE_SERVER` so the trial bundles record each trial's network flows. Empty collects none |
+| `config.judge.provider` | `anthropic` | Seed of `spec.judge.provider`: the LLM judge of every run, `anthropic`, `openai`, `openai-compatible` or `nv_build`. See "The judge" |
+| `config.judge.model`, `.baseURL` | `""`, `""` | Seed of `spec.judge.model` (empty: SkillEvaluator's default) and `spec.judge.baseURL` (the API root; required for `openai-compatible`, not allowed for `nv_build`) |
+| `config.judge.secretKey` | `anthropic` | Seed of `spec.judge.secretKey`: the key of `llm-keys` that holds the judge's API key (`SKILL_EVAL_LLM_API_KEY` of the runner, required) |
 | `sandboxProfiles` | `{default: {create: true, image: "", resources: {cpu: "1", memory: 2Gi}, warmPool: {replicas: 2}}}` | Seeds of SandboxProfiles in the controller namespace, name to spec (`image`, `resources`, `warmPool.replicas`, `runtimeClassName`, `nodeSelector`, `tolerations`). Each is created only when it does not exist yet. An empty image is `--sandbox-image`. `create: false` or `null` skips one. Rendered only when the chart ships the SandboxProfile CRD |
 | `controller.logging.level`, `.encoder`, `.development` | `""`, `""`, `false` | `--zap-log-level`, `--zap-encoder`, `--zap-devel` |
 | `ports.webhook`, `ports.metrics`, `ports.reports` | `8080`, `8081`, `8082` | Container ports, `--webhook-addr`, `--metrics-addr`, `--reports-addr` |
@@ -220,17 +224,40 @@ kubectl -n skill-ci create secret generic otlp-headers --from-literal=headers='x
 
 ### LLM keys
 
-The runner Job reads these keys of `llm-keys`. Only `anthropic` is required: it is the judge that scores every
-run, whatever agent is under test.
+The runner Job reads these keys of `llm-keys`. The judge's key (`config.judge.secretKey`, default `anthropic`) is
+required, and so is `anthropic` for Claude Code and OpenCode `anthropic/...` models; a Job without them does not start.
 
 | Key | Variable | Needed for |
 | --- | --- | --- |
-| `anthropic` | `ANTHROPIC_API_KEY` | The judge; Claude Code; OpenCode models `anthropic/<model>` |
+| `anthropic` | `ANTHROPIC_API_KEY` | The default judge; Claude Code; OpenCode models `anthropic/<model>` |
 | `openai` | `OPENAI_API_KEY` | Codex; Tier 2 embeddings |
 | `openai-base-url` | `OPENAI_BASE_URL` | Codex endpoint; the runner uses `https://api.openai.com/v1` when it is missing |
 | `ollama` | `OLLAMA_API_KEY` | OpenCode models `ollama-cloud/<model>` (Ollama Cloud, `https://ollama.com/v1`) |
 | `openrouter` | `OPENROUTER_API_KEY` | OpenCode models `openrouter/<model>`. An API key, not a provisioning key (the runner rejects those) |
 | `nvidia` | `NVIDIA_API_KEY` | OpenCode models `nvidia/<model>` (NVIDIA Build); Tier 2 embeddings when `openai` is missing |
+
+A judge on another key gets it as `SKILL_EVAL_LLM_API_KEY` as well. With `secrets.llmKeys.create: true` the chart
+writes only the keys above, so point `config.judge.secretKey` at one of them, or create the Secret out of band
+with a key of your own.
+
+### The judge
+
+An LLM judge scores every trial, whatever agent is under test. It lives in the SkillCIConfig `default`
+(`spec.judge`), which `config.judge` seeds on the first install only; afterwards change it with
+`kubectl -n skill-ci edit scc default`. The controller passes it to every new runner Job as
+`SKILL_EVAL_LLM_PROVIDER`, `SKILL_EVAL_LLM_MODEL` and `SKILL_EVAL_LLM_BASE_URL` (the last two only when set) and
+`SKILL_EVAL_LLM_API_KEY` from `llm-keys/<secretKey>`, and allows the judge's host in the network modes `none` and
+`allowlist`: `api.anthropic.com`, `api.openai.com` (or the host of `openai-base-url`), `integrate.api.nvidia.com`, or
+the host of `baseURL`. The runner pairs `openai` and `nv_build` with Claude Code and
+Codex, `openai-compatible` with Claude Code, and OpenCode only with `anthropic`; another combination fails the run
+before its Job. Details: [docs/agents-and-models.md](../../docs/agents-and-models.md#the-judge) and
+CONTRACT.md, "SkillCIConfig".
+
+```bash
+helm upgrade --install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller -n skill-ci \
+  --set config.judge.provider=openai-compatible --set config.judge.baseURL=https://llm.example.com/v1 \
+  --set config.judge.model=<model> --set config.judge.secretKey=openai
+```
 
 ### The statistical gate
 
