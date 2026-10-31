@@ -1,6 +1,7 @@
 Local patch for NVIDIA SkillEvaluator v0.6.0 (applied by runner/Dockerfile with `patch -p1`).
-Regenerate: fetch src/skillevaluator/cli.py and src/skillevaluator/tier3/harbor/runner.py at
-tag v0.6.0, edit, then `diff -u a/<file> b/<file>`. Each hunk, in file order:
+Regenerate: fetch src/skillevaluator/cli.py, src/skillevaluator/tier3/harbor/runner.py and
+src/skillevaluator/tier3/harbor/local_agents.py at tag v0.6.0, edit, then `diff -u a/<file> b/<file>`.
+Each hunk, in file order:
 
 cli.py
   1. `validate --catalog FILE` (option): a saved Tier 2 catalog (`similarity-check --save-catalog`).
@@ -42,6 +43,12 @@ tier3/harbor/runner.py
  11. `_agent_import_path`: with the gateway flag, OpenCode runs as SkillEvaluatorGatewayOpenCode
      (Chat Completions through @ai-sdk/openai-compatible; OpenCode's built-in openai provider
      always uses the Responses API).
+
+tier3/harbor/local_agents.py
+ 12. `SkillEvaluatorGatewayOpenCode.model_connection`: forwards OPENAI_API_KEY to the agent.
+     The wrapper renames the model to `skillevaluator-gateway/<id>`, a provider Harbor does not
+     know, so Harbor resolved no key for it and the provider config's `{env:OPENAI_API_KEY}` was
+     empty in the sandbox: every OpenCode trial through a gateway failed with HTTP 401.
 
 --- a/src/skillevaluator/cli.py
 +++ b/src/skillevaluator/cli.py
@@ -174,3 +181,30 @@ tier3/harbor/runner.py
      if provider.provider == "openai-compatible" and agent == "codex" and env_mode != ENV_MODE_LOCAL:
          return _GATEWAY_CODEX_IMPORT_PATH
      if provider.provider == "openai-compatible" and agent == "opencode" and env_mode in HARBOR_DOCKER_ENGINE_ENV_MODES:
+--- a/src/skillevaluator/tier3/harbor/local_agents.py
++++ b/src/skillevaluator/tier3/harbor/local_agents.py
+@@ -17,6 +17,7 @@
+ import uuid
+ from collections.abc import Awaitable, Callable, Mapping
+ from contextlib import suppress
++from dataclasses import replace
+ from pathlib import Path, PurePosixPath
+ from typing import TYPE_CHECKING, Any
+ from urllib.parse import urlsplit
+@@ -481,6 +482,16 @@
+             },
+         )
+ 
++    @property
++    def model_connection(self) -> ResolvedModelConnection:
++        # skill-ci: Harbor does not know the skillevaluator-gateway namespace and forwards no key
++        # for it, so {env:OPENAI_API_KEY} above would be empty in the agent's environment.
++        access = super().model_connection
++        resolved = self._resolve_env("OPENAI_API_KEY")
++        if not resolved or not resolved[1]:
++            return access
++        return replace(access, env={**access.env, "OPENAI_API_KEY": resolved[1]})
++
+ 
+ class SkillEvaluatorLocalOpenCode(OpenCode):
+     """OpenCode wrapper that skips nvm/npm bootstrap in local mode."""

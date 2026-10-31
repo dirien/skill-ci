@@ -51,9 +51,11 @@ RUN gitleaks version | grep -qx "${GITLEAKS_VERSION}" \
  && skillspector --version | grep -q "${SKILLSPECTOR_VERSION#v}" \
  && semgrep --version | grep -qx "${SEMGREP_VERSION}" \
  && bandit --version | grep -q "${BANDIT_VERSION}" \
- && skillevaluator --version \
- && python -c "from skillevaluator.tier3.harbor import runner as r; \
-assert r._GATEWAY_OPENCODE_IMPORT_PATH in r._NATIVE_BACKEND_AGENT_IMPORT_PATHS, 'patch hunk 6: OpenCode gateway not allowed on ack'"
+ && skillevaluator --version
+
+# Fail the build when the SkillEvaluator patch applies but no longer takes effect.
+COPY runner/check_patch.py /tmp/check_patch.py
+RUN python /tmp/check_patch.py && rm /tmp/check_patch.py
 
 COPY runner/skill_eval.py /usr/local/bin/skill_eval.py
 
