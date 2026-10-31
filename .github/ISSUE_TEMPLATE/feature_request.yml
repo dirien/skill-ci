@@ -1,0 +1,53 @@
+name: Feature request
+description: Propose a new feature or a change to how skill-ci works.
+title: "feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Larger changes start with an issue, so the direction is agreed before anyone writes code. See [CONTRIBUTING.md](https://github.com/dirien/skill-ci/blob/main/CONTRIBUTING.md).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what stops you today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: How should skill-ci behave? Name any CRD fields, chart values or runner settings you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways to solve the problem that you considered, including workarounds you use now.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      multiple: true
+      options:
+        - controller
+        - runner
+        - sandbox image
+        - Helm chart
+        - install path (deploy/)
+        - Pulumi reference stack (infra/)
+        - documentation
+        - not sure
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to work on this change.

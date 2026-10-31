@@ -1,0 +1,87 @@
+name: Bug report
+description: Something in skill-ci does not work as documented.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not report security problems here: follow [SECURITY.md](https://github.com/dirien/skill-ci/blob/main/SECURITY.md) instead.
+        Remove API keys, registry credentials and other secrets from everything you paste.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: The smallest set of steps, skill, model list entry or configuration that shows the problem.
+      placeholder: |
+        1. Push skill version v1.1.0 with `oras push ...`
+        2. `kubectl -n skill-ci get skillevals`
+        3. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part do you think is affected?
+      multiple: true
+      options:
+        - controller
+        - runner
+        - sandbox image
+        - Helm chart
+        - install path (deploy/)
+        - Pulumi reference stack (infra/)
+        - documentation
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: skill-ci version
+      description: The release you run, for example 0.10.1.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Kubernetes version and distribution, Agent Sandbox version, goharbor version, CNI (Cilium or another), and the network mode of the skill.
+      placeholder: |
+        Kubernetes: 1.36 on DOKS
+        Agent Sandbox: v1.0.9
+        goharbor: 2.15.4
+        CNI: Cilium
+        Network mode: allowlist
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and status
+      description: Controller logs, runner Job logs, or `kubectl -n skill-ci get skilleval <name> -o yaml`. This is rendered as code.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and did not find this bug.
+          required: true
+        - label: I removed secrets from the logs and configuration above.
+          required: true

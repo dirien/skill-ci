@@ -80,6 +80,7 @@ The controller, runner, sandbox image and chart always share one version. [deplo
 | [docs/reference-stack.md](docs/reference-stack.md) | The Pulumi reference stack on DOKS in `infra/` |
 | [docs/releasing.md](docs/releasing.md) | Releases, published artifacts, the Helm chart, CI |
 | [docs/design-notes.md](docs/design-notes.md) | Why things are built the way they are |
+| [docs/dependency-licenses.md](docs/dependency-licenses.md) | Licenses of the shipped and installed third-party components, and the ones outside the CNCF allowlist |
 | [CONTRACT.md](CONTRACT.md) | The specification: names, CRDs, the runner Job contract, statistics, policy, metrics |
 | [deploy/README.md](deploy/README.md) | Step-by-step install on your own cluster with Helm and kubectl |
 | [charts/skill-ci-controller/README.md](charts/skill-ci-controller/README.md) | Chart values, CRD handling, adopting an existing install |
@@ -106,3 +107,15 @@ reports/               Eval reports downloaded by `make report`
 ```
 
 `make help` lists the Makefile targets.
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build and test each part, the commit message style, and the DCO sign-off (`git commit -s`) that every commit needs. Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md). [GOVERNANCE.md](GOVERNANCE.md) describes how decisions are made, [MAINTAINERS.md](MAINTAINERS.md) lists the maintainers, and [ROADMAP.md](ROADMAP.md) lists the planned work. If you use skill-ci, add yourself to [ADOPTERS.md](ADOPTERS.md). [CHANGELOG.md](CHANGELOG.md) summarizes each release.
+
+## Security
+
+Report vulnerabilities privately through GitHub private vulnerability reporting, never in a public issue. [SECURITY.md](SECURITY.md) lists the supported versions, the scope and what to expect after you report.
+
+## License
+
+skill-ci is licensed under the [Apache License 2.0](LICENSE). [NOTICE](NOTICE) credits the material from NVIDIA SkillEvaluator. The published images contain third-party software under its own licenses, including Claude Code in the sandbox image, which is proprietary; [docs/dependency-licenses.md](docs/dependency-licenses.md) lists them.

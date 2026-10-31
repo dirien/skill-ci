@@ -1,0 +1,67 @@
+name: DCO
+
+# Every commit of a pull request needs a Signed-off-by line whose name and email match the commit
+# author (git commit -s). See CONTRIBUTING.md, "Developer Certificate of Origin". Bot authors such
+# as dependabot[bot] sign off with another email than their author address, so for an author whose
+# name ends in [bot] the name alone has to match.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dco:
+    name: Signed-off-by
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the sign-off of every commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          lower() { tr '[:upper:]' '[:lower:]'; }
+          failed=0
+          count=0
+          for sha in $(git rev-list --no-merges --reverse "${BASE_SHA}..${HEAD_SHA}"); do
+            count=$((count + 1))
+            name="$(git log -1 --format='%an' "${sha}")"
+            email="$(git log -1 --format='%ae' "${sha}")"
+            subject="$(git log -1 --format='%s' "${sha}")"
+            want="$(printf '%s <%s>' "${name}" "${email}" | lower)"
+            ok=0
+            while IFS= read -r line; do
+              [[ -n "${line}" ]] || continue
+              got="$(printf '%s' "${line}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | lower)"
+              if [[ "${got}" == "${want}" ]]; then
+                ok=1
+              elif [[ "${name}" == *"[bot]" && "${got}" == "$(printf '%s' "${name}" | lower) <"* ]]; then
+                ok=1
+              fi
+            done < <(git log -1 --format='%(trailers:key=Signed-off-by,valueonly,unfold,separator=%x0A)' "${sha}")
+            if [[ "${ok}" == 1 ]]; then
+              echo "ok      ${sha:0:12} ${subject}"
+            else
+              echo "::error::Commit ${sha:0:12} (${subject}) has no 'Signed-off-by: ${name} <${email}>' line."
+              failed=1
+            fi
+          done
+          echo "Checked ${count} commit(s)."
+          if [[ "${failed}" == 1 ]]; then
+            echo "::error::Sign off each commit with 'git commit -s'. For commits you already made: git rebase --signoff ${BASE_SHA:0:12} && git push --force-with-lease"
+            exit 1
+          fi
