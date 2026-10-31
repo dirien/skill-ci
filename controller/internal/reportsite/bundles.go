@@ -110,11 +110,15 @@ func (s *Server) trialStates(ctx context.Context, runs []Run) map[string]string 
 	}
 	for _, r := range runs {
 		if r.ReportDigest == "" {
+			mu.Lock()
 			out[r.Name] = apiv1.TrialsNone
+			mu.Unlock()
 			continue
 		}
 		if ref, ok := s.bundles.get(r.ReportDigest); ok {
+			mu.Lock()
 			out[r.Name] = ref.state
+			mu.Unlock()
 			continue
 		}
 		jobs <- r
