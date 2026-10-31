@@ -463,6 +463,15 @@ resources:
     options:
       provider: ${k8s}
 
+  # SandboxProfile: Agent Sandbox template and warm pool for the trials (CONTRACT.md "SandboxProfile").
+  # A resource of its own, so adding it never replaces the SkillEval CRD above (that would delete every run).
+  sandboxProfileCrd:
+    type: kubernetes:yaml/v2:ConfigFile
+    properties:
+      file: ../charts/skill-ci-controller/crds/skillci.dev_sandboxprofiles.yaml
+    options:
+      provider: ${k8s}
+
   # The controller, from the published OCI chart. deploy/helm/values/skill-ci-controller.yaml is shared
   # with the plain Helm path (deploy/install.sh); the image tags and OTLP settings come from config.
   skillCiController:
@@ -495,6 +504,8 @@ resources:
       provider: ${k8s}
       dependsOn:
         - ${skillCiCrds}
+        - ${sandboxProfileCrd}
+        - ${agentSandbox}
         - ${harborCredentialsSecret}
         - ${harborWebhookSecret}
         - ${modelsConfigMap}
