@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check that infra/Pulumi.yaml uses the same component versions as deploy/versions.env.
 #   deploy/check-versions.sh
-# Exits 1 and prints every mismatch. The skill-ci release is not in Pulumi.yaml (make deploy installs it).
+# Exits 1 and prints every mismatch, including the skill-ci release (skillCiVersion vs SKILL_CI_VERSION).
 set -euo pipefail
 
 deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,4 +38,5 @@ check harborChartVersion "${HARBOR_CHART_VERSION}"
 check kubePrometheusStackVersion "${KUBE_PROMETHEUS_STACK_VERSION}"
 check orasVersion "${ORAS_VERSION}"
 check curlVersion "${CURL_VERSION}"
+check skillCiVersion "${SKILL_CI_VERSION}"
 exit "${status}"

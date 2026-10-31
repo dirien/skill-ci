@@ -21,6 +21,33 @@ config:
   kubePrometheusStackVersion:
     type: string
     default: 92.10.1
+  # The skill-ci release: OCI chart oci://ghcr.io/dirien/charts/skill-ci-controller and the controller,
+  # runner and sandbox images of the same tag. Same value as SKILL_CI_VERSION in deploy/versions.env.
+  skillCiVersion:
+    type: string
+    default: 0.8.1
+  # Optional OTLP push of the controller's skillci_* metrics (chart values otlp.*, CONTRACT.md
+  # "OpenTelemetry export"). Off while otlpEndpoint is empty. The ServiceMonitor below already scrapes
+  # the controller into this stack's Prometheus: do not push into that Prometheus as well.
+  otlpEndpoint:
+    type: string
+    default: ""
+  otlpProtocol:
+    type: string
+    default: http/protobuf
+  otlpUrlPath:
+    type: string
+    default: ""
+  otlpInsecure:
+    type: boolean
+    default: false
+  otlpInterval:
+    type: string
+    default: ""
+  # A Secret in skill-ci whose key `headers` holds the OTLP headers, e.g. an ingest key.
+  otlpHeadersSecret:
+    type: string
+    default: ""
 
 variables:
   # The Harbor setup script is also a Job input, so editing it re-runs the Job.
@@ -426,6 +453,52 @@ resources:
       dependsOn:
         - ${kubePrometheusStack}
         - ${ns}
+
+  # The SkillEval CRD from the chart's crds/. Helm installs crds/ once and never upgrades them, so
+  # Pulumi applies the CRD itself and the release skips them.
+  skillCiCrds:
+    type: kubernetes:yaml/v2:ConfigFile
+    properties:
+      file: ../charts/skill-ci-controller/crds/skillci.dev_skillevals.yaml
+    options:
+      provider: ${k8s}
+
+  # The controller, from the published OCI chart. deploy/helm/values/skill-ci-controller.yaml is shared
+  # with the plain Helm path (deploy/install.sh); the image tags and OTLP settings come from config.
+  skillCiController:
+    type: kubernetes:helm.sh/v3:Release
+    properties:
+      name: skill-ci
+      chart: oci://ghcr.io/dirien/charts/skill-ci-controller
+      version: ${skillCiVersion}
+      namespace: ${ns.metadata.name}
+      skipCrds: true
+      valueYamlFiles:
+        - fn::fileAsset: ../deploy/helm/values/skill-ci-controller.yaml
+      values:
+        image:
+          tag: ${skillCiVersion}
+        controller:
+          runnerImage:
+            tag: ${skillCiVersion}
+          sandboxImage:
+            tag: ${skillCiVersion}
+        otlp:
+          endpoint: ${otlpEndpoint}
+          protocol: ${otlpProtocol}
+          urlPath: ${otlpUrlPath}
+          insecure: ${otlpInsecure}
+          interval: ${otlpInterval}
+          headersSecret:
+            name: ${otlpHeadersSecret}
+    options:
+      provider: ${k8s}
+      dependsOn:
+        - ${skillCiCrds}
+        - ${harborCredentialsSecret}
+        - ${harborWebhookSecret}
+        - ${modelsConfigMap}
+        - ${harborSetup}
 
   # Picked up by the Grafana sidecar through the grafana_dashboard label.
   skillCiDashboardConfigMap:
