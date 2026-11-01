@@ -1898,3 +1898,24 @@ criterion, 0.35. Same tokens in, half the cost with the skill. This is what
 the lift number means, one trial at a time. net-pypi-check v1.2.0, Claude
 Code with Opus 5.5, release 0.11.1, 2026-10-31.
 -->
+
+---
+
+# Backup: what the network policy blocked
+
+<img src="/fallback/trial-network.png" class="fallback" alt="Reporting UI network tab of a trial in mode none: api.anthropic.com forwarded, pypi.org dropped by the policy 13 times at step 4" />
+
+<style scoped>
+.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+</style>
+
+<!--
+Backup for the network modes slide. The same skill that needs the Python art
+package, pushed with network mode none: the trial reached api.anthropic.com
+(the model and the judge), and Cilium dropped every connection to pypi.org,
+13 of them, starting at step 4 where the agent ran pip install. Without the
+package the trial scored 0.48 and passed 0 of 2 criteria. Flows come from
+Hubble Relay, collected by the runner during the run and stored in the trial
+bundle. net-pypi-check v1.3.0, Claude Code with Opus 5.5, release 0.11.1,
+2026-10-31.
+-->
