@@ -92,7 +92,7 @@ controller/            The skill-ci controller (Go)
 runner/                In-cluster runner image and the SkillEval Job (ORAS init container + SkillEvaluator)
 sandbox/               Dockerfile of the trial sandbox image (Python, verifier packages, agent CLIs) and the script that installs the CLIs
 harbor-agent-sandbox/  Harbor framework environment that runs each trial as an agents.x-k8s.io Sandbox from the sandbox image
-skillevaluator-patch/  Patch for SkillEvaluator 0.6.0: that environment, its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway
+skillevaluator-patch/  Patch for SkillEvaluator 0.6.0: that environment, its sandbox image and sizing, a Tier 2 catalog for validate, the agent CLI version, OpenCode behind an OpenAI-compatible gateway, the native Codex exec calls the Tier 3 verifier decodes
 charts/                Helm chart of the controller, published as oci://ghcr.io/dirien/charts/skill-ci-controller
 config/                Controller manifests (CRD source, RBAC, Deployment, Service), plain `kubectl apply -k` alternative
 deploy/                Install path with Helm and kubectl: install and uninstall scripts, manifests, values, versions.env

@@ -1,4 +1,4 @@
-"""Build-time check that the SkillEvaluator patch does what the sandbox, OpenCode and retry need.
+"""Build-time check that the SkillEvaluator patch does what sandbox, OpenCode, retry and Codex need.
 
 runner/Dockerfile runs this after installing the patched SkillEvaluator, so a patch that applies
 but no longer takes effect fails the image build instead of every OpenCode eval on the cluster.
@@ -11,6 +11,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+from skillevaluator.tier3.eval_core.codex_tool_call_normalizer import (
+    iter_normalized_tool_calls,
+    normalized_tool_call_observation,
+)
 from skillevaluator.tier3.harbor import runner
 from skillevaluator.tier3.harbor.local_agents import SkillEvaluatorGatewayOpenCode
 
@@ -70,5 +74,52 @@ with tempfile.TemporaryDirectory() as work:
     }
     if retry != expected:
         sys.exit(f"patch hunk 13: Harbor resolved the retry settings to {retry}")
+
+
+# Hunk 14: without it every Codex 0.161.0 command is an unsupported exec wrapper, and the verifier
+# scores security 0.5 and cannot evaluate skill efficiency. Two exec inputs from real trials: an
+# inline exec_command, and an allSettled batch whose records (outputs shortened) each belong to one
+# call. The adapter copies this module into every task, so the verifier in the sandbox runs it.
+def codex_exec(source: str, output: str) -> list[tuple[str, dict, str]]:
+    step = {
+        "source": "agent",
+        "tool_calls": [
+            {"tool_call_id": "c1", "function_name": "exec", "arguments": {"input": source}}
+        ],
+        "observation": {"results": [{"source_call_id": "c1", "content": output}]},
+    }
+    return [
+        (call["function_name"], call["arguments"], normalized_tool_call_observation(owner, call))
+        for owner, call in iter_normalized_tool_calls({"steps": [step]})
+        if call.get("_atif_normalization_status") is None
+    ]
+
+
+inline = codex_exec(
+    'text(await tools.exec_command({cmd:"cat /root/.agents/skills/env-canary/SKILL.md",'
+    '"max_output_tokens":6000}));\n',
+    'Script completed\nWall time 0.1 seconds\nOutput:\n\n{"exit_code":0,"output":"---"}',
+)
+if [(name, args) for name, args, _ in inline] != [
+    (
+        "exec_command",
+        {"cmd": "cat /root/.agents/skills/env-canary/SKILL.md", "max_output_tokens": 6000},
+    )
+]:
+    sys.exit(f"patch hunk 14: an inline Codex exec_command was not decoded: {inline}")
+batch = codex_exec(
+    "const results = await Promise.allSettled([\n"
+    '  tools.write_stdin({session_id:88961,chars:"",yield_time_ms:1000,max_output_tokens:2000}),\n'
+    '  tools.write_stdin({session_id:19310,chars:"",yield_time_ms:1000,max_output_tokens:2000})\n'
+    "]); for(let i=0;i<results.length;i++)text({i,...results[i]});\n",
+    "Script completed\nWall time 5.0 seconds\nOutput:\n\n"
+    '{"i":0,"status":"fulfilled","value":{"session_id":88961,"output":""}}\n'
+    '{"i":1,"status":"fulfilled","value":{"exit_code":28,"output":"curl: (28) Failed"}}',
+)
+if [(name, args["session_id"], json.loads(obs)["i"]) for name, args, obs in batch] != [
+    ("write_stdin", 88961, 0),
+    ("write_stdin", 19310, 1),
+]:
+    sys.exit(f"patch hunk 14: a Codex allSettled batch was not decoded call by call: {batch}")
 
 print("SkillEvaluator patch checks passed")
