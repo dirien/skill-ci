@@ -6,7 +6,7 @@
 
 - A DOKS cluster on the newest 1.36 patch release, with an autoscaled node pool of 2 to 5 `s-4vcpu-8gb` nodes (region `fra1` by default).
 - Agent Sandbox v1.0.9, goharbor (chart 1.19.4), the Secrets, the Harbor setup Job, the toolbox, the model list, and Prometheus and Grafana (kube-prometheus-stack chart 92.10.1).
-- The skill-ci controller from the published OCI chart of the stack's `skillCiVersion` (default 0.11.1). Helm never upgrades `crds/`, so Pulumi applies the three CRDs (`SkillEval`, `SandboxProfile`, `SkillCIConfig`) itself, each a resource of its own, and installs the release with `skipCrds: true` after them. The CRDs come from `charts/skill-ci-controller/crds/` of this checkout, so keep the checkout on the release you install.
+- The skill-ci controller from the published OCI chart of the stack's `skillCiVersion` (default 0.11.2). Helm never upgrades `crds/`, so Pulumi applies the three CRDs (`SkillEval`, `SandboxProfile`, `SkillCIConfig`) itself, each a resource of its own, and installs the release with `skipCrds: true` after them. The CRDs come from `charts/skill-ci-controller/crds/` of this checkout, so keep the checkout on the release you install.
 - The `SkillCIConfig` and the `SandboxProfile` named `default`, which the chart creates once from its values (`config.*`, `sandboxProfiles.*`) and never overwrites. The stack sets `config.observability.hubbleRelay` from the stack config `hubbleRelay` (default `hubble-relay.kube-system.svc.cluster.local:80`, the Hubble Relay of DOKS; `""` collects no network flows).
 
 The versions are stack config with the same defaults as [deploy/versions.env](../deploy/versions.env); `deploy/check-versions.sh` compares the two files.

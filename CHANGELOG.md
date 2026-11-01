@@ -2,7 +2,7 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
-## Unreleased
+## [0.11.2](https://github.com/dirien/skill-ci/releases/tag/v0.11.2) (2026-11-01)
 
 - Fix: the Tier 3 verifier decodes the native `exec` calls of Codex 0.161.0 (inline `text(await tools.NAME(...))`, single-quoted strings, `Promise.allSettled` batches). Before, 140 of the 148 such calls in our runs were unsupported, which lowered the security, skill efficiency and skill execution scores of Codex trials. SkillEvaluator patch hunk 14, until [NVIDIA/SkillEvaluator#235](https://github.com/NVIDIA/SkillEvaluator/issues/235) is fixed upstream.
 - Fix (deploy): the vanilla Grafana dashboard is regenerated with the Skill variable, `install.sh` waits for the CRDs and keeps existing `llm-keys` entries on a re-run, `uninstall.sh` removes all three skill-ci CRDs, and `deploy/README.md` has a GitOps section.

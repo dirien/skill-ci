@@ -2,8 +2,8 @@ apiVersion: v2
 name: skill-ci-controller
 description: Kubernetes controller that evaluates agent skills pushed to Harbor (SkillEval CRD, runner Jobs, tag policy, Prometheus metrics).
 type: application
-version: 0.11.1
-appVersion: "0.11.1"
+version: 0.11.2
+appVersion: "0.11.2"
 kubeVersion: ">=1.27.0-0"
 keywords:
   - skills
