@@ -6,6 +6,13 @@ kind: Job
 metadata:
   name: harbor-setup
   namespace: skill-ci
+  # GitOps only, kubectl ignores them (deploy/README.md "GitOps"): Argo CD runs the Job after every sync and
+  # deletes the previous one first; Flux recreates it when its spec changes instead of failing on the
+  # immutable pod template.
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    kustomize.toolkit.fluxcd.io/force: enabled
 spec:
   backoffLimit: 4
   template:

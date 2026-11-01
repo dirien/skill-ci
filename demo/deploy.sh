@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Install or upgrade the skill-ci release on the Pulumi stack. The controller is a Helm release of the
-# published OCI chart (oci://ghcr.io/dirien/charts/skill-ci-controller) and the SkillEval CRD is applied
-# from the chart's crds/: both are resources in infra/Pulumi.yaml, so this is `pulumi up` with a version.
+# published OCI chart (oci://ghcr.io/dirien/charts/skill-ci-controller) and the three CRDs (SkillEval,
+# SandboxProfile, SkillCIConfig) are applied from the chart's crds/ in this checkout: all are resources in
+# infra/Pulumi.yaml, so this is `pulumi up` with a version, then the SkillCIConfig Hubble Relay below.
 #   demo/deploy.sh               the stack's skillCiVersion (default: SKILL_CI_VERSION of deploy/versions.env)
 #   TAG=0.8.1 demo/deploy.sh     a given release: sets the stack config skillCiVersion first
 # The controller, runner and sandbox images are always the ones of that release.
@@ -39,7 +40,11 @@ pulumi up --yes
 # spec.observability.hubbleRelay existed keeps it empty. Fill it from the stack once; a value set
 # with kubectl stays. (A Pulumi CustomResourcePatch cannot express this from Pulumi YAML.)
 relay="$(pulumi stack output hubbleRelay 2>/dev/null || pulumi config get hubbleRelay 2>/dev/null || true)"
-current="$(kubectl -n "${NS}" get skillciconfig default -o jsonpath='{.spec.observability.hubbleRelay}' 2>/dev/null || true)"
+if kubectl -n "${NS}" get skillciconfig default >/dev/null 2>&1; then
+  current="$(kubectl -n "${NS}" get skillciconfig default -o jsonpath='{.spec.observability.hubbleRelay}')"
+else
+  current="(no SkillCIConfig default)"
+fi
 if [[ -n "${relay}" && -z "${current}" ]]; then
   say "Setting the SkillCIConfig Hubble Relay to ${relay}"
   kubectl -n "${NS}" patch skillciconfig default --type merge \

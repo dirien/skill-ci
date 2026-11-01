@@ -22,7 +22,7 @@ All images come from GHCR and need no pull secret, and nothing builds images in 
 | Namespace, secrets, model list, toolbox | `skill-ci` | `kubectl` and `deploy/manifests` |
 | Harbor project `skills` and its webhook policy | in Harbor | a Job (`deploy/manifests/harbor-setup`) |
 | Prometheus and Grafana (optional) | `monitoring` | Helm chart `kube-prometheus-stack`, plus a ServiceMonitor and a dashboard |
-| skill-ci controller, `SkillEval` CRD, runner RBAC | `skill-ci` | OCI Helm chart |
+| skill-ci controller, the CRDs `SkillEval`, `SandboxProfile` and `SkillCIConfig`, the `SkillCIConfig` and `SandboxProfile` named `default`, runner RBAC | `skill-ci` | OCI Helm chart (CRDs applied before it) |
 
 ## Prerequisites
 
@@ -70,15 +70,26 @@ export OPENROUTER_API_KEY=...            # optional: OpenCode with openrouter/..
 deploy/install.sh
 ```
 
-The script runs the steps below in order, prints each one, and can be run again: it keeps the generated passwords,
-upgrades what changed and never overwrites the model list. A first install takes about 20 minutes (most of it Harbor
-and kube-prometheus-stack becoming ready); a re-run with nothing to change takes about a minute. Harbor is upgraded
-only when its chart version or `deploy/helm/values/harbor.yaml` changed, because the chart generates new internal
-secrets on every render and each upgrade restarts Harbor's core, jobservice and registry pods (`HARBOR_UPGRADE=1`
-upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana. To also push the controller's metrics
+The script runs the steps below in order, prints each one, and can be run again: it keeps the generated passwords and
+the LLM keys you do not pass again, upgrades what changed and never overwrites the model list. A first install takes
+about 20 minutes (most of it Harbor and kube-prometheus-stack becoming ready); a re-run with nothing to change takes
+about a minute. Harbor is upgraded only when its chart version or `deploy/helm/values/harbor.yaml` changed, because
+the chart generates new internal secrets on every render and each upgrade restarts Harbor's core, jobservice and
+registry pods (`HARBOR_UPGRADE=1` upgrades it anyway). `SKIP_MONITORING=1` leaves out Prometheus and Grafana. To also push the controller's metrics
 over OpenTelemetry, set `OTLP_ENDPOINT` and the other `OTLP_*` variables of
 [OpenTelemetry export](#opentelemetry-export-optional) before the run, and on every later run.
 Then go to [Try the loop](#try-the-loop). Read on for what each step does and how to check it.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | none | Key `anthropic` of `llm-keys`. Required on the first run, when the Secret does not exist yet. |
+| `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENROUTER_API_KEY`, `OLLAMA_API_KEY`, `NVIDIA_API_KEY` | none | The optional keys `openai`, `openai-base-url`, `openrouter`, `ollama` and `nvidia` of `llm-keys`. A key you leave unset on a re-run keeps its value in the Secret; remove one with `kubectl -n skill-ci edit secret llm-keys`. |
+| `HUBBLE_RELAY` | detected | `host:port` of the Hubble Relay the runner reads the trials' network flows from. Without it the script uses `hubble-relay.kube-system.svc.cluster.local` with its Service port when Cilium and that Service exist (DOKS: port 80). `off` collects no flows. See [Network flows](#network-flows-hubble-relay). |
+| `OTLP_*` | off | [OpenTelemetry export](#opentelemetry-export-optional). |
+| `SKIP_MONITORING=1` | off | No kube-prometheus-stack, ServiceMonitor or dashboard. |
+| `HARBOR_UPGRADE=1` | off | Upgrade Harbor even when its chart version and values did not change. |
+| `CONTROLLER_CHART` | the OCI chart | Another chart, for example `./charts/skill-ci-controller` to test an unreleased one. |
+| `KUBE_CONTEXT` | current context | The kubeconfig context for `kubectl` and `helm`. |
 
 ## Step 1: namespace
 
@@ -123,7 +134,7 @@ Five Secrets, none of them stored in this repository. Templates with placeholder
 | `harbor-credentials` | `skill-ci` | controller, toolbox, setup Job (Harbor REST API) | You choose the Harbor admin password; Harbor is installed with the same one in step 4. The demo uses `admin`; a project robot account is the production choice. |
 | `harbor-pull` | `skill-ci` | runner Jobs and toolbox (`oras` pull and push) | The same login as a registry config for `harbor.harbor.svc.cluster.local`. |
 | `harbor-webhook` | `skill-ci` | controller and the Harbor webhook policy | A random token you generate. The setup Job gives it to Harbor, the controller checks it on every webhook. |
-| `llm-keys` | `skill-ci` | runner Jobs | Your provider accounts. Only `anthropic` is required. |
+| `llm-keys` | `skill-ci` | runner Jobs; the controller reads it for `openai-base-url` and to redact key values on the reporting site | Your provider accounts. Only `anthropic` is required. |
 | `grafana-admin` | `monitoring` | Grafana | You choose the password. Only needed with monitoring. |
 
 The keys inside `llm-keys`:
@@ -136,6 +147,10 @@ The keys inside `llm-keys`:
 | `openrouter` | OpenCode `openrouter/...` models (the demo model list uses one). An API key from openrouter.ai/settings/keys, not a provisioning key: those cannot run models, and the runner fails the run when it gets one | [openrouter.ai](https://openrouter.ai) |
 | `ollama` | OpenCode `ollama-cloud/...` models | [ollama.com](https://ollama.com) |
 | `nvidia` | OpenCode `nvidia/...` models | [build.nvidia.com](https://build.nvidia.com) |
+
+`anthropic` is the key of the default judge. Another judge (`spec.judge` of the `SkillCIConfig`, see
+[Network modes and sandbox profiles](#network-modes-and-sandbox-profiles)) reads its key from the `llm-keys` key named
+in `spec.judge.secretKey`; add that key to the Secret before you switch.
 
 Generate the passwords and keep them in your shell (or a password manager). If you lose the Harbor password, read it
 back from the Secret.
@@ -288,8 +303,19 @@ gates, so with only an Anthropic key the Claude Code entry still decides.
 
 ## Step 8: the controller
 
+The runner reads the network flows of every trial from Hubble Relay when the cluster has one. On Cilium with Hubble
+Relay (DOKS has it) the address is the `hubble-relay` Service in `kube-system`:
+
+```bash
+kubectl -n kube-system get service hubble-relay -o jsonpath='{.spec.ports[0].port}{"\n"}'
+export HUBBLE_RELAY=hubble-relay.kube-system.svc.cluster.local:80   # the port printed above
+# No Hubble Relay: export HUBBLE_RELAY=   (empty collects no flows)
+```
+
 ```bash
 helm show crds oci://ghcr.io/dirien/charts/skill-ci-controller --version "${SKILL_CI_VERSION}" | kubectl apply --server-side -f -
+kubectl wait --for=condition=established --timeout=60s \
+  crd/skillevals.skillci.dev crd/sandboxprofiles.skillci.dev crd/skillciconfigs.skillci.dev
 helm upgrade --install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller \
   --version "${SKILL_CI_VERSION}" \
   --namespace skill-ci \
@@ -297,12 +323,25 @@ helm upgrade --install skill-ci oci://ghcr.io/dirien/charts/skill-ci-controller 
   --set-string image.tag="${SKILL_CI_VERSION}" \
   --set-string controller.runnerImage.tag="${SKILL_CI_VERSION}" \
   --set-string controller.sandboxImage.tag="${SKILL_CI_VERSION}" \
+  --set-string config.observability.hubbleRelay="${HUBBLE_RELAY}" \
   --wait --timeout 5m
 kubectl -n skill-ci get deployment skill-ci-controller
+kubectl -n skill-ci get skillciconfig,sandboxprofile
 ```
 
-The first command applies the `SkillEval` CRD. Helm installs a chart's `crds/` once and never upgrades it, so apply the
-CRD yourself on every upgrade.
+The first command applies the three CRDs (`SkillEval`, `SandboxProfile`, `SkillCIConfig`). Helm installs a chart's
+`crds/` once and never upgrades it, so apply them yourself on every upgrade, and wait until they are established: the
+chart creates a `SkillCIConfig` and a `SandboxProfile` named `default`.
+
+The chart creates those two objects only when they do not exist yet, from `config.*` and `sandboxProfiles.*` of the
+values (see [Network modes and sandbox profiles](#network-modes-and-sandbox-profiles)). On a later upgrade
+`config.observability.hubbleRelay` has no effect. An install from before the field existed keeps it empty; set it once
+(`install.sh` does this when the field is empty):
+
+```bash
+kubectl -n skill-ci patch skillciconfig default --type merge \
+  -p "{\"spec\":{\"observability\":{\"hubbleRelay\":\"${HUBBLE_RELAY}\"}}}"
+```
 
 Expected:
 
@@ -389,11 +428,13 @@ Done.
 
 ```bash
 kubectl get pods -A | grep -v 'kube-system'
-kubectl -n skill-ci get servicemonitor,skillevals
+kubectl -n skill-ci get skillciconfig,sandboxprofile,skillevals
+kubectl -n skill-ci get servicemonitor   # only with monitoring
 ```
 
-Everything should be `Running` or `Completed`, and `kubectl get skillevals` returns "No resources found" until you
-push a skill. If you skipped monitoring, there is no ServiceMonitor.
+Everything should be `Running` or `Completed`. The `SkillCIConfig` shows `READY True`, the `SandboxProfile` `default`
+`WARM 2` and, once the warm sandboxes have started, `READY 2`. `kubectl get skillevals` returns nothing until you push
+a skill. Without monitoring the last command fails, because the `ServiceMonitor` kind does not exist.
 
 ## Try the loop
 
@@ -458,7 +499,7 @@ restart.
 
 | Resource | Holds |
 | --- | --- |
-| `SkillCIConfig` `default` (short name `scc`) | the default sandbox profile and the network policy: default mode, allowed modes, enforcement, bundles, always-allowed hosts |
+| `SkillCIConfig` `default` (short name `scc`) | the default sandbox profile; the network policy: default mode, allowed modes, enforcement, bundles, always-allowed hosts; the Hubble Relay of the network flows; the LLM judge (provider, model, base URL, `llm-keys` key) |
 | `SandboxProfile` (short name `sbp`), `default` and any you add | the trial sandbox: image (default: the release's sandbox image), CPU and memory (default 1 and 2Gi), warm pool size (default 2), `runtimeClassName`, `nodeSelector`, `tolerations` |
 
 ```bash
@@ -509,8 +550,18 @@ Sandbox's own policy. The effective hosts of a run are in `kubectl -n skill-ci g
 jsonpath='{.status.network}'` and on its page of the reporting site; the runs page shows the policy in force. Details:
 CONTRACT.md "SkillCIConfig", "SandboxProfile" and "Network modes".
 
+### Network flows (Hubble Relay)
+
+With `spec.observability.hubbleRelay` set, every runner Job gets it as `HUBBLE_SERVER` and stores the DNS lookups and
+connections of each trial in the trial bundle next to the report (the reporting site shows them per trial). Empty
+collects no flows; runs work the same. `install.sh` sets it from `HUBBLE_RELAY` or the `hubble-relay` Service it finds,
+and only while the field is empty, so a value you edit stays. The runner pods have no egress policy, so they reach the
+relay whatever the trials' network mode. Trial bundles are on by default (runner image default `TRIAL_BUNDLE=on`); see
+CONTRACT.md "Trial bundles".
+
 GitOps tools that render charts with `helm template` (Argo CD) would apply the seed objects on every sync: set
-`config.create=false` and `sandboxProfiles.default.create=false` there and keep the two objects in Git instead.
+`config.create=false` and `sandboxProfiles.default.create=false` there and keep the two objects in Git instead (see
+[GitOps](#gitops)).
 
 ## Platform notes
 
@@ -551,6 +602,56 @@ Some manifests are generated, never hand-edited:
 
 After changing a source, run `deploy/generate.sh`. `deploy/generate.sh --check` exits 1 when the files are out of date.
 
+## GitOps
+
+Everything `install.sh` applies is a file in this repository, so Argo CD or Flux can install skill-ci without the
+script. Put these in Git, in this order (Argo CD sync waves, or Flux `dependsOn`):
+
+| Order | What | From |
+| --- | --- | --- |
+| 1 | Namespaces | `deploy/manifests/namespaces.yaml`, `deploy/manifests/monitoring/namespace.yaml` |
+| 1 | Agent Sandbox | a kustomization whose only resource is the release URL of step 2 (server-side apply: its CRDs are large) |
+| 1 | skill-ci CRDs | `config/crd/` (the same files as the chart's `crds/`), server-side apply |
+| 2 | Harbor, kube-prometheus-stack | the charts of steps 4 and 5 with `deploy/helm/values/*.yaml` and the versions of `versions.env` |
+| 3 | Toolbox | `deploy/manifests` (demo only) |
+| 3 | Model list | `deploy/manifests/seed`, created once (see below) |
+| 3 | Controller | the OCI chart at `SKILL_CI_VERSION` with `deploy/helm/values/skill-ci-controller.yaml` |
+| 3 | `SkillCIConfig` and `SandboxProfile` `default` | `config/manager/skillciconfig.yaml` and `config/manager/sandboxprofile.yaml`, with `hubbleRelay` filled in |
+| 4 | ServiceMonitor and dashboard | `deploy/manifests/monitoring` (needs the Prometheus Operator CRDs of kube-prometheus-stack) |
+| 4 | Harbor project and webhook | `deploy/manifests/harbor-setup` |
+
+What `install.sh` does that Git has to say instead:
+
+- Chart values. The script passes the image tags, `config.observability.hubbleRelay` and the `OTLP_*` values with
+  `--set`. In Git, pin the chart version (the chart's images default to the same release) and put the rest in a
+  values file next to `deploy/helm/values/skill-ci-controller.yaml`.
+- CRDs. Helm never upgrades `crds/`, so the CRDs are their own step before the chart. Argo CD renders the chart with
+  `helm template`: set `skipCrds: true` on the chart source and apply `config/crd/`. With Flux use
+  `install.crds: Create` and `upgrade.crds: CreateReplace` on the HelmRelease, or apply `config/crd/` in a
+  Kustomization the HelmRelease depends on.
+- Seed objects. `helm template` has no cluster, so under Argo CD the chart renders the `SkillCIConfig` and the
+  `SandboxProfile` on every sync. Set `config.create=false` and `sandboxProfiles.default.create=false` and keep the
+  two files from `config/manager/` in Git. Flux runs Helm against the cluster, so the chart seeds them once as it
+  does for `install.sh`; keeping them in Git works there too.
+- Hubble Relay. Nothing detects it: write the address (DOKS: `hubble-relay.kube-system.svc.cluster.local:80`) into
+  `spec.observability.hubbleRelay`, or leave it empty for no flows.
+- Model list. The demo edits it live, so Git must not reset it. Flux: annotate the ConfigMap with
+  `kustomize.toolkit.fluxcd.io/ssa: IfNotPresent`. Argo CD: add `ignoreDifferences` on `/data` with the sync option
+  `RespectIgnoreDifferences=true`. Or change the list only through Git and skip `make demo-model-swap`.
+- Harbor setup Job. A Job's pod template is immutable, which is why the script deletes it first. `job.yaml` carries
+  annotations for both tools: Argo CD runs it as a `PostSync` hook and deletes the previous one, Flux recreates it
+  when it changes.
+- Harbor upgrades. The chart generates its internal secrets and token certificate on every render. Flux renders only
+  when the chart or the values change, like the script. Argo CD renders on every refresh, so Harbor drifts and
+  restarts: give it fixed values from a Secret (`core.existingSecret`, `core.existingXsrfSecret`, `core.secretName`,
+  `jobservice.existingSecret`, `registry.existingSecret`, `registry.credentials.htpasswdString`).
+
+What stays imperative are the Secrets of [step 3](#step-3-secrets). Never commit their values: create them with
+`kubectl`, or from your secret store with External Secrets, Sealed Secrets or SOPS. They must exist before the
+toolbox, the controller and the setup Job start. Use the same Harbor admin password in `harbor-credentials`,
+`harbor-pull` and Harbor itself; in Git, point Harbor at a Secret with `existingSecretAdminPassword` (namespace
+`harbor`, key `HARBOR_ADMIN_PASSWORD`) instead of `harborAdminPassword`.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
@@ -571,6 +672,7 @@ After changing a source, run `deploy/generate.sh`. `deploy/generate.sh --check` 
 | A run fails with `unknown network bundle` | The skill names a bundle the platform does not define. Add it to `spec.network.bundles` of `SkillCIConfig` `default`, or use domains. |
 | A run fails with `sandbox profile "<name>" not found` | The model list entry names a `SandboxProfile` that does not exist: `kubectl -n skill-ci get sandboxprofiles`. |
 | A trial fails with `InvalidMetadata` | Agent Sandbox refused the claim's labels. skill-ci uses the default allowed domain `sandbox.users.io`; a custom `agent-sandbox-config` with `allowed-label-domains` must keep it. |
+| A trial page has no network flows | `kubectl -n skill-ci get scc default -o jsonpath='{.spec.observability.hubbleRelay}'` is empty, or the relay does not answer: the trial bundle index says which. Set it as in [step 8](#step-8-the-controller). |
 | An agent cannot reach a host it needs | The skill's network mode blocks it. `hubble observe -n skill-ci --verdict DROPPED` shows the blocked lookups; add the domain or a bundle to `skillci.dev/network-allow`. |
 | `ImagePullBackOff` on ghcr.io | The release exists but its GHCR packages are still private. Make them public in the package settings. |
 
@@ -589,7 +691,7 @@ By hand, in reverse order:
 ```bash
 kubectl -n skill-ci delete skillevals --all
 helm -n skill-ci uninstall skill-ci
-kubectl delete crd skillevals.skillci.dev
+kubectl delete crd skillevals.skillci.dev sandboxprofiles.skillci.dev skillciconfigs.skillci.dev
 helm -n monitoring uninstall kps
 helm -n harbor uninstall harbor
 kubectl delete namespace skill-ci monitoring harbor

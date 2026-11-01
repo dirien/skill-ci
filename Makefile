@@ -48,7 +48,7 @@ preview: ## Show what pulumi up would change
 	@cd infra && { [ ! -f "$(PULUMI_ENV)" ] || . "$(PULUMI_ENV)"; } && $(PULUMI) preview
 
 .PHONY: deploy
-deploy: ## Install a skill-ci release (OCI chart, CRD, GHCR images) with pulumi up (TAG=0.8.1 sets skillCiVersion)
+deploy: ## Install a skill-ci release (OCI chart, CRDs, GHCR images) with pulumi up (TAG=0.8.1 sets skillCiVersion)
 	@demo/deploy.sh
 
 .PHONY: seed
@@ -107,11 +107,23 @@ sandbox-image: ## Build the generic sandbox image locally (needs docker; the rel
 
 .PHONY: lint
 lint: check-skills ## shellcheck, yamllint, markdownlint, JSON validity
-	$(SHELLCHECK) demo/*.sh infra/harbor-setup.sh sandbox/*.sh
-	$(YAMLLINT) -c .yamllint.yaml infra demo .github .goreleaser.yaml .yamllint.yaml .markdownlint.yaml
+	$(SHELLCHECK) demo/*.sh deploy/*.sh infra/harbor-setup.sh sandbox/*.sh
+	$(YAMLLINT) -c .yamllint.yaml infra demo deploy config .github .goreleaser.yaml .yamllint.yaml .markdownlint.yaml
 	$(MARKDOWNLINT) README.md DEMO.md ADOPTERS.md CHANGELOG.md CODE_OF_CONDUCT.md CONTRIBUTING.md GOVERNANCE.md MAINTAINERS.md ROADMAP.md SECURITY.md .github/PULL_REQUEST_TEMPLATE.md "docs/*.md" deploy/README.md ui/README.md "testdata/*/README.md" "skills/*/SKILL.md" "demo/variants/*/*/SKILL.md"
 	python3 -m json.tool infra/dashboards/skill-ci.json >/dev/null
 	@for f in skills/*/evals/evals.json demo/variants/*/*/evals/evals.json; do python3 -m json.tool "$$f" >/dev/null || exit 1; done
+
+.PHONY: deploy-lint
+deploy-lint: ## Vanilla path checks: versions match infra/, generated manifests current, kubeconform (needs helm, kubeconform)
+	deploy/check-versions.sh
+	deploy/generate.sh --check
+	@for dir in deploy/manifests deploy/manifests/monitoring deploy/manifests/harbor-setup; do \
+	  kubectl kustomize "$$dir" | $(KUBECONFORM) -strict -summary -ignore-missing-schemas - || exit 1; \
+	done
+	$(KUBECONFORM) -strict -summary deploy/manifests/seed/*.yaml deploy/manifests/secrets/*.example.yaml
+	$(HELM) template skill-ci $(CHART) --namespace skill-ci -f deploy/helm/values/skill-ci-controller.yaml \
+	  --set-string config.observability.hubbleRelay=hubble-relay.kube-system.svc.cluster.local:80 | \
+	  $(KUBECONFORM) -strict -summary -ignore-missing-schemas -
 
 .PHONY: lint-workflows
 lint-workflows: ## actionlint on .github/workflows (needs actionlint)

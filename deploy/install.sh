@@ -9,6 +9,8 @@
 # command from deploy/README.md. Environment:
 #   ANTHROPIC_API_KEY  required unless the Secret llm-keys already exists
 #   OPENAI_API_KEY, OPENAI_BASE_URL, OPENROUTER_API_KEY, OLLAMA_API_KEY, NVIDIA_API_KEY   optional LLM keys
+#                      llm-keys is written when one of these is set. A key whose variable is unset keeps its
+#                      value in the Secret, so a re-run never drops a key; remove one with kubectl edit.
 #   SKIP_MONITORING=1  do not install kube-prometheus-stack, the ServiceMonitor and the dashboard
 #   HARBOR_UPGRADE=1   run helm upgrade for Harbor even when its chart version and values did not change
 #   CONTROLLER_CHART   chart to install (default oci://ghcr.io/dirien/charts/skill-ci-controller),
@@ -125,8 +127,13 @@ step "Checking prerequisites"
 command -v kubectl >/dev/null || die "kubectl is not installed"
 command -v helm >/dev/null || die "helm is not installed"
 command -v openssl >/dev/null || die "openssl is not installed (used to generate passwords)"
-helm_major="$(helm version --template '{{.Version}}' | sed 's/^v//; s/\..*//')"
-[[ "${helm_major}" -ge 3 ]] || die "helm 3.17 or newer is required"
+helm_version="$(helm version --template '{{.Version}}' | sed 's/^v//')"
+helm_major="${helm_version%%.*}"
+helm_minor="${helm_version#*.}"
+helm_minor="${helm_minor%%.*}"
+if [[ "${helm_major}" -lt 3 || ("${helm_major}" -eq 3 && "${helm_minor}" -lt 17) ]]; then
+  die "helm 3.17 or newer is required, found ${helm_version}"
+fi
 kc version >/dev/null || die "cannot reach the cluster. Check KUBECONFIG"
 echo "cluster: $(kc config current-context)"
 if ! kc get storageclass -o jsonpath='{range .items[*]}{.metadata.annotations.storageclass\.kubernetes\.io/is-default-class}{"\n"}{end}' | grep -q true; then
@@ -181,17 +188,26 @@ harbor_auth="$(printf 'admin:%s' "${harbor_password}" | base64 | tr -d '\n')"
 apply_secret "${ns}" harbor-pull --type=kubernetes.io/dockerconfigjson \
   --from-file=.dockerconfigjson=<(printf '{"auths":{"%s":{"username":"admin","password":"%s","auth":"%s"}}}' \
     "${harbor_host}" "${harbor_password}" "${harbor_auth}")
-if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+# llm-keys: key=VARIABLE. A key whose variable is unset keeps the value it has in the Secret.
+llm_keys="anthropic=ANTHROPIC_API_KEY openai=OPENAI_API_KEY openai-base-url=OPENAI_BASE_URL
+openrouter=OPENROUTER_API_KEY ollama=OLLAMA_API_KEY nvidia=NVIDIA_API_KEY"
+llm_keys_set=0
+for pair in ${llm_keys}; do
+  var="${pair#*=}"
+  [[ -z "${!var:-}" ]] || llm_keys_set=1
+done
+if [[ "${llm_keys_set}" == 1 ]]; then
   apply_secret "${ns}" llm-keys --from-env-file=<(
-    printf 'anthropic=%s\n' "${ANTHROPIC_API_KEY}"
-    [[ -z "${OPENAI_API_KEY:-}" ]] || printf 'openai=%s\n' "${OPENAI_API_KEY}"
-    [[ -z "${OPENAI_BASE_URL:-}" ]] || printf 'openai-base-url=%s\n' "${OPENAI_BASE_URL}"
-    [[ -z "${OPENROUTER_API_KEY:-}" ]] || printf 'openrouter=%s\n' "${OPENROUTER_API_KEY}"
-    [[ -z "${OLLAMA_API_KEY:-}" ]] || printf 'ollama=%s\n' "${OLLAMA_API_KEY}"
-    [[ -z "${NVIDIA_API_KEY:-}" ]] || printf 'nvidia=%s\n' "${NVIDIA_API_KEY}"
+    for pair in ${llm_keys}; do
+      key="${pair%%=*}"
+      var="${pair#*=}"
+      value="${!var:-}"
+      [[ -n "${value}" ]] || value="$(secret_field "${ns}" llm-keys "${key}")"
+      [[ -z "${value}" ]] || printf '%s=%s\n' "${key}" "${value}"
+    done
   )
 else
-  echo "secret ${ns}/llm-keys kept (ANTHROPIC_API_KEY is not set)"
+  echo "secret ${ns}/llm-keys kept (no LLM key variable is set)"
 fi
 if [[ "${SKIP_MONITORING:-0}" != 1 ]]; then
   grafana_password="$(secret_field monitoring grafana-admin admin-password)"
@@ -245,8 +261,11 @@ fi
 step "skill-ci controller ${SKILL_CI_VERSION} (${controller_chart})${OTLP_ENDPOINT:+, OTLP export to ${OTLP_ENDPOINT}}"
 chart_version=()
 [[ "${controller_chart}" != oci://* ]] || chart_version=(--version "${SKILL_CI_VERSION}")
-# Helm installs crds/ on the first install only and never upgrades them, so apply them on every run.
+# Helm installs crds/ on the first install only and never upgrades them, so apply them on every run. The
+# chart creates a SkillCIConfig and a SandboxProfile, so their CRDs must be established first.
 hm show crds "${controller_chart}" ${chart_version[@]+"${chart_version[@]}"} | kc apply --server-side -f -
+kc wait --for=condition=established --timeout=60s \
+  crd/skillevals.skillci.dev crd/sandboxprofiles.skillci.dev crd/skillciconfigs.skillci.dev
 hm upgrade --install skill-ci "${controller_chart}" ${chart_version[@]+"${chart_version[@]}"} \
   --namespace "${ns}" \
   -f "${deploy_dir}/helm/values/skill-ci-controller.yaml" \
@@ -260,6 +279,7 @@ kc -n "${ns}" get deployment skill-ci-controller
 # The chart creates the SkillCIConfig default only once; an older install has no relay yet.
 if [[ -n "${relay}" ]] && kc -n "${ns}" get skillciconfig default >/dev/null 2>&1 &&
   [[ -z "$(kc -n "${ns}" get skillciconfig default -o jsonpath='{.spec.observability.hubbleRelay}')" ]]; then
+  echo "setting the Hubble Relay of the existing SkillCIConfig default to ${relay}"
   kc -n "${ns}" patch skillciconfig default --type merge \
     -p "{\"spec\":{\"observability\":{\"hubbleRelay\":\"${relay}\"}}}"
 fi

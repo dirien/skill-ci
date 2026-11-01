@@ -70,7 +70,8 @@ fi
 
 step "skill-ci controller"
 helm_uninstall skill-ci skill-ci
-kc delete crd skillevals.skillci.dev --ignore-not-found
+# The SkillCIConfig and SandboxProfiles carry helm.sh/resource-policy: keep; deleting their CRDs removes them.
+kc delete crd skillevals.skillci.dev sandboxprofiles.skillci.dev skillciconfigs.skillci.dev --ignore-not-found
 
 step "Harbor setup Job and toolbox"
 kc delete -k "${deploy_dir}/manifests/harbor-setup" --ignore-not-found

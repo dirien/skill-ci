@@ -24,7 +24,37 @@ data:
         "to": "now"
       },
       "templating": {
-        "list": []
+        "list": [
+          {
+            "name": "skill",
+            "label": "Skill",
+            "type": "query",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "query": {
+              "query": "label_values(skillci_lift, skill)",
+              "refId": "skill"
+            },
+            "definition": "label_values(skillci_lift, skill)",
+            "refresh": 2,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "sort": 1,
+            "hide": 0
+          }
+        ]
       },
       "annotations": {
         "list": []
@@ -51,7 +81,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "label_join(label_join(label_join(label_replace(skillci_lift, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\"), \"harness\", \"@\", \"agent\", \"agent_version\"), \"col\", \" / \", \"harness\", \"short\"), \"row\", \" \", \"skill\", \"version\")",
+              "expr": "label_join(label_join(label_join(label_replace(skillci_lift{skill=~\"$skill\"}, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\"), \"harness\", \"@\", \"agent\", \"agent_version\"), \"col\", \" / \", \"harness\", \"short\"), \"row\", \" \", \"skill\", \"version\")",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -157,7 +187,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum(skillci_stable) or vector(0)",
+              "expr": "sum(skillci_stable{skill=~\"$skill\"}) or vector(0)",
               "refId": "A",
               "legendFormat": "",
               "format": "time_series",
@@ -217,7 +247,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum(skillci_obsolete) or vector(0)",
+              "expr": "sum(skillci_obsolete{skill=~\"$skill\"}) or vector(0)",
               "refId": "A",
               "legendFormat": "",
               "format": "time_series",
@@ -260,7 +290,7 @@ data:
           "id": 4,
           "type": "stat",
           "title": "SkillEvals by phase (now)",
-          "description": "skillci_skillevals_total (counter, since controller start).",
+          "description": "skillci_skillevals_total (counter, since controller start). Counts every SkillEval in the namespace; the skill filter does not apply.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -328,9 +358,9 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "label_replace(skillci_with_score, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
+              "expr": "label_replace(skillci_with_score{skill=~\"$skill\"}, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
               "refId": "A",
-              "legendFormat": "{{skill}} {{version}} · {{agent}}@{{agent_version}} / {{short}}",
+              "legendFormat": "{{skill}} {{version}} \u00b7 {{agent}}@{{agent_version}} / {{short}}",
               "format": "time_series",
               "instant": true,
               "range": false
@@ -381,9 +411,9 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "label_replace(skillci_without_score, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
+              "expr": "label_replace(skillci_without_score{skill=~\"$skill\"}, \"short\", \"$1\", \"model\", \"(?:[^/]*/)?(?:claude-)?(.*)\")",
               "refId": "A",
-              "legendFormat": "{{skill}} {{version}} · {{agent}}@{{agent_version}} / {{short}}",
+              "legendFormat": "{{skill}} {{version}} \u00b7 {{agent}}@{{agent_version}} / {{short}}",
               "format": "time_series",
               "instant": true,
               "range": false
@@ -433,7 +463,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "skillci_stable == 1",
+              "expr": "skillci_stable{skill=~\"$skill\"} == 1",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -492,7 +522,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "skillci_obsolete == 1",
+              "expr": "skillci_obsolete{skill=~\"$skill\"} == 1",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -535,7 +565,7 @@ data:
           "id": 9,
           "type": "timeseries",
           "title": "SkillEvals over time",
-          "description": "skillci_skillevals_total by phase.",
+          "description": "skillci_skillevals_total by phase. Counts every SkillEval in the namespace; the skill filter does not apply.",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -601,7 +631,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "skillci_publication == 1",
+              "expr": "skillci_publication{skill=~\"$skill\"} == 1",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -723,7 +753,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "count(skillci_rejected == 1) or vector(0)",
+              "expr": "count(skillci_rejected{skill=~\"$skill\"} == 1) or vector(0)",
               "refId": "A",
               "legendFormat": "",
               "format": "time_series",
@@ -782,7 +812,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "skillci_rejected == 1",
+              "expr": "skillci_rejected{skill=~\"$skill\"} == 1",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -842,7 +872,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift)",
+              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift{skill=~\"$skill\"})",
               "refId": "A",
               "legendFormat": "",
               "format": "table",
@@ -854,7 +884,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_lower)",
+              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_lower{skill=~\"$skill\"})",
               "refId": "B",
               "legendFormat": "",
               "format": "table",
@@ -866,7 +896,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_upper)",
+              "expr": "sum by (skill, version, agent, agent_version, model) (skillci_lift_ci_upper{skill=~\"$skill\"})",
               "refId": "C",
               "legendFormat": "",
               "format": "table",
@@ -996,7 +1026,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "count(skillci_inconclusive == 1) or vector(0)",
+              "expr": "count(skillci_inconclusive{skill=~\"$skill\"} == 1) or vector(0)",
               "refId": "A",
               "legendFormat": "",
               "format": "time_series",
@@ -1056,7 +1086,7 @@ data:
                 "type": "prometheus",
                 "uid": "prometheus"
               },
-              "expr": "count(skillci_regressed == 1) or vector(0)",
+              "expr": "count(skillci_regressed{skill=~\"$skill\"} == 1) or vector(0)",
               "refId": "A",
               "legendFormat": "",
               "format": "time_series",

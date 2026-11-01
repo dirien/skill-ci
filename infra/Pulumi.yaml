@@ -461,7 +461,9 @@ resources:
         - ${ns}
 
   # The SkillEval CRD from the chart's crds/. Helm installs crds/ once and never upgrades them, so
-  # Pulumi applies the CRD itself and the release skips them.
+  # Pulumi applies the CRDs itself and the release skips them. They come from this checkout, not from the
+  # published chart: keep the checkout on the release of skillCiVersion (deploy/install.sh applies the
+  # published chart's own crds/ with helm show crds instead).
   skillCiCrds:
     type: kubernetes:yaml/v2:ConfigFile
     properties:
