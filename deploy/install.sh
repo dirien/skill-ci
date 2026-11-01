@@ -296,5 +296,5 @@ kc -n "${ns}" logs job/harbor-setup --tail=5
 step "Done"
 cat <<DONE
 Harbor admin password:  kubectl -n ${ns} get secret harbor-credentials -o jsonpath='{.data.password}' | base64 --decode
-Next: make seed   (pushes the sample skills, see deploy/README.md "Run the demo")
+Next: make seed   (pushes the sample skills, see deploy/README.md "Try the loop")
 DONE
