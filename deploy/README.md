@@ -471,7 +471,7 @@ the skill.
 | Target | What it does |
 | --- | --- |
 | `make seed` | Pushes every skill under `skills/` as `v1.0.0` |
-| `make demo-push SKILL=acme-release-notes VERSION=v1.1.0` | Pushes a new version (`v1.2.0` is a deliberate regression) |
+| `make demo-push SKILL=k8s-incident-triage VERSION=v1.1.0` | Pushes a new version (`v1.2.0` is a deliberate regression) |
 | `make draft-evals SKILL=...` | Drafts `evals/evals.json` for a skill, for you to review |
 | `make demo-model-swap MODE=add` | Changes the model list live (`add`, `swap`, `restore`, `bump`, `require`, `optional`) |
 | `make status` | SkillEvals and the tags per skill |

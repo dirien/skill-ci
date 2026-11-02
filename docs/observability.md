@@ -46,7 +46,7 @@ The runner pod has no egress policy (only trial pods do, see [Network modes and 
 `make report` downloads the eval reports attached to a skill version in Harbor, the newest per `agent@version/model` entry:
 
 ```bash
-make report SKILL=acme-release-notes VERSION=v1.1.0 OUT=reports/
+make report SKILL=k8s-incident-triage VERSION=v1.1.0 OUT=reports/
 ```
 
 `MODEL=...` limits it to one model. Each report holds `report.html`, `result.json` and, when SkillEvaluator wrote one, `BENCHMARK.md`.

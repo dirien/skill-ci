@@ -1,0 +1,56 @@
+{
+  "skill_name": "k8s-incident-triage",
+  "evals": [
+    {
+      "id": "triage-oom",
+      "prompt": "The ledger API in production keeps restarting. Write a triage note into a file named TRIAGE.md. This is the output of kubectl -n payments-prd describe pod ledger-api-7d9f8c6b5-x2k4p:\n\nName:             ledger-api-7d9f8c6b5-x2k4p\nNamespace:        payments-prd\nNode:             pool-prd-3f9k2/10.110.0.14\nStatus:           Running\nControlled By:    ReplicaSet/ledger-api-7d9f8c6b5\nContainers:\n  ledger-api:\n    Image:          registry.acme.example/ledger-api:2.3.1\n    State:          Waiting\n      Reason:       CrashLoopBackOff\n    Last State:     Terminated\n      Reason:       OOMKilled\n      Exit Code:    137\n    Ready:          False\n    Restart Count:  7\n    Limits:\n      memory:  256Mi\n    Requests:\n      memory:  256Mi\nEvents:\n  Type     Reason   Age                 From     Message\n  ----     ------   ----                ----     -------\n  Warning  BackOff  2m (x31 over 18m)   kubelet  Back-off restarting failed container ledger-api in pod ledger-api-7d9f8c6b5-x2k4p_payments-prd",
+      "expected_output": "TRIAGE.md whose first line is 'TRIAGE payments-prd/ledger-api-7d9f8c6b5-x2k4p', then '## Cause' with OOM_KILLED, '## Evidence' quoting the 'Reason: OOMKilled' line, and '## Next step' with 'kubectl -n payments-prd top pod ledger-api-7d9f8c6b5-x2k4p --containers'. The quote is followed by the line '(describe)', and the last line is 'Owner: @acme/payments-oncall'.",
+      "assertions": [
+        "TRIAGE.md exists",
+        "The first line is exactly 'TRIAGE payments-prd/ledger-api-7d9f8c6b5-x2k4p'",
+        "There are exactly three sections, '## Cause', '## Evidence' and '## Next step', in that order",
+        "The Cause section is exactly 'OOM_KILLED'",
+        "The Evidence section is a quote line starting with '> ' that contains 'OOMKilled'",
+        "The Next step section is exactly 'kubectl -n payments-prd top pod ledger-api-7d9f8c6b5-x2k4p --containers'",
+        "The note does not suggest deleting the pod, restarting a rollout, or scaling",
+        "The Evidence section names the source of the quote on its own line as '(describe)'",
+        "The last line of the file is exactly 'Owner: @acme/payments-oncall'"
+      ],
+      "expected_skill": "k8s-incident-triage"
+    },
+    {
+      "id": "triage-image-pull",
+      "prompt": "The checkout web pod in staging never starts. Write a triage note into a file named TRIAGE.md. This is the output of kubectl -n storefront-stg describe pod checkout-web-5c8b7d9f4-m7qzt:\n\nName:             checkout-web-5c8b7d9f4-m7qzt\nNamespace:        storefront-stg\nNode:             pool-stg-8d2m1/10.110.0.22\nStatus:           Pending\nControlled By:    ReplicaSet/checkout-web-5c8b7d9f4\nContainers:\n  checkout-web:\n    Image:          registry.acme.example/checkout-web:3.0.0-rc1\n    State:          Waiting\n      Reason:       ImagePullBackOff\n    Ready:          False\n    Restart Count:  0\nEvents:\n  Type     Reason   Age                From     Message\n  ----     ------   ----               ----     -------\n  Normal   Pulling  4m (x4 over 6m)    kubelet  Pulling image \"registry.acme.example/checkout-web:3.0.0-rc1\"\n  Warning  Failed   4m (x4 over 6m)    kubelet  Failed to pull image \"registry.acme.example/checkout-web:3.0.0-rc1\": not found\n  Warning  Failed   4m (x4 over 6m)    kubelet  Error: ErrImagePull\n  Normal   BackOff  70s (x20 over 6m)  kubelet  Back-off pulling image \"registry.acme.example/checkout-web:3.0.0-rc1\"",
+      "expected_output": "TRIAGE.md whose first line is 'TRIAGE storefront-stg/checkout-web-5c8b7d9f4-m7qzt', then '## Cause' with IMAGE_PULL, '## Evidence' quoting the 'Failed to pull image' event line, and '## Next step' with 'kubectl -n storefront-stg describe pod checkout-web-5c8b7d9f4-m7qzt'. The quote is followed by the line '(events)', and the last line is 'Owner: @acme/storefront-oncall'.",
+      "assertions": [
+        "TRIAGE.md exists",
+        "The first line is exactly 'TRIAGE storefront-stg/checkout-web-5c8b7d9f4-m7qzt'",
+        "There are exactly three sections, '## Cause', '## Evidence' and '## Next step', in that order",
+        "The Cause section is exactly 'IMAGE_PULL'",
+        "The Evidence section is a quote line starting with '> ' that contains 'Failed to pull image'",
+        "The Next step section is exactly 'kubectl -n storefront-stg describe pod checkout-web-5c8b7d9f4-m7qzt'",
+        "The note does not suggest deleting the pod, restarting a rollout, or scaling",
+        "The Evidence section names the source of the quote on its own line as '(events)'",
+        "The last line of the file is exactly 'Owner: @acme/storefront-oncall'"
+      ],
+      "expected_skill": "k8s-incident-triage"
+    },
+    {
+      "id": "triage-app-crash",
+      "prompt": "The nightly ledger report in dev crashes right after it starts. Write a triage note into a file named TRIAGE.md. This is the output of kubectl -n payments-dev describe pod ledger-report-6f5d8b9c7-q8wzn:\n\nName:             ledger-report-6f5d8b9c7-q8wzn\nNamespace:        payments-dev\nNode:             pool-dev-1k7p4/10.110.0.31\nStatus:           Running\nControlled By:    ReplicaSet/ledger-report-6f5d8b9c7\nContainers:\n  ledger-report:\n    Image:          registry.acme.example/ledger-report:0.9.0\n    State:          Waiting\n      Reason:       CrashLoopBackOff\n    Last State:     Terminated\n      Reason:       Error\n      Exit Code:    1\n    Ready:          False\n    Restart Count:  5\n\nAnd this is the output of kubectl -n payments-dev logs ledger-report-6f5d8b9c7-q8wzn --previous:\n\n2026-11-02T09:14:03Z INFO  starting ledger-report 0.9.0\n2026-11-02T09:14:03Z INFO  loading configuration\npanic: required environment variable DATABASE_URL is not set\n\ngoroutine 1 [running]:\nmain.mustEnv(...)\n        /src/cmd/report/main.go:41",
+      "expected_output": "TRIAGE.md whose first line is 'TRIAGE payments-dev/ledger-report-6f5d8b9c7-q8wzn', then '## Cause' with APP_CRASH, '## Evidence' quoting the 'panic: required environment variable DATABASE_URL is not set' line, and '## Next step' with 'kubectl -n payments-dev rollout history deployment/ledger-report'. The quote is followed by the line '(logs)', and the last line is 'Owner: @acme/payments-oncall'.",
+      "assertions": [
+        "TRIAGE.md exists",
+        "The first line is exactly 'TRIAGE payments-dev/ledger-report-6f5d8b9c7-q8wzn'",
+        "There are exactly three sections, '## Cause', '## Evidence' and '## Next step', in that order",
+        "The Cause section is exactly 'APP_CRASH'",
+        "The Evidence section is a quote line starting with '> ' that contains 'DATABASE_URL'",
+        "The Next step section is exactly 'kubectl -n payments-dev rollout history deployment/ledger-report'",
+        "The note does not suggest deleting the pod, restarting a rollout, or scaling",
+        "The Evidence section names the source of the quote on its own line as '(logs)'",
+        "The last line of the file is exactly 'Owner: @acme/payments-oncall'"
+      ],
+      "expected_skill": "k8s-incident-triage"
+    }
+  ]
+}

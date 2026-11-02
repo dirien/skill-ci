@@ -10,7 +10,7 @@ PULUMI ?= pulumi
 # infra/Pulumi.yaml, the same as SKILL_CI_VERSION in deploy/versions.env). TAG=0.8.1 sets it first.
 
 # Demo beats.
-SKILL ?= acme-release-notes
+SKILL ?= k8s-incident-triage
 VERSION ?= v1.1.0
 MODE ?= add
 # demo-model-swap: AGENT for MODE=require|optional, TO for MODE=bump (a Claude Code version).
@@ -56,12 +56,20 @@ seed: ## Push the sample skills as v1.0.0 (RETRIGGER=1 re-fires the webhook for 
 	@demo/seed.sh
 
 .PHONY: demo-push
-demo-push: ## Push a new skill version (SKILL=acme-release-notes VERSION=v1.1.0; v1.2.0 is a deliberate regression)
+demo-push: ## Push a new skill version (SKILL=k8s-incident-triage VERSION=v1.1.0; v1.2.0 is a deliberate regression)
 	@demo/demo-push.sh $(SKILL) $(VERSION)
+
+.PHONY: demo-live
+demo-live: ## The live push on stage: a small real edit of k8s-incident-triage v1.1.0 (VERSION=v1.1.1, then v1.1.2, ...)
+	@demo/live-push.sh $(VERSION)
 
 .PHONY: demo-model-swap
 demo-model-swap: ## Change the model list (MODE=add|swap|restore, bump [TO=2.1.308], require|optional AGENT=codex)
 	@demo/model-swap.sh $(MODE) $(if $(filter bump,$(MODE)),$(TO),$(AGENT))
+
+.PHONY: results
+results: ## The SkillEvals of one skill as a compact table (SKILL=k8s-incident-triage)
+	@demo/results.sh $(SKILL)
 
 .PHONY: status
 status: ## SkillEvals and the tags per skill in Harbor

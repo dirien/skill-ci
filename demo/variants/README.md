@@ -1,11 +1,13 @@
 # Demo variants
 
-Versions of a skill that the demo pushes with `demo/push-skill.sh <skill> <version>`. The directory is `demo/variants/<skill>/<version>/` and holds a complete skill (`SKILL.md`, `evals/`).
+The demo uses two skills, k8s-resource-naming and k8s-incident-triage; acme-release-notes and python-docstrings are test skills that the tests and fixtures still use. Versions of a skill that the demo pushes with `demo/push-skill.sh <skill> <version>`. The directory is `demo/variants/<skill>/<version>/` and holds a complete skill (`SKILL.md`, `evals/`).
 
 | Variant | Purpose | Expected outcome |
 | --- | --- | --- |
 | `acme-release-notes/v1.1.0` | An improvement: two more rules and matching eval assertions | Tier 1 and 2 pass, lift stays high, takes over `stable` |
 | `acme-release-notes/v1.2.0` | A deliberate quality regression: its rules contradict the unchanged evals | Tier 1 and 2 pass, scores drop, the regression gate fires |
+| `k8s-incident-triage/v1.1.0` | An improvement: two more on-call rules (evidence source, owner line) and matching eval assertions | Tier 1 and 2 pass, lift stays high, takes over `stable` |
+| `k8s-incident-triage/v1.2.0` | A deliberate quality regression: its rules contradict the unchanged v1.1.0 evals (wrong file, no cause codes) and nothing in it is unsafe | Tier 1 and 2 pass, scores drop, the regression gate fires |
 | `k8s-resource-naming/v1.1.0` | A deliberately unsafe skill for the Tier 1 gate | Tier 1 fails, Tier 3 never runs, verdict `Rejected` |
 
 ## `k8s-resource-naming/v1.1.0` is unsafe on purpose

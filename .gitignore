@@ -21,3 +21,5 @@ dist/
 slides/node_modules/
 slides/dist/
 slides/.slidev/
+# Demo recordings: rendered clips (VHS tapes in demo/recordings/ are the source)
+demo/recordings/clips/
