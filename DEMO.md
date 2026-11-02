@@ -114,7 +114,7 @@ One hour before:
    kubectl -n skill-ci get deploy skill-ci-controller -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
    ```
 
-   Expect every node `Ready`, every pod `Running` (runner pods `Completed`) and the image `ghcr.io/dirien/skill-ci-controller:0.11.2`.
+   Expect every node `Ready`, every pod `Running` (runner pods `Completed`) and the image `ghcr.io/dirien/skill-ci-controller:0.12.0`.
 
 2. Keys, without printing them.
 
