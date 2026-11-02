@@ -179,8 +179,10 @@ class FakeRun:
         evals: str | None = "evals/evals.json",
         trials: list[tuple[str, str, str, str | None]] | None = None,
         trials_attach_exit: int = 0,
+        rewards: dict[tuple[str, str], dict] | None = None,
     ):
         self.evals = evals
+        self.rewards = rewards or {}  # (arm, trial id) -> reward.json in the run dir
         self.trials = trials or []  # (arm, trial id, started_at, finished_at) in the run dir
         self.trials_attach_exit = trials_attach_exit  # exit code of the trial bundle attach
         self.attaches: list[dict[str, Any]] = []  # every oras attach: type, command, directory
@@ -284,6 +286,10 @@ class FakeRun:
                 trial.mkdir(parents=True)
                 times = {"started_at": started, "finished_at": finished}
                 (trial / "result.json").write_text(json.dumps(times))
+            for (arm, trial_id), reward in self.rewards.items():
+                trial = run_dir / "claude-code" / arm / "trials" / trial_id
+                trial.mkdir(parents=True, exist_ok=True)
+                (trial / "reward.json").write_text(json.dumps(reward))
         if content is None:
             return subprocess.CompletedProcess(cmd, 1, "", "provider error\nboom")
         results = [r for r in content["results"] if str(r["gating"]["tier"]) in selected]
@@ -1221,6 +1227,80 @@ def test_samples_are_the_per_trial_scores(termination, monkeypatch):
     assert samples["withSkill"] == [0.95, 0.9, 0.85, 0.95, 0.95, 0.8, 0.9, 0.95, 0.85]
     assert samples["withoutSkill"][:3] == [0.36, 0.38, 0.35]
     assert len(samples["withoutSkill"]) == 9
+
+
+# The metrics of the DOKS trials in testdata/trials/claude-code-doks (SkillEvaluator: 0.95, 0.36).
+REWARD_WITH = {
+    "security": 1.0,
+    "skill_execution": 1.0,
+    "skill_efficiency": 0.75,
+    "accuracy": 1.0,
+    "goal_accuracy": 1.0,
+    "behavior_check": 1.0,
+    "overall": 0.95,
+}
+REWARD_WITHOUT = {
+    "security": 1.0,
+    "skill_execution": 0.0,
+    "skill_efficiency": 0.25,
+    "accuracy": 0.4,
+    "goal_accuracy": 0.05,
+    "behavior_check": 0.25,
+    "overall": 0.36,
+}
+
+
+def trial_block(*trials: tuple[str, float]) -> dict:
+    """Build one ``pass_at_k.<arm>`` block with one case and one attempt per (trial, score)."""
+    rows = [{"attempt": n, "trial": t, "score": s} for n, (t, s) in enumerate(trials, 1)]
+    return {"cases": {"case-0": {"attempts": rows}}}
+
+
+def test_scores_leave_out_discoverability(termination, monkeypatch):
+    """Each trial scores the mean of four dimensions; Discoverability is left out."""
+    entry = with_trials(
+        agent_entry(0.95, 0.36),
+        trial_block(("t-with-1", 0.95), ("t-with-2", 0.95)),
+        trial_block(("t-without-1", 0.36), ("t-without-2", 0.36)),
+    )
+    rewards = {
+        ("with-skill", "t-with-1"): REWARD_WITH,
+        ("with-skill", "t-with-2"): {**REWARD_WITH, "accuracy": 0.6},
+        ("without-skill", "t-without-1"): REWARD_WITHOUT,
+        ("without-skill", "t-without-2"): REWARD_WITHOUT,
+    }
+    run = FakeRun({"agents": {"claude-code": entry}}, rewards=rewards)
+    monkeypatch.setattr(skill_eval.subprocess, "run", run)
+    assert skill_eval.main() == 0
+    message = termination()
+    assert message["samples"] == {"withSkill": [0.94, 0.84], "withoutSkill": [0.45, 0.45]}
+    assert (message["withSkill"], message["withoutSkill"], message["lift"]) == (0.89, 0.45, 0.44)
+
+
+@pytest.mark.parametrize(
+    "rewards",
+    [
+        {("with-skill", "t-with-1"): REWARD_WITH},  # the without-skill trial has no reward.json
+        {
+            ("with-skill", "t-with-1"): REWARD_WITH,
+            ("without-skill", "t-without-1"): {**REWARD_WITHOUT, "security": None},
+        },
+    ],
+    ids=["reward missing", "metric missing"],
+)
+def test_scores_fall_back_to_skillevaluator(rewards, termination, monkeypatch):
+    """When one trial has no usable metrics, both arms keep SkillEvaluator's overall scores."""
+    entry = with_trials(
+        agent_entry(0.95, 0.36),
+        trial_block(("t-with-1", 0.95)),
+        trial_block(("t-without-1", 0.36)),
+    )
+    run = FakeRun({"agents": {"claude-code": entry}}, rewards=rewards)
+    monkeypatch.setattr(skill_eval.subprocess, "run", run)
+    assert skill_eval.main() == 0
+    message = termination()
+    assert message["samples"] == {"withSkill": [0.95], "withoutSkill": [0.36]}
+    assert (message["withSkill"], message["withoutSkill"], message["lift"]) == (0.95, 0.36, 0.59)
 
 
 @pytest.mark.parametrize(

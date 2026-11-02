@@ -121,10 +121,10 @@
       },
       {
         "key": "overall",
-        "label": "Overall",
-        "withSkill": 0.95,
-        "withoutSkill": 0.37,
-        "delta": 0.58,
+        "label": "Score without skill execution",
+        "withSkill": 0.94,
+        "withoutSkill": 0.46,
+        "delta": 0.48,
         "overall": true
       }
     ],

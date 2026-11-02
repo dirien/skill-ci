@@ -18,6 +18,38 @@ var dimensionOrder = []struct{ Key, Label string }{
 	{"security", "Security"},
 }
 
+// taskDimensions are the dimensions of the score skill-ci gates on: SkillEvaluator's
+// dimensions without Discoverability (skill_execution), each a weighted mean of its metrics.
+// runner/scoring.py computes the same score per trial (CONTRACT.md, "Statistics").
+var taskDimensions = []map[string]float64{
+	{"security": 1},
+	{"accuracy": 1},
+	{"goal_accuracy": 0.5, "behavior_check": 0.5},
+	{"skill_efficiency": 1},
+}
+
+// scoreLabel is the label of the summary row when it is the gate's score.
+const scoreLabel = "Score without skill execution"
+
+// taskScore is the mean of taskDimensions over the metric means in m; false when a metric
+// is missing, as with a custom metric set.
+func taskScore(m map[string]float64) (float64, bool) {
+	var sum float64
+	for _, sources := range taskDimensions {
+		var weighted, total float64
+		for metric, weight := range sources {
+			v, ok := m[metric]
+			if !ok {
+				return 0, false
+			}
+			weighted += v * weight
+			total += weight
+		}
+		sum += weighted / total
+	}
+	return sum / float64(len(taskDimensions)), true
+}
+
 // Limits on what the site takes from result.json for run-level suggestions.
 const (
 	maxSuggestions     = 20
@@ -109,7 +141,15 @@ func parseResult(data []byte, agent string) (reportResult, error) {
 		add(d.Key, d.Label, false)
 	}
 	if len(res.Dimensions) > 0 {
-		add("overall", "Overall", true)
+		with, okWith := taskScore(res.ArmMeans[apiv1.ArmWithSkill])
+		without, okWithout := taskScore(res.ArmMeans[apiv1.ArmWithoutSkill])
+		if okWith && okWithout {
+			d := apiv1.Dimension{Key: "overall", Label: scoreLabel, WithSkill: round2(with), WithoutSkill: round2(without), Overall: true}
+			d.Delta = round2(d.WithSkill - d.WithoutSkill)
+			res.Dimensions = append(res.Dimensions, d)
+		} else {
+			add("overall", "Overall", true) // a custom metric set: SkillEvaluator's own overall
+		}
 	}
 	res.Suggestions = suggestions(raw.Feedback.Suggestions)
 	return res, nil

@@ -9,7 +9,7 @@ describe("compare page", () => {
     renderAt(`/runs/${RUN.claudeCode}/cases/rn-basic/compare`);
     const table = await screen.findByRole("table", { name: "The two trials side by side" });
     const score = within(table).getByRole("rowheader", { name: "Score" }).closest("tr") as HTMLElement;
-    expect(score.textContent).toBe("Score0.950.36");
+    expect(score.textContent).toBe("Score0.940.45");
     const crit = within(table).getByRole("rowheader", { name: "Criteria" }).closest("tr") as HTMLElement;
     expect(crit.textContent).toBe("Criteria4 of 41 of 4");
 

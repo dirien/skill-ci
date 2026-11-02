@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+import scoring
+
 try:
     from skillevaluator.utils.redaction import redact_sensitive_text
 except ImportError:  # the runner image has it; the CI tests stub it
@@ -714,7 +716,9 @@ def _entry(doc: Mapping[str, Any], pass_threshold: float) -> dict[str, Any]:
     meta = doc["meta"]
     reward = doc.get("reward") if isinstance(doc.get("reward"), Mapping) else None
     if doc["status"] == "scored" and reward is not None:
-        score = _money(reward.get("overall"))
+        score = scoring.task_score(reward)  # the score the gate uses, without Discoverability
+        if score is None:
+            score = _money(reward.get("overall"))
         entry["score"] = min(score, 1.0) if score is not None else 0.0
         entry["passed"] = entry["score"] >= pass_threshold
     else:

@@ -41,6 +41,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import scoring
+
 TERMINATION_LOG = "/dev/termination-log"
 MAX_MESSAGE_BYTES = 4000  # Kubernetes caps the termination message at 4096 bytes.
 REPORT_TYPE = "application/vnd.skillci.report.v1+json"
@@ -133,6 +135,9 @@ MAX_FINDINGS = 5
 MAX_FINDING_CHARS = 200
 MAX_CATALOG_SKILLS = 200  # other skills compared against in Tier 2
 MAX_SAMPLES = 50  # per-trial scores kept per arm; 3 cases x 3 attempts give 9
+# result.json arm -> run directory; a trial name is a directory there, never a path
+ARM_DIRS = {"with_skill": "with-skill", "without_skill": "without-skill"}
+TRIAL_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SEMVER_TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 # The eval dataset files SkillEvaluator 0.6.0 reads from <skill>/evals/, in its order
@@ -1059,26 +1064,63 @@ def newest_result(results: Path) -> Path:
     return candidates[-1]
 
 
-def trial_scores(entry: Mapping[str, Any], arm: str) -> list[float]:
-    """Return the per-trial overall scores of one arm (``with_skill`` or ``without_skill``).
+def scored_attempts(entry: Mapping[str, Any], arm: str) -> list[Mapping[str, Any]]:
+    """Return the scored attempts of one arm (``with_skill`` or ``without_skill``).
 
     SkillEvaluator lists every attempt of every case under
-    ``pass_at_k.<arm>.cases.<case>.attempts[].score``; the arm's overall score is their mean.
-    Scores are rounded to two decimals and capped at ``MAX_SAMPLES``. An older result without
-    that block gives an empty list, and the controller then uses its fixed-number rules.
+    ``pass_at_k.<arm>.cases.<case>.attempts[]``, each with its ``trial`` and ``score``. An older
+    result without that block gives an empty list.
     """
     cases = ((entry.get("pass_at_k") or {}).get(arm) or {}).get("cases") or {}
-    scores = [
-        round(float(attempt["score"]), 2)
+    return [
+        attempt
         for case in cases.values()
         for attempt in case.get("attempts") or []
         if isinstance(attempt.get("score"), int | float)
     ]
-    return scores[:MAX_SAMPLES]
+
+
+def trial_scores(entry: Mapping[str, Any], arm: str) -> list[float]:
+    """Return SkillEvaluator's per-trial overall scores of one arm, the fallback samples.
+
+    The arm's ``overall_*`` score is their mean. Scores are rounded to two decimals and capped
+    at ``MAX_SAMPLES``; the controller uses its fixed-number rules when an arm has none.
+    """
+    return [round(float(a["score"]), 2) for a in scored_attempts(entry, arm)][:MAX_SAMPLES]
+
+
+def task_scores(entry: Mapping[str, Any], arm: str, agent_dir: Path) -> list[float] | None:
+    """Return the skill-ci score (``scoring.task_score``) of every scored attempt of one arm.
+
+    Reads each attempt's ``<agent_dir>/<with-skill|without-skill>/trials/<trial>/reward.json``.
+    ``None`` when an attempt names no valid trial, its ``reward.json`` cannot be read or lacks a
+    metric: the run then keeps SkillEvaluator's overall scores for both arms, so the gate never
+    compares two different scores.
+    """
+    scores = []
+    for attempt in scored_attempts(entry, arm):
+        trial = attempt.get("trial")
+        if not isinstance(trial, str) or not TRIAL_NAME.match(trial):
+            return None
+        reward_file = agent_dir / ARM_DIRS[arm] / "trials" / trial / "reward.json"
+        try:
+            reward = json.loads(reward_file.read_text())
+        except (OSError, ValueError):
+            return None
+        score = scoring.task_score(reward) if isinstance(reward, dict) else None
+        if score is None:
+            return None
+        scores.append(score)
+    return scores
 
 
 def read_scores(results: Path, agent: str) -> dict[str, Any]:
-    """Extract the scores for ``agent`` from the newest ``result.json`` under ``results``."""
+    """Extract the scores for ``agent`` from the newest ``result.json`` under ``results``.
+
+    The scores leave out Discoverability (``scoring``): each arm's score is the mean of its
+    trials' task scores, and ``samples`` are those trial scores. When a trial's metrics are
+    missing, SkillEvaluator's own overall scores are used instead, and the log says so.
+    """
     path = newest_result(results)
     try:
         result = json.loads(path.read_text())
@@ -1092,6 +1134,22 @@ def read_scores(results: Path, agent: str) -> dict[str, Any]:
     if not all(isinstance(v, int | float) for v in (with_skill, without_skill)):
         errors = "; ".join(map(str, result.get("execution_errors", []))) or result.get("error")
         raise EvalError(f"no scores in result.json: {errors or 'unknown reason'}")
+    task = {arm: task_scores(entry, arm, path.parent / agent) for arm in ARM_DIRS}
+    if all(task.values()):
+        with_skill = sum(task["with_skill"]) / len(task["with_skill"])
+        without_skill = sum(task["without_skill"]) / len(task["without_skill"])
+        samples = {
+            "withSkill": [round(s, 2) for s in task["with_skill"]][:MAX_SAMPLES],
+            "withoutSkill": [round(s, 2) for s in task["without_skill"]][:MAX_SAMPLES],
+        }
+        policy = scoring.SCORE_POLICY
+    else:
+        samples = {
+            "withSkill": trial_scores(entry, "with_skill"),
+            "withoutSkill": trial_scores(entry, "without_skill"),
+        }
+        policy = str(entry.get("score_policy_with_skill") or "SkillEvaluator overall")
+    print(f"skill-eval: score policy {policy}", flush=True)
     with_skill, without_skill = round(with_skill, 2), round(without_skill, 2)
     payload: dict[str, Any] = {
         "withSkill": with_skill,
@@ -1100,8 +1158,6 @@ def read_scores(results: Path, agent: str) -> dict[str, Any]:
         "agent": agent,
         "model": entry.get("model", ""),
     }
-    samples = {"withSkill": trial_scores(entry, "with_skill")}
-    samples["withoutSkill"] = trial_scores(entry, "without_skill")
     if all(samples.values()):
         payload["samples"] = samples
     return payload

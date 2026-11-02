@@ -124,10 +124,10 @@
       },
       {
         "key": "overall",
-        "label": "Overall",
-        "withSkill": 0.95,
-        "withoutSkill": 0.36,
-        "delta": 0.59,
+        "label": "Score without skill execution",
+        "withSkill": 0.94,
+        "withoutSkill": 0.45,
+        "delta": 0.49,
         "overall": true
       }
     ],
@@ -169,7 +169,7 @@
             "case": "rn-basic",
             "attempt": 1,
             "status": "scored",
-            "score": 0.95,
+            "score": 0.9375,
             "passed": true,
             "durationSec": 453.3,
             "agentSec": 6,
@@ -196,7 +196,7 @@
             "case": "rn-basic",
             "attempt": 1,
             "status": "scored",
-            "score": 0.36,
+            "score": 0.45,
             "passed": false,
             "durationSec": 453.1,
             "agentSec": 7.4,

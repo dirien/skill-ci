@@ -24,7 +24,7 @@ describe("run page", () => {
     const grid = within(trials).getByRole("table", { name: /Trials of case rn-basic/ });
     const session = within(grid).getByRole("link", { name: "Session rn-basic__sryqofs, with-skill, attempt 1" });
     expect(session.getAttribute("href")).toBe(`/runs/${RUN.claudeCode}/trials/rn-basic__sryqofs`);
-    expect(within(grid).getByText("0.36")).toBeTruthy();
+    expect(within(grid).getByText("0.45")).toBeTruthy();
     expect(within(grid).getByRole("img", { name: "did not pass" })).toBeTruthy();
     expect(within(trials).getByRole("link", { name: "Compare with and without" }).getAttribute("href")).toBe(
       `/runs/${RUN.claudeCode}/cases/rn-basic/compare`,

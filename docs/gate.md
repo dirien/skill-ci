@@ -22,6 +22,8 @@ The profile is SkillEvaluator's built-in `external`, the only one it ships. For 
 
 A fixed number is a bad gate for a noisy measurement. The same skill version scored 0.95 on one run and 0.87 on the next, and a rule of "more than 0.05 below stable is a regression" held a good version back. Evidence-based evaluation avoids that: SWE-Skills-Bench, for one, found that 92 of 98 skills had no statistically significant effect. The skill-ci gate asks for evidence too.
 
+Each trial gets a score from 0 to 1: the mean of four of SkillEvaluator's five dimensions, Security, Correctness, Effectiveness and Efficiency. The gate leaves out the fifth, Discoverability ("was the right skill loaded?"), because it is 0 by definition when no skill is installed: it would add up to +0.20 to every lift, so a skill that is loaded and does nothing useful would still clear the +0.10 bar. [CONTRACT.md, "Trial score"](../CONTRACT.md#trial-score) has the formula.
+
 Each run has 3 eval cases x 3 attempts per arm, so up to 9 trial scores with the skill and 9 without. The runner sends them (`samples` in the termination message), and the controller computes a confidence interval (Welch's t, 95% by default) and decides:
 
 | Question | Rule |

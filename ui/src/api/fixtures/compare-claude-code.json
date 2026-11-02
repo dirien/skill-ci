@@ -29,7 +29,7 @@
       "case": "rn-basic",
       "attempt": 1,
       "status": "scored",
-      "score": 0.95,
+      "score": 0.9375,
       "passed": true,
       "durationSec": 453.3,
       "agentSec": 6,
@@ -51,8 +51,8 @@
     "header": {
       "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
       "status": "scored",
-      "score": 0.95,
-      "armMean": 0.95,
+      "score": 0.9375,
+      "armMean": 0.938,
       "dimensions": [
         {
           "key": "accuracy",
@@ -476,7 +476,7 @@
       "case": "rn-basic",
       "attempt": 1,
       "status": "scored",
-      "score": 0.36,
+      "score": 0.45,
       "passed": false,
       "durationSec": 453.1,
       "agentSec": 7.4,
@@ -498,8 +498,8 @@
     "header": {
       "prompt": "Write the release notes for version 1.4.0 into a file named RELEASE_NOTES.md. Changes: added CSV export (ticket ACME-101), fixed a login timeout (ticket ACME-117).\n",
       "status": "scored",
-      "score": 0.36,
-      "armMean": 0.36,
+      "score": 0.45,
+      "armMean": 0.45,
       "dimensions": [
         {
           "key": "accuracy",

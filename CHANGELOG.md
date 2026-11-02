@@ -4,6 +4,7 @@ All notable changes to skill-ci. The controller, runner, sandbox image and Helm 
 
 ## Unreleased
 
+- Change: the gate scores a trial without Discoverability. A trial's score is the mean of SkillEvaluator's other four dimensions (Security, Correctness, Effectiveness, Efficiency); Discoverability is 0 by definition without a skill and added up to +0.20 to every lift, twice the promotion threshold. `withSkill`, `withoutSkill`, `lift`, `samples`, the trial bundle scores and the run page's summary row ("Score without skill execution") all use it. A run whose trials lack a metric keeps SkillEvaluator's overall score. Runs from before keep their stored scores: re-run the `stable` version of each skill after upgrading, so the regression gate compares runs scored the same way.
 - Fix: the default `spec.network.agentInstallHosts` adds `downloads.claude.ai`. A Claude Code release that is not preinstalled is installed from there, so with network mode `none` or `allowlist` every trial failed with `NetworkConnectionError` (curl exit 28). A SkillCIConfig that sets the field keeps its own list.
 
 ## [0.11.2](https://github.com/dirien/skill-ci/releases/tag/v0.11.2) (2026-11-01)
