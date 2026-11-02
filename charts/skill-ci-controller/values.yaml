@@ -138,7 +138,7 @@ config:
       node: [registry.npmjs.org]
       python: [pypi.org, files.pythonhosted.org]
     # Hosts added to none and allowlist when an entry's agent version is not preinstalled.
-    agentInstallHosts: [registry.npmjs.org]
+    agentInstallHosts: [registry.npmjs.org, downloads.claude.ai]
   # Network flows of the trials (CONTRACT.md "Trial bundles"). Runner pods have no egress policy, so they
   # reach the relay on any cluster.
   observability:

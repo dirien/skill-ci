@@ -2,6 +2,10 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
+## Unreleased
+
+- Fix: the default `spec.network.agentInstallHosts` adds `downloads.claude.ai`. A Claude Code release that is not preinstalled is installed from there, so with network mode `none` or `allowlist` every trial failed with `NetworkConnectionError` (curl exit 28). A SkillCIConfig that sets the field keeps its own list.
+
 ## [0.11.2](https://github.com/dirien/skill-ci/releases/tag/v0.11.2) (2026-11-01)
 
 - Fix: the Tier 3 verifier decodes the native `exec` calls of Codex 0.161.0 (inline `text(await tools.NAME(...))`, single-quoted strings, `Promise.allSettled` batches). Before, 140 of the 148 such calls in our runs were unsupported, which lowered the security, skill efficiency and skill execution scores of Codex trials. SkillEvaluator patch hunk 14, until [NVIDIA/SkillEvaluator#235](https://github.com/NVIDIA/SkillEvaluator/issues/235) is fixed upstream.

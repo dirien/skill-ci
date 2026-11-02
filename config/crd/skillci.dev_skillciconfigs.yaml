@@ -130,10 +130,12 @@ spec:
                   agentInstallHosts:
                     default:
                     - registry.npmjs.org
+                    - downloads.claude.ai
                     description: |-
                       AgentInstallHosts are added to none and allowlist when a model list
                       entry's agent version is not preinstalled in the sandbox image (Harbor
-                      installs the CLI with npm then).
+                      installs Codex and OpenCode with npm then, and Claude Code from
+                      downloads.claude.ai).
                     items:
                       description: |-
                         Host is a host trial sandboxes may reach on TCP 443: a lowercase RFC 1123

@@ -82,7 +82,7 @@ func TestResolve(t *testing.T) {
 		{
 			name: "an agent version that is not preinstalled adds the install hosts",
 			in:   Input{Spec: spec("none"), Entry: Entry{Agent: "claude-code", AgentVersion: "2.1.308", Model: "claude-opus-5-5"}, CiliumCRD: true},
-			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "registry.npmjs.org"}},
+			want: Effective{Mode: "none", Source: "skill", Cilium: true, Hosts: []string{"api.anthropic.com", "downloads.claude.ai", "registry.npmjs.org"}},
 		},
 		{
 			name: "an unpinned entry runs the preinstalled default",

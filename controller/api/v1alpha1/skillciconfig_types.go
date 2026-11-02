@@ -77,9 +77,10 @@ type PlatformNetwork struct {
 	Bundles map[string]BundleHosts `json:"bundles,omitempty"`
 	// AgentInstallHosts are added to none and allowlist when a model list
 	// entry's agent version is not preinstalled in the sandbox image (Harbor
-	// installs the CLI with npm then).
+	// installs Codex and OpenCode with npm then, and Claude Code from
+	// downloads.claude.ai).
 	// +optional
-	// +kubebuilder:default={"registry.npmjs.org"}
+	// +kubebuilder:default={"registry.npmjs.org","downloads.claude.ai"}
 	// +kubebuilder:validation:MaxItems=20
 	// +listType=set
 	AgentInstallHosts []Host `json:"agentInstallHosts,omitempty"`

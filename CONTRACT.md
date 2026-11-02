@@ -260,7 +260,7 @@ spec:
       github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
       node: [registry.npmjs.org]
       python: [pypi.org, files.pythonhosted.org]
-    agentInstallHosts: [registry.npmjs.org]   # added for an agent version not in --preinstalled-agents, at most 20
+    agentInstallHosts: [registry.npmjs.org, downloads.claude.ai]   # added for an agent version not in --preinstalled-agents, at most 20
   observability:
     hubbleRelay: ""                 # host:port of Hubble Relay; empty (default) collects no network flows
   judge:                            # the LLM judge of every run, whatever the agent under test
@@ -285,7 +285,7 @@ status:
       enforcement: auto
       enforcedBy: cilium            # cilium | none: what enforcement resolves to on this cluster
       bundles: [apt, github, node, python]
-      agentInstallHosts: [registry.npmjs.org]
+      agentInstallHosts: [registry.npmjs.org, downloads.claude.ai]
     observability:
       hubbleRelay: hubble-relay.kube-system.svc.cluster.local:80
     judge:
@@ -367,7 +367,7 @@ A SkillEval that names a profile (`spec.sandboxProfile`, copied from the model l
 | `spec.network.enforcement` | `auto` | `auto`: CiliumNetworkPolicies when the CRD `ciliumnetworkpolicies.cilium.io` exists (looked up through the API, cached for a minute); `cilium`: require it; `off`: no policies, every mode runs unenforced |
 | `spec.network.alwaysAllow` | empty | Hosts added to `none` and `allowlist` |
 | `spec.network.bundles` | the bundles above | Bundles a skill names as `@<name>` |
-| `spec.network.agentInstallHosts` | `[registry.npmjs.org]` | Hosts an agent install needs |
+| `spec.network.agentInstallHosts` | `[registry.npmjs.org, downloads.claude.ai]` | Hosts an agent install needs: npm for Codex and OpenCode, `downloads.claude.ai` for Claude Code |
 
 One controller flag stays, because it is a fact of the release image rather than a policy: `--preinstalled-agents` (default `claude-code@2.1.292,codex@0.161.0,opencode@1.19.1`, Helm `controller.preinstalledAgents`), the agent pins in the sandbox image. The flags `--network-default`, `--network-modes`, `--network-enforcement`, `--network-always-allow`, `--network-bundles`, `--agent-install-hosts` and `--default-sandbox-profile` of 0.9.0 are gone (an old argument list makes the controller exit with `flag provided but not defined`).
 

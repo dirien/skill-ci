@@ -38,7 +38,7 @@ Only trial pods are restricted. Neither policy of skill-ci selects the runner po
 | `spec.network.enforcement` | `auto` | `auto`: Cilium when its CRD exists; `cilium`: require it; `off`: no policies |
 | `spec.network.alwaysAllow` | empty | Hosts added to `none` and `allowlist`, for example a proxy |
 | `spec.network.bundles` | `@apt`, `@github`, `@node`, `@python` | Named host lists a skill can use in `skillci.dev/network-allow` |
-| `spec.network.agentInstallHosts` | `[registry.npmjs.org]` | Hosts added for an agent version that is not preinstalled |
+| `spec.network.agentInstallHosts` | `[registry.npmjs.org, downloads.claude.ai]` | Hosts added for an agent version that is not preinstalled |
 | `spec.observability.hubbleRelay` | empty | `host:port` of the Hubble Relay the runner reads network flows from; empty collects none. See [Observability](observability.md#network-flows) |
 | `spec.judge` | `{provider: anthropic, secretKey: anthropic}` | The LLM judge of every run and its key in `llm-keys`. See [Agents and models](agents-and-models.md#the-judge) |
 

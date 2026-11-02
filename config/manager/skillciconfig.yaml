@@ -20,7 +20,7 @@ spec:
       github: [github.com, api.github.com, codeload.github.com, objects.githubusercontent.com]
       node: [registry.npmjs.org]
       python: [pypi.org, files.pythonhosted.org]
-    agentInstallHosts: [registry.npmjs.org]
+    agentInstallHosts: [registry.npmjs.org, downloads.claude.ai]
   observability:
     # host:port of Hubble Relay (HUBBLE_SERVER of runner Jobs); empty collects no network flows. On Cilium
     # with Hubble Relay (DOKS): hubble-relay.kube-system.svc.cluster.local:80

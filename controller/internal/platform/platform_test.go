@@ -357,7 +357,7 @@ func TestEffective(t *testing.T) {
 	n := eff.Network
 	if eff.Source != v1alpha1.ConfigSourceSkillCIConfig || eff.Generation != 2 || eff.DefaultSandboxProfile != "small" ||
 		n.Default != "none" || !slices.Equal(n.Modes, []string{"none"}) || n.Enforcement != "auto" || n.EnforcedBy != "cilium" ||
-		!slices.Equal(n.Bundles, []string{"apt", "github", "node", "python"}) || !slices.Equal(n.AgentInstallHosts, []string{"registry.npmjs.org"}) {
+		!slices.Equal(n.Bundles, []string{"apt", "github", "node", "python"}) || !slices.Equal(n.AgentInstallHosts, []string{"registry.npmjs.org", "downloads.claude.ai"}) {
 		t.Errorf("effective %+v", eff)
 	}
 	if eff.Observability.HubbleRelay != "" || eff.Judge != (v1alpha1.EffectiveJudge{Provider: "anthropic", SecretKey: "anthropic", Host: "api.anthropic.com"}) {

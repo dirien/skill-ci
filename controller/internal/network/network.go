@@ -72,8 +72,10 @@ var DefaultBundles = map[string][]string{
 // DefaultPreinstalledAgents are the agent@version pins the sandbox image ships.
 var DefaultPreinstalledAgents = []string{"claude-code@2.1.292", "codex@0.161.0", "opencode@1.19.1"}
 
-// DefaultAgentInstallHosts are the hosts an agent install needs (Harbor installs with npm).
-var DefaultAgentInstallHosts = []string{"registry.npmjs.org"}
+// DefaultAgentInstallHosts are the hosts an agent install needs: Harbor installs
+// Codex and OpenCode with npm, and Claude Code with the bootstrap script from
+// downloads.claude.ai.
+var DefaultAgentInstallHosts = []string{"registry.npmjs.org", "downloads.claude.ai"}
 
 // Policy is the platform's network policy, from the SkillCIConfig default
 // (package platform) and --preinstalled-agents.

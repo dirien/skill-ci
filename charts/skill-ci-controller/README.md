@@ -166,7 +166,7 @@ keys are rejected.
 | `config.network.enforcement` | `auto` | Seed of `spec.network.enforcement`: `auto` (CiliumNetworkPolicies when Cilium's CRD exists), `cilium` (require Cilium), `off` (no policies) |
 | `config.network.alwaysAllow` | `[]` | Seed of `spec.network.alwaysAllow`: hosts added to `none` and `allowlist`, for example a proxy |
 | `config.network.bundles` | `apt`, `github`, `node`, `python` | Seed of `spec.network.bundles`: name to hosts, named as `@<name>` in `skillci.dev/network-allow`. A map that merges with the defaults; `null` drops a bundle |
-| `config.network.agentInstallHosts` | `[registry.npmjs.org]` | Seed of `spec.network.agentInstallHosts`: added to `none` and `allowlist` for an entry whose agent version is not preinstalled |
+| `config.network.agentInstallHosts` | `[registry.npmjs.org, downloads.claude.ai]` | Seed of `spec.network.agentInstallHosts`: added to `none` and `allowlist` for an entry whose agent version is not preinstalled |
 | `config.observability.hubbleRelay` | `""` | Seed of `spec.observability.hubbleRelay`: `host:port` of a Hubble Relay (`hubble-relay.kube-system.svc.cluster.local:80` on DOKS), passed to runner Jobs as `HUBBLE_SERVER` so the trial bundles record each trial's network flows. Empty collects none |
 | `config.judge.provider` | `anthropic` | Seed of `spec.judge.provider`: the LLM judge of every run, `anthropic`, `openai`, `openai-compatible` or `nv_build`. See "The judge" |
 | `config.judge.model`, `.baseURL` | `""`, `""` | Seed of `spec.judge.model` (empty: SkillEvaluator's default) and `spec.judge.baseURL` (the API root; required for `openai-compatible`, not allowed for `nv_build`) |

@@ -40,7 +40,7 @@ Pin every entry to keep runs comparable. An unpinned entry and a pinned one are 
 | `codex` | 0.161.0 (SkillEvaluator's pin) | `openai/<id>` | `openai`, optionally `openai-base-url` |
 | `opencode` | 1.19.1 (skill-ci's pin: upstream pins none, 1.19.1 was published on 2026-10-15) | `ollama-cloud/gpt-oss:120b`, `anthropic/<model>`, ... | `ollama` (or `openrouter`, `nvidia`, `anthropic`) |
 
-The sandbox image ships these three releases. An `agentVersion` that differs from the pin is installed in each trial sandbox with npm, which is slower, so `TIMEOUT_MULTIPLIER` on the runner matters for it, and with network mode `none` or `allowlist` the run also gets the `SkillCIConfig` `network.agentInstallHosts`. The controller learns the preinstalled releases from `--preinstalled-agents` (Helm `controller.preinstalledAgents`).
+The sandbox image ships these three releases. An `agentVersion` that differs from the pin is installed in each trial sandbox (Codex and OpenCode with npm, Claude Code with its bootstrap script from `downloads.claude.ai`), which is slower, so `TIMEOUT_MULTIPLIER` on the runner matters for it, and with network mode `none` or `allowlist` the run also gets the `SkillCIConfig` `network.agentInstallHosts`. The controller learns the preinstalled releases from `--preinstalled-agents` (Helm `controller.preinstalledAgents`).
 
 A new agent version is a new entry, so bumping a version evaluates every `beta` and `stable` digest on it again. Results stay per entry: the regression gate compares a candidate with the stable version on the same `agent@version/model`, never across harnesses.
 
