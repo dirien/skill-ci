@@ -11,6 +11,8 @@ defineProps({
   position: { type: String, default: 'center' },
   // Caption size in rem; long captions want ~5.
   size: { type: Number, default: 6.2 },
+  // Keep the captions' own case instead of upper-casing them (file names like SKILL.md).
+  keepCase: { type: Boolean, default: false },
   // Labels placed on people in the picture (templates like "Floating Boy"):
   // [{ text, x, y, size? }] with x and y in percent of the slide.
   labels: { type: Array, default: () => [] },
@@ -21,8 +23,8 @@ defineProps({
   <div class="meme">
     <img v-if="fit === 'contain'" class="meme__backdrop" :src="src" alt="" />
     <img class="meme__img" :src="src" :style="{ objectFit: fit, objectPosition: position }" alt="" />
-    <div v-if="top" class="meme__caption meme__caption--top" :style="{ fontSize: `${size}rem` }">{{ top }}</div>
-    <div v-if="bottom" class="meme__caption meme__caption--bottom" :style="{ fontSize: `${size}rem` }">{{ bottom }}</div>
+    <div v-if="top" class="meme__caption meme__caption--top" :class="{ 'meme__caption--keep': keepCase }" :style="{ fontSize: `${size}rem` }">{{ top }}</div>
+    <div v-if="bottom" class="meme__caption meme__caption--bottom" :class="{ 'meme__caption--keep': keepCase }" :style="{ fontSize: `${size}rem` }">{{ bottom }}</div>
     <div
       v-for="label in labels"
       :key="label.text"
@@ -73,5 +75,6 @@ defineProps({
 }
 .meme__caption--top { top: 3.5%; }
 .meme__caption--bottom { bottom: 3.5%; }
+.meme__caption--keep { text-transform: none; }
 .meme__label { left: auto; right: auto; white-space: nowrap; transform: translate(-50%, -50%); }
 </style>

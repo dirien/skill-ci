@@ -1,6 +1,6 @@
 <script setup>
 // The version-over-version gate, drawn as 95% intervals of "candidate minus stable".
-// Top row: the measured acme-release-notes v1.2.0 run on Claude Code (2026-10-31).
+// Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code (2026-11-02), scored without Discoverability.
 // Bottom row: the worked Inconclusive example in CONTRACT.md.
 const lo = -0.4
 const hi = 0.1
@@ -8,7 +8,7 @@ const w = 1000
 const x = (v) => ((v - lo) / (hi - lo)) * w
 const rows = [
   // side: where the numbers go, so they never cross the zero or tolerance lines
-  { label: 'v1.2.0, measured', mean: -0.29, a: -0.31, b: -0.27, verdict: 'Regressed', kind: 'bad', side: 'right' },
+  { label: 'v1.2.0, measured', mean: -0.25, a: -0.33, b: -0.17, verdict: 'Regressed', kind: 'bad', side: 'right' },
   { label: 'v1.2.0, spread-out trials', mean: -0.08, a: -0.18, b: 0.03, verdict: 'Inconclusive', kind: 'warn', side: 'left' },
 ]
 const ticks = [-0.4, -0.3, -0.2, -0.1, 0, 0.1]
@@ -61,8 +61,11 @@ const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
 .ci__dot { stroke: var(--p-bg); stroke-width: 3; }
 .ci__verdict { font-size: 34px; font-weight: 700; }
 .ci__nums { fill: var(--p-fg); font-size: 23px; }
-:global(.dark) .ci__bar--bad { stroke: #ff9fa4; }
-:global(.dark) .ci__fill--bad { fill: #ff9fa4; }
-:global(.dark) .ci__bar--warn { stroke: #fbbf24; }
-:global(.dark) .ci__fill--warn { fill: #fbbf24; }
+/* The whole selector goes inside :global(). Vue drops everything after a
+   leading ":global(.dark)", which turned these into ".dark { stroke; fill }"
+   and outlined every SVG on the page in yellow in dark mode. */
+:global(.dark .ci__bar--bad) { stroke: #ff9fa4; }
+:global(.dark .ci__fill--bad) { fill: #ff9fa4; }
+:global(.dark .ci__bar--warn) { stroke: #fbbf24; }
+:global(.dark .ci__fill--warn) { fill: #fbbf24; }
 </style>

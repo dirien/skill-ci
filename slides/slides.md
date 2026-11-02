@@ -13,53 +13,8 @@ canvasWidth: 1920
 aspectRatio: 16/9
 highlighter: shiki
 lineNumbers: false
-layout: cover
 defaults:
   layout: default
-
----
-
-<div class="absolute inset-0 flex flex-col justify-center items-start px-20">
-  <div class="event">KubeAuto Day North America 2026 · Salt Lake City · November 9, 2026</div>
-  <h1 class="!text-[7.6rem] !leading-[1.02] !font-semibold !tracking-tight !m-0 !max-w-[92%]">
-    Skills Are<br />Packages Now.
-  </h1>
-  <p class="sub">Your platform should treat them that way.</p>
-  <div class="speaker" v-click>
-    <img src="/img/engin-diri.png" alt="Engin Diri" />
-    <div>
-      <div class="speaker__name">Engin Diri</div>
-      <div class="speaker__role">Principal Solutions Architect, Pulumi</div>
-      <div class="speaker__handles">
-        <span><carbon-logo-x /> @_ediri</span>
-        <span><carbon-logo-linkedin /> engin-diri</span>
-        <span><carbon-logo-github /> dirien</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<style scoped>
-.event { font-family: var(--slidev-font-mono); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--p-primary); margin-bottom: 2rem; }
-.sub { margin: 1.6rem 0 0 !important; font-size: 2.9rem !important; line-height: 1.2 !important; color: var(--p-fg-muted) !important; max-width: 90% !important; }
-.speaker { display: flex; align-items: center; gap: 1.6rem; margin-top: 3.4rem; }
-.speaker img { width: 7.5rem; height: 7.5rem; border-radius: 9999px; object-fit: cover; border: 3px solid color-mix(in srgb, var(--p-primary) 45%, transparent); }
-.speaker__name { font-size: 1.8rem; font-weight: 600; color: var(--p-fg); }
-.speaker__role { font-size: 1.3rem; color: var(--p-fg-muted); margin-top: 0.2rem; }
-.speaker__handles { display: flex; gap: 1.6rem; margin-top: 0.6rem; font-size: 1.05rem; color: var(--p-fg-muted); }
-.speaker__handles span { display: inline-flex; align-items: center; gap: 0.4rem; }
-</style>
-
-<!--
-[0:00 to 0:30]
-
-Good afternoon, KubeAuto. I'm Engin, I work at Pulumi on platform tooling.
-[click] Quick thank-you to the organizers for putting this day next to
-KubeCon. 25 minutes: a problem, a platform answer, a demo, what broke while
-I built it, and a blueprint you can take home.
-
-TODO: confirm the session start time and whether Q&A is inside the 25 minutes.
--->
 
 ---
 
@@ -73,6 +28,121 @@ TODO: confirm the session start time and whether Q&A is inside the 25 minutes.
 
 It's 2026 and skills are big business. Look at your own company: it's highly
 likely that every team ships agent skills by now.
+-->
+
+---
+
+<div class="proof">
+  <img src="/img/x-mattpocockuk.png" class="proof__img proof__img--profile" alt="X profile of Matt Pocock (@mattpocockuk), 383K followers" />
+  <img v-click src="/img/x-thehypekevin-skills.png" class="proof__img proof__img--tweet" alt="Post by @thehypekevin: @mattpocockuk's skills repo has more stars than React, and the most installed skill is one line long" />
+  <img v-click src="/img/gh-mattpocock-skills.png" class="proof__img proof__img--card" alt="GitHub social card of mattpocock/skills: Skills for Real Engineers, 309k stars, 26k forks" />
+  <img v-click src="/img/skills-sh-mattpocock.png" class="proof__img proof__img--installs" alt="skills.sh search for mattpocock: setup-matt-pocock-skills 1.1M installs, grill-me 1.5M, grill-with-docs 1.3M, improve-codebase-architecture 1.2M, tdd 1.2M, handoff 1.1M, down to domain-modeling 918.8K at number ten" />
+</div>
+
+<style scoped>
+/* Captures scattered on the slide like prints on a table: each click drops one more on top. */
+.proof { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+.proof__img {
+  position: absolute; display: block; border-radius: 18px; border: 1.5px solid var(--p-border); background: #fff;
+  box-shadow: 0 30px 70px rgb(0 0 0 / 0.22), 0 4px 14px rgb(0 0 0 / 0.12);
+  transform: rotate(var(--r)) scale(1); opacity: 1;
+  transition: transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15), opacity 0.35s ease-out;
+}
+.proof__img.slidev-vclick-hidden { transform: rotate(calc(var(--r) * 2.5)) scale(1.18); opacity: 0; }
+.proof__img--profile { --r: -5deg; height: 660px; left: 130px; top: 70px; }
+.proof__img--tweet { --r: 4deg; height: 690px; left: 1060px; top: 50px; }
+.proof__img--card { --r: -2deg; width: 900px; left: 500px; top: 470px; }
+/* The last click takes over the whole slide, footer included. */
+.proof__img--installs { --r: 0deg; position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; object-position: top; border: 0; border-radius: 0; background: #000; z-index: 20; }
+.proof__img--installs.slidev-vclick-hidden { transform: scale(1.08); opacity: 0; }
+</style>
+
+<!--
+[0:45 to 1:25]
+
+This is Matt Pocock. He teaches TypeScript for a living, 383K followers on X.
+[click] In October, this post went around: his skills repo has more stars than
+React, and the most installed skill in it is one line long.
+[click] The repo itself: "Skills for Real Engineers. Straight from my .agents
+directory." 309k stars, 26k forks. One person's skills folder, installed by a
+few hundred thousand engineers.
+[click] And the installs: search skills.sh for him and nine of his top ten
+skills have a million or more. grill-me alone, 1.5 million.
+
+Captures from 2026-11-01 with the microlink.io screenshot API, cropped: the X
+profile and the post by @thehypekevin of 2026-10-09
+(x.com/thehypekevin/status/2108598006748794896), plus the GitHub social card
+of github.com/mattpocock/skills, and the skills.sh search for "mattpocock"
+(skills.sh/?q=mattpocock, microlink capture at 1280px wide, top ten rows;
+56 skills, 31.2M installs in total on skills.sh/mattpocock/skills). The React comparison is the post's claim.
+TODO: re-time from here on; the hands-up windows below still start at 0:45.
+-->
+
+---
+layout: full
+---
+
+<Meme src="/memes/legend.jpg" fit="contain" />
+
+<!--
+[1:25 to 1:35]
+
+Pause on it. One line, three hundred thousand stars.
+
+Image: "Fucking legend" meme, via ifunny.co, with the ifunny bar cropped off.
+-->
+
+---
+
+<div class="statement">
+  <h1>Every team ships <em>skills</em> by now.</h1>
+</div>
+
+<!--
+[2:00 to 2:20]
+
+Skills are sprawling. Every team writes its own, in its own repo, with its
+own idea of "works". Nobody asks the platform team, because a skill is just
+a folder.
+-->
+
+---
+
+# We definitely do
+
+<div class="repos">
+  <img src="/img/gh-pulumi-agent-skills.png" class="repos__img repos__img--public" alt="GitHub repository pulumi/agent-skills: Official Pulumi Agent Skills, public, 78 stars, 8 forks, plugins for Claude Code, Codex, Cursor and Gemini CLI" />
+  <img v-click src="/img/gh-pulumi-skills-internal.png" class="repos__img repos__img--internal" alt="GitHub repository pulumi/pulumi-skills-internal, internal: Pulumi Internal Agent Skills, 215 commits, 84 branches" />
+</div>
+
+<style scoped>
+.repos { position: relative; height: 780px; margin-top: 0; }
+.repos__img {
+  position: absolute; display: block; border-radius: 16px; border: 1.5px solid var(--p-border); background: #fff;
+  box-shadow: 0 30px 70px rgb(0 0 0 / 0.2), 0 4px 14px rgb(0 0 0 / 0.1);
+  transform: rotate(var(--r)); opacity: 1;
+  transition: transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15), opacity 0.35s ease-out;
+}
+.repos__img.slidev-vclick-hidden { transform: rotate(calc(var(--r) * 2.5)) scale(1.15); opacity: 0; }
+.repos__img--public { --r: -2deg; width: 1100px; left: -20px; top: 0px; }
+.repos__img--internal { --r: 2.5deg; width: 1080px; left: 700px; top: 150px; background: #0d1117; }
+</style>
+
+<!--
+[about 15 seconds]
+
+And Pulumi? We definitely do. This is our public one, pulumi/agent-skills:
+official Pulumi skills for writing, migrating and operating infrastructure,
+shipped as plugins for Claude Code, Codex, Cursor and Gemini CLI.
+[click] And next to it, the internal one, pulumi/pulumi-skills-internal:
+skills for our own workflows, customer research, analytics, engineering.
+215 commits, 84 branches, 17 contributors. Only our own teams see it.
+
+Capture of github.com/pulumi/agent-skills on 2026-11-02 (Playwright, light
+mode, GitHub's top bar cropped): 78 stars, 8 forks, Apache 2.0.
+pulumi/pulumi-skills-internal is internal: screenshot from a logged-in
+browser, dark mode, from the speaker's own browser on 2026-11-02; GitHub's top bar and the
+Contributors section (avatars) cropped off.
 -->
 
 ---
@@ -138,7 +208,7 @@ the first question to the last is the gap this talk is about.
 layout: full
 ---
 
-<Meme src="/memes/this-is-fine.jpg" fit="contain" top="Model updated overnight" bottom="My skills: this is fine" :size="5" />
+<Meme src="/memes/this-is-fine.jpg" fit="contain" top="MODEL UPDATE" bottom="SKILL.md" keep-case :size="5" />
 
 <!--
 [1:50 to 2:00]
@@ -150,22 +220,55 @@ Template: "This Is Fine" (KC Green), via imgflip.
 -->
 
 ---
+layout: cover
+---
 
-<div class="statement">
-  <h1>Every team ships <em>skills</em> by now.</h1>
+<div class="absolute inset-0 flex flex-col justify-center items-start px-20">
+  <div class="event">KubeAuto Day North America 2026 · Salt Lake City · November 9, 2026</div>
+  <h1 class="!text-[7.6rem] !leading-[1.02] !font-semibold !tracking-tight !m-0 !max-w-[92%]">
+    Skills Are<br />Packages Now.
+  </h1>
+  <p class="sub">Your platform should treat them that way.</p>
+  <div class="speaker" v-click>
+    <img src="/img/engin-diri.png" alt="Engin Diri" />
+    <div>
+      <div class="speaker__name">Engin Diri</div>
+      <div class="speaker__role">Principal Solutions Architect, Pulumi</div>
+      <div class="speaker__handles">
+        <span><carbon-logo-x /> @_ediri</span>
+        <span><carbon-logo-linkedin /> engin-diri</span>
+        <span><carbon-logo-github /> dirien</span>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!--
-[2:00 to 2:20]
+<style scoped>
+.event { font-family: var(--slidev-font-mono); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--p-primary); margin-bottom: 2rem; }
+.sub { margin: 1.6rem 0 0 !important; font-size: 2.9rem !important; line-height: 1.2 !important; color: var(--p-fg-muted) !important; max-width: 90% !important; }
+.speaker { display: flex; align-items: center; gap: 1.6rem; margin-top: 3.4rem; }
+.speaker img { width: 7.5rem; height: 7.5rem; border-radius: 9999px; object-fit: cover; border: 3px solid color-mix(in srgb, var(--p-primary) 45%, transparent); }
+.speaker__name { font-size: 1.8rem; font-weight: 600; color: var(--p-fg); }
+.speaker__role { font-size: 1.3rem; color: var(--p-fg-muted); margin-top: 0.2rem; }
+.speaker__handles { display: flex; gap: 1.6rem; margin-top: 0.6rem; font-size: 1.05rem; color: var(--p-fg-muted); }
+.speaker__handles span { display: inline-flex; align-items: center; gap: 0.4rem; }
+</style>
 
-Skills are sprawling. Every team writes its own, in its own repo, with its
-own idea of "works". Nobody asks the platform team, because a skill is just
-a folder.
+<!--
+[after the cold open, about 30 seconds]
+
+So, now that the fire is burning: good afternoon, KubeAuto. I'm Engin, I
+work at Pulumi on platform tooling.
+[click] Quick thank-you to the organizers for putting this day next to
+KubeCon. 25 minutes: a problem, a platform answer, how it ships, a demo,
+and a recap you can take home.
+
+TODO: confirm the session start time and whether Q&A is inside the 25 minutes.
 -->
 
 ---
 
-# A skill is a package
+# What's in a skill
 
 <div class="grid grid-cols-[1.25fr_1fr] gap-8 mt-2 items-stretch zm">
   <div class="gpu-card gpu-card--primary tree" v-click>
@@ -194,24 +297,15 @@ my-skill/
   </div>
 </div>
 
-<div class="loads mt-5" v-click>
-  <div class="loads__step"><span class="loads__n">1</span><div><strong>Always</strong>: name and description, ~100 tokens</div></div>
-  <div class="loads__step"><span class="loads__n">2</span><div><strong>When triggered</strong>: the <code>SKILL.md</code> body, under 5k tokens</div></div>
-  <div class="loads__step"><span class="loads__n">3</span><div><strong>When read</strong>: scripts, references, assets</div></div>
-</div>
-
 <style scoped>
 .tree :deep(pre), .tree :deep(code) { font-size: 0.86rem !important; line-height: 1.55 !important; }
 .anatomy { list-style: none; padding: 0; margin: 1rem 0 0 !important; display: flex; flex-direction: column; gap: 0.9rem; }
 .anatomy li { margin: 0 !important; font-size: 1.25rem !important; line-height: 1.3 !important; }
 .anatomy strong { color: var(--p-fg); }
-.loads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.loads__step { display: flex; align-items: center; gap: 0.8rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.3; }
-.loads__n { flex-shrink: 0; width: 2.1rem; height: 2.1rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
 </style>
 
 <!--
-[2:20 to 3:00]
+[2:20 to 2:50]
 
 A skill is a folder. [click] SKILL.md is the only required file: YAML
 frontmatter with a name and a description, then the instructions. Next to it
@@ -220,17 +314,15 @@ them, and assets like templates or schemas. And an evals folder: evals.json
 holds test cases, a prompt, a description of the expected output, and
 assertions, with input files under evals/files.
 
-[click] So it already has what a package has: a name, a license, an author
+[click] So it already carries a lot: a name, a license, an author
 and a version in the metadata, code and data, and tests.
 
-[click] And it loads like a package with lazy imports. The agent keeps only
-name and description in context, about 100 tokens per skill. It reads the
-SKILL.md body when the skill triggers, and the other files only when it needs
-them. A script runs through bash and only its output enters the context.
+If there is time: it even loads lazily. Only name and description sit in the
+context, about 100 tokens per skill, until the skill triggers.
 
 The demo skills are small on purpose: SKILL.md and evals/. Version 1.1.0 of
 k8s-resource-naming adds a scripts/ folder, which is exactly what the Tier 1
-security scan reads in Demo 2.
+security scan reads in step 2 of the demo.
 
 Sources: agentskills.io/specification (layout, frontmatter: name and
 description required; license, compatibility, metadata, allowed-tools
@@ -243,19 +335,7 @@ loading levels and their token budgets); docs.port.io/agent-management/skills
 
 ---
 
-<div class="statement">
-  <h1>A package declares its <em>dependencies</em>.</h1>
-</div>
-
-<!--
-[2:50 to 3:00]
-
-And packages declare their dependencies. That's the part skills skip.
--->
-
----
-
-# A skill has two dependencies nobody checks
+# A skill depends on a model and a harness
 
 <div class="diagram-slide">
   <Diagram name="dependencies" alt="A skill depends on the model and on the agent harness, and nothing checks either" />
@@ -266,9 +346,10 @@ And packages declare their dependencies. That's the part skills skip.
 </style>
 
 <!--
-[3:00 to 3:50]
+[2:50 to 3:50]
 
-A skill is written against a model. That is the first dependency. It is also
+Like any software, a skill has dependencies. It is written against a
+model. That is the first dependency. It is also
 run by an agent harness, Claude Code, Codex, OpenCode, each with its own
 release train. That is the second. Nothing checks that the skill still works
 when either one changes.
@@ -280,84 +361,143 @@ was tested with. The open agentskills.io spec has no model field, and harnesses
 ignore fields they don't know. There is no field for the harness version;
 compatibility is free text that Claude Code "accepts but doesn't act on".
 
+Proof that the harness matters, not just the model: SkillsBench v4 (June
+2026) ran the same model under two harnesses. Claude Opus 4.7 gains 18.2
+points from curated skills in Claude Code and 11.1 in OpenHands. Gemini 3.1
+Pro: 24.8 in Gemini CLI, 19.0 in OpenHands. GPT-5.5: 19.7 in Codex, 15.8 in
+OpenHands. Finding 3 of the paper: "Harness choice materially changes how
+the same model uses Skills." The harness decides where skills are found
+(.claude/skills, .agents/skills, .opencode/skills), which frontmatter it
+reads (model, context and allowed-tools are Claude Code fields; Codex keeps
+its policy in agents/openai.yaml; OpenCode ignores unknown fields), and how
+a skill is loaded (a Skill tool, a skill tool, or reading the file).
+Anthropic says the same about the model, in its skill-creator guide
+(2026-03-03): "a skill that worked well last month might behave differently
+today." And if the base model passes the evals without the skill, "The skill
+isn't broken; it's just no longer necessary." Re-running evals also tells
+you when to retire a skill.
+Careful: SkillsBench compares harnesses, not releases of one harness. For
+releases, the Claude Code docs version-gate skill behavior (for example
+skill name matching needs v2.1.228 or later), so a release can change it;
+nobody has published a measurement of that yet.
+
 In the demo the harness is pinned: Claude Code 2.1.292, Codex 0.161.0,
 OpenCode 1.19.1. A new release of any of them can change how a skill is found
 and followed. Same folder, different result.
 
-Sources: README.md "Agents and their versions", CONTRACT.md "Agent versions";
+Sources: arxiv.org/abs/2602.12670 v4 (SkillsBench, Finding 3 and Table 2);
+claude.com/resources/articles/improving-skill-creator-test-measure-and-refine-agent-skills;
+code.claude.com/docs/en/skills; learn.chatgpt.com/docs/build-skills (Codex);
+opencode.ai/docs/skills; README.md "Agents and their versions", CONTRACT.md
+"Agent versions";
 code.claude.com/docs/en/skills (frontmatter reference: model, compatibility);
 agentskills.io/specification (no model field).
 Drawn in Excalidraw: slides/diagrams/dependencies.excalidraw.
 -->
 
 ---
+layout: full
+---
 
-<div class="statement">
-  <h1>Skills can make the agent <em>worse</em>.</h1>
-</div>
+<Meme src="/memes/im-helping.jpg" fit="contain" bottom="SKILL.md" keep-case :size="6" />
 
 <!--
 [3:50 to 4:00]
 
-And the other thing we skip: a skill can make the agent worse. People have
+SKILL.md: I'm helping. And the other thing we skip: a skill can make the
+agent worse, even a good one. You cannot tell by reading it. People have
 measured it.
+
+Image: Ralph Wiggum, "I'm helping" (The Simpsons), via pbs.twimg.com
+(media/EOX_2n_WsAAhdZE), 500 x 360, shown with the blurred backdrop.
 -->
 
 ---
 
-# The numbers are already out there
+# Skills help, or not? Can you tell?
 
 <div class="grid grid-cols-3 gap-8 mt-6 zm">
   <div class="gpu-card gpu-card--primary ev" v-click>
+    <div class="gpu-caption gpu-caption--accent">ACES</div>
+    <div class="ev__big">72.8%</div>
+    <p>of 947 paired runs improved with the skill: 58 production skills, four harnesses</p>
+    <div class="src">arxiv.org/abs/2608.20614</div>
+  </div>
+  <div class="gpu-card gpu-card--primary ev" v-click>
     <div class="gpu-caption gpu-caption--accent">SkillsBench</div>
     <div class="ev__big">13 of 87</div>
-    <p>tasks got worse with curated skills, while the average rose 16.6 points</p>
+    <p>tasks got worse with curated skills, though every agent and model pair gained overall</p>
     <div class="src">arxiv.org/abs/2602.12670v4</div>
   </div>
   <div class="gpu-card gpu-card--primary ev" v-click>
-    <div class="gpu-caption gpu-caption--accent">SWE-Skills-Bench</div>
-    <div class="ev__big">92 of 98</div>
-    <p>skills had no statistically significant effect</p>
-    <div class="src">arxiv.org/abs/2603.15401</div>
-  </div>
-  <div class="gpu-card gpu-card--primary ev" v-click>
-    <div class="gpu-caption gpu-caption--accent">Nick Nisi, WorkOS</div>
-    <div class="ev__big">97% → 77%</div>
-    <p>success on one task without the skill, then with it</p>
-    <div class="src">AI Engineer Europe 2026, youtu.be/vy7o1g2iHY8</div>
+    <div class="gpu-caption gpu-caption--accent">Anthropic</div>
+    <div class="ev__quote">“A skill that worked well last month might behave differently today.”</div>
+    <div class="src">skill-creator guide, claude.com, 2026-03-03</div>
   </div>
 </div>
 
 <style scoped>
 .ev { display: flex; flex-direction: column; gap: 1rem; }
 .ev__big { white-space: nowrap; font-size: 3.1rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; color: var(--p-fg); }
+.ev__quote { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.2; color: var(--p-fg); flex: 1; }
 .ev p { margin: 0 !important; font-size: 1.5rem !important; line-height: 1.3 !important; flex: 1; }
 </style>
 
 <!--
 [4:00 to 5:30]
 
-Three data points, all public.
+Three data points, all public. They say the same thing: skills usually
+help, and you cannot see from the folder which ones don't.
+
+[click] ACES, August 2026, the paper behind NVIDIA's SkillEvaluator, which is
+what my stack runs. 947 paired runs, with and without the skill, from 58
+production skills on four harnesses. The skill helped in 72.8 percent of
+them. So about one in four times, it didn't.
 
 [click] SkillsBench, the June 2026 version: 87 tasks, 18 model and harness
-configurations. Curated skills lift the average pass rate from 33.9 to 50.5
-percent, plus 16.6 points, and still 13 of 87 tasks got worse. The worst are
-exam-block-sequencing and suricata-custom-exfil at minus 7.4 points. Averages
-hide the tasks where the skill hurts. (The February version said 16 of 84
-tasks and plus 16.2 points; quote the current one.)
+configurations. Every configuration gains from curated skills, plus 16.6
+points on average, from 33.9 to 50.5 percent, and smaller models with
+skills match larger ones without. And still 13 of 87 tasks got worse; the
+worst are exam-block-sequencing and suricata-custom-exfil at minus 7.4
+points. Averages hide the tasks where the skill hurts.
 
-[click] SWE-Skills-Bench: 98 skills, and 92 of them have no statistically
-significant effect. The average pass ratio moves from 76.6 to 76.9 percent.
-Individual swings reach plus 17.7 and minus 17.0 points.
+[click] And it does not stay put. Anthropic, in the guide for its own
+skill-creator, March 2026: "a skill that worked well last month might behave
+differently today." The model moved, the skill did not. That is why the
+evals have to run again, not once.
 
-[click] Nick Nisi from WorkOS, at AI Engineer Europe 2026: one task
-succeeded 97 percent of the time without the skill and 77 percent with it. He
-then deleted 95 percent of his skills, replaced more than 10,000 generated
-lines with 553 lines of hand-written gotchas, and his eval runs went from 68
-minutes to 6. This one is a practitioner talk, not a paper.
+Say it out loud: none of this is a reason to skip skills. It's a reason to
+test them.
 
-Sources are on the slide. None of these are statements about your
-skills. They say you cannot know without measuring.
+Q&A backup, not on the slide:
+- Nick Nisi, WorkOS, AI Engineer Europe 2026 (youtu.be/vy7o1g2iHY8): he
+  generated about 10,000 lines of skills from his docs; one of them dropped
+  a task from 97 percent correct without it to 77 percent with it. He
+  deleted 95 percent of the generated skills, wrote 553 lines of gotchas by
+  hand, and the results went up; eval runs went from 68 minutes to 6. He
+  does not give that one task's score after the rewrite.
+- SWE-Skills-Bench (arxiv.org/abs/2603.15401 v2, 2026-10-27): 92 of 98
+  public software-engineering skills had no statistically significant
+  effect, 76.6 to 76.9 percent on average, single skills swing +17.7 and
+  -17.0. Where the model already knows the domain, most skills add little;
+  the few that matter matter a lot. Again: measure which.
+- Vercel, "AGENTS.md outperforms skills in our agent evals" (January
+  2026): on Next.js 16 tasks, skills with default settings scored 53
+  percent, the same as no docs; with explicit instructions 79; an 8 KB docs
+  index in AGENTS.md 100. Mostly the agent did not invoke the skill. One
+  setup, a harness behavior, and they only knew because they measured.
+
+Fact-checked 2026-11-01: ACES abstract (947 paired cases from 58 of 64
+production skills and four harnesses, composite lift positive in 72.8
+percent, mean 0.2134, 95% CI 0.1967 to 0.2301); the Anthropic article of
+2026-03-03 (quote verbatim, lower-case "a" in the original); SkillsBench v4 (Finding 1
+"Every one of the 18 model-harness configurations improves", 13 of 87
+negative, 33.9 to 50.5); the Nisi talk transcript: 07:56 "generated over
+10,000 lines of skills ... based on our docs", 09:06 "553 lines of
+gotchas", 09:19 "6 minutes per run" (68 before, 08:27), 09:33 "the
+performance of it actually went up", 09:38 "one skill in particular ...
+correct 77% of the time ... without loading the skill, it was correct 97%
+of the time".
 -->
 
 ---
@@ -372,6 +512,59 @@ layout: full
 One does not simply ship a skill without testing it. And yet.
 
 Template: "One Does Not Simply" (Boromir, The Lord of the Rings), via imgflip.
+-->
+
+---
+
+# What an eval is
+
+<div class="grid grid-cols-3 gap-8 mt-6 zm">
+  <div class="gpu-card gpu-card--primary ev2" v-click>
+    <div class="ev2__head"><span class="ev2__n">1</span>A test case</div>
+    <p>A task for the agent, and checks on the result.</p>
+    <div class="ev2__ex"><span>"Write the manifests for the ledger service"</span><span>✓ every resource is in payments-prd</span></div>
+  </div>
+  <div class="gpu-card gpu-card--primary ev2" v-click>
+    <div class="ev2__head"><span class="ev2__n">2</span>Two runs</div>
+    <p>The agent does the task with the skill and without it, a few times each. Agents are not deterministic.</p>
+    <div class="ev2__ex"><span>with skill × 3</span><span>without skill × 3</span></div>
+  </div>
+  <div class="gpu-card gpu-card--primary ev2" v-click>
+    <div class="ev2__head"><span class="ev2__n">3</span>A score</div>
+    <p>A judge grades every run against the checks. The difference is the <strong>lift</strong>.</p>
+    <div class="ev2__ex"><span>with 0.95, without 0.36</span><span class="ev2__lift">lift +0.59</span></div>
+  </div>
+</div>
+
+<style scoped>
+.ev2 { display: flex; flex-direction: column; gap: 1rem; }
+.ev2__head { display: flex; align-items: center; gap: 0.8rem; font-size: 1.9rem; font-weight: 600; letter-spacing: -0.03em; color: var(--p-fg); }
+.ev2__n { flex-shrink: 0; width: 2.4rem; height: 2.4rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; }
+.ev2 p { margin: 0 !important; font-size: 1.4rem !important; line-height: 1.35 !important; flex: 1; }
+.ev2 strong { color: var(--p-primary); }
+.ev2__ex { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.8rem 1rem; border-radius: 10px; background: var(--p-bg); border: 1px solid var(--p-border); font-family: var(--slidev-font-mono); font-size: 1rem; line-height: 1.4; color: var(--p-fg-muted); }
+.ev2__lift { color: var(--p-primary); font-weight: 700; }
+</style>
+
+<!--
+[about 30 seconds]
+
+Quick refresher, so we mean the same thing by "eval".
+
+[click] A test case: a task you give the agent, and checks on what comes
+out. This one is from the demo skill: write the manifests for the ledger
+service, and every resource has to land in the namespace payments-prd.
+[click] Then you run it twice: with the skill and without it, a few times
+each, because the same prompt does not give the same answer twice.
+[click] A judge, another model, grades every run against the checks. With
+the skill minus without the skill is the lift. That number is what the rest
+of this talk moves around.
+
+Numbers: k8s-resource-naming v1.0.0 on Claude Code 2.1.292 with Opus 5.5,
+3 cases x 3 trials per arm, 0.95 with, 0.36 without, lift +0.59, interval
+[+0.53, +0.64], recorded 2026-11-02 (DEMO.md, "The state before the talk"). The test case is naming-deployment
+in skills/k8s-resource-naming/evals/evals.json. In skill-ci an arm runs 3
+attempts per case by default (CONTRACT.md, attempts).
 -->
 
 ---
@@ -407,7 +600,7 @@ For containers. For infrastructure. For packages.
   <div class="gpu-card gpu-card--primary loop" v-click>
     <div class="gpu-caption gpu-caption--accent">Registry</div>
     <p><strong>Containers:</strong> images in an OCI registry</p>
-    <p><strong>Skills:</strong> OCI artifacts in the same kind of registry</p>
+    <p><strong>Skills:</strong> every version stored, with release channels</p>
   </div>
   <div class="gpu-card gpu-card--primary loop" v-click>
     <div class="gpu-caption gpu-caption--accent">Pipeline</div>
@@ -433,8 +626,8 @@ For containers. For infrastructure. For packages.
 You push an image to a registry. A pipeline builds, scans and tests it. A gate
 decides which tag moves to production. Nobody asks a human to eyeball it.
 
-[click] Registry: skills are OCI artifacts, so they go in the same kind of
-registry. In the demo that is Harbor.
+[click] Registry: every version of a skill is stored and addressable, with
+release channels. Which registry? Hold that thought, it's the best part.
 [click] Pipeline: the test run is an eval, with the skill and without it.
 It runs when a version is pushed and when the model or harness changes.
 [click] Gate: a version that helps gets the stable tag. One that makes the
@@ -447,40 +640,38 @@ Skills differ from images, and the loop still transfers.
 layout: full
 ---
 
-<Meme src="/memes/yo-dawg.jpg" top="I heard you like CI" bottom="So we put CI on your skills" :size="5.4" />
+<Meme src="/memes/freedom-of-speech.jpg" fit="contain" bottom="What if skills get CI too?" :size="5" :labels="[{ text: 'Me', x: 50, y: 50, size: 4.5 }, { text: 'Platform team', x: 26, y: 64, size: 3.4 }]" />
 
 <!--
 [7:00 to 7:10]
 
-So: I heard you like CI, so we put CI on your skills.
+So I stood up in front of the platform team and asked: what if skills get
+CI too?
 
-Template: "Yo Dawg" (Xzibit), via imgflip.
+Template: "Freedom of Speech" (Norman Rockwell, 1943), the meme of the one
+person who stands up and says it, via preview.redd.it.
 -->
 
 ---
 
-<div class="statement statement--triple">
-  <h1><span v-click>Registry.</span> <span v-click>Pipeline.</span> <span v-click><em>Gate.</em></span></h1>
+<div class="statement statement--long">
+  <h1>Skills should go in the registry you <em>already run</em>.</h1>
 </div>
 
-<style scoped>
-.statement--triple h1 { font-size: 6.6rem !important; white-space: nowrap; max-width: none; }
-</style>
-
 <!--
-[7:10 to 7:30]
+[7:10 to 7:20]
 
-Three parts. [click] Registry. [click] Pipeline. [click] Gate. Here is the
-stack I built to try it, on plain Kubernetes.
+Start with the registry. Remember the question: which registry? The one you
+already run for your images.
 -->
 
 ---
 
-# A skill is an OCI artifact
+# A skill is an OCI artifact (my spec)
 
 <div class="grid grid-cols-[1.1fr_1fr] gap-10 mt-2 items-start zm">
   <div class="ociman" v-click>
-    <div class="gpu-caption gpu-caption--accent">net-pypi-check:v1.1.0 in Harbor</div>
+    <div class="gpu-caption gpu-caption--accent">k8s-incident-triage:v1.0.0 in Harbor</div>
 
 ```json
 {
@@ -488,12 +679,12 @@ stack I built to try it, on plain Kubernetes.
   "layers": [{
     "mediaType": "…image.layer.v1.tar+gzip",
     "annotations": {
-      "org.opencontainers.image.title": "net-pypi-check"
+      "org.opencontainers.image.title": "k8s-incident-triage"
     }
   }],
   "annotations": {
-    "skillci.dev/network": "allowlist",
-    "skillci.dev/network-allow": "@python"
+    "org.opencontainers.image.created": "2026-11-02T09:54:08Z",
+    "skillci.dev/network": "none"
   }
 }
 ```
@@ -508,19 +699,31 @@ stack I built to try it, on plain Kubernetes.
 </div>
 
 <div class="ocistrap" v-click>No new registry. No new protocol. No new client.</div>
+<div class="ociprop" v-after>
+  <div class="ociprop__text"><strong>Open proposal at the AAIF</strong><span>Skills packaging and distribution as OCI artifacts, by Thomas Vitale</span><code>agentskills/agentskills #292</code></div>
+  <div class="ociprop__qr"><QRCode data="https://github.com/agentskills/agentskills/discussions/292" dark="#000000" /></div>
+</div>
 
 <style scoped>
 .ociman :deep(pre), .ociman :deep(code) { font-size: 0.82rem !important; line-height: 1.5 !important; }
 .ocigets { display: flex; flex-direction: column; gap: 0.75rem; }
 .ocigets__row { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
 .ocigets__row strong { font-size: 1.2rem; color: var(--p-primary); }
+.ociprop { position: absolute; right: 3.5rem; bottom: 1.2rem; display: flex; align-items: center; gap: 1.1rem; }
+.ociprop__text { display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem; text-align: right; }
+.ociprop__text strong { font-size: 1.15rem; color: var(--p-fg); }
+.ociprop__text span { font-size: 0.95rem; color: var(--p-fg-muted); }
+.ociprop__text code { font-size: 0.9rem; color: var(--p-primary); }
+.ociprop__qr { width: 150px; height: 150px; border-radius: 10px; background: #fff; padding: 6px; border: 1.5px solid var(--p-border); }
 .ocistrap { margin-top: 1.4rem; padding: 0.7rem 1.1rem; border-left: 4px solid var(--p-primary); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--p-fg); }
 </style>
 
 <!--
 [about 45 seconds, keep it]
 
-This is the whole idea in one picture. [click] A skill version in Harbor: one
+This is the whole idea in one picture, in the format I use in skill-ci; the
+standard format is still open, more on that in a second. [click] A skill
+version in Harbor: one
 manifest, one layer with the skill folder, and annotations. The skill even
 declares its network here, so the platform reads it like an image label. ORAS
 pushed it; nothing about it is special to skills.
@@ -534,49 +737,154 @@ replication to other sites, retention, scanning.
 
 [click] So there is no new registry, no new protocol and no new client to
 run. If your platform can ship container images, it can ship skills.
+And I'm not the only one who thinks so: Thomas Vitale has an open proposal
+at the AAIF, where the Agent Skills spec lives now, to standardize skills as
+OCI artifacts. The QR code goes there; read it, comment, upvote.
 
-Source: oras manifest fetch of skills/net-pypi-check:v1.1.0 on the DOKS
-cluster, 2026-10-31 (config is the OCI empty descriptor, trimmed here).
+Proposal: github.com/agentskills/agentskills/discussions/292, "Specification
+for Skills Packaging and Distributions as OCI Artifacts", opened by
+ThomasVitale on 2026-04-02, open, 16 comments (checked 2026-11-02); draft
+spec at github.com/ThomasVitale/agents-skills-oci-artifacts-spec. QR code:
+the QRCode component (qrcode library), rendered from that URL.
+Source: oras manifest fetch of skills/k8s-incident-triage:v1.0.0 on the DOKS
+cluster, 2026-11-02 (config, digests and the oras unpack annotations
+trimmed). The skill declares network none in its SKILL.md metadata, so its
+trials reach only the model API and the judge.
 -->
 
 ---
 
-# One push, one controller, many sandboxes
+# Meet the skill-ci controller
 
-<div class="diagram-slide">
-  <Diagram name="architecture" alt="Architecture: a team pushes a skill to Harbor, a webhook triggers the skill-ci controller, which starts a runner Job that runs trials in Agent Sandboxes, then moves tags and exports metrics" />
+<div class="ci-grid mt-6">
+  <div class="ci">
+    <p class="ci__lead"><strong>CI for agent skills on Kubernetes.</strong><br>Open source, Apache 2.0. I built it after feedback from customers. Evaluates on Claude Code, Codex and OpenCode.</p>
+    <div v-click>
+      <div class="gpu-caption gpu-caption--muted">Three CRDs</div>
+      <ul class="ci__list ci__list--crd">
+        <li><code>SkillEval</code>: one run</li>
+        <li><code>SandboxProfile</code>: the trial sandbox</li>
+        <li><code>SkillCIConfig</code>: the policy</li>
+      </ul>
+    </div>
+    <div v-click>
+      <div class="gpu-caption gpu-caption--muted">Telemetry</div>
+      <ul class="ci__list">
+        <li>Prometheus metrics and a Grafana dashboard</li>
+        <li>OTLP push to any OpenTelemetry backend</li>
+      </ul>
+    </div>
+  </div>
+  <div class="gpu-card gpu-card--primary ci__crd" v-click>
+    <div class="gpu-caption gpu-caption--accent">Claude Code + Opus 5.5</div>
+
+```yaml
+kind: SkillEval
+spec:
+  skill: k8s-resource-naming
+  version: v1.0.0
+  agent: claude-code
+  agentVersion: 2.1.292
+  model: claude-opus-5-5
+  required: true
+status:
+  withSkill: "0.95"
+  withoutSkill: "0.36"
+  lift: "+0.59"
+  liftCI: "[+0.53, +0.64]"
+  verdict: Helps
+```
+
+  </div>
+  <div class="gpu-card gpu-card--primary ci__crd" v-click>
+    <div class="gpu-caption gpu-caption--accent">Codex + gpt-6.1-sol</div>
+
+```yaml
+kind: SkillEval
+spec:
+  skill: k8s-resource-naming
+  version: v1.0.0
+  agent: codex
+  agentVersion: 0.161.0
+  model: openai/gpt-6.1-sol
+  required: false
+status:
+  withSkill: "0.76"
+  withoutSkill: "0.41"
+  lift: "+0.35"
+  liftCI: "[+0.24, +0.46]"
+  verdict: Helps
+```
+
+  </div>
+</div>
+
+<div class="ci__repo">
+  <span>github.com/dirien/skill-ci</span>
+  <div class="ci__qr"><QRCode data="https://github.com/dirien/skill-ci" dark="#000000" /></div>
 </div>
 
 <style scoped>
-.diagram-slide { height: 36rem; margin-top: -0.5rem; }
+.ci-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.6rem; align-items: start; }
+.ci { display: flex; flex-direction: column; gap: 1.2rem; }
+.ci__lead { margin: 0 !important; font-size: 1.2rem !important; line-height: 1.45 !important; color: var(--p-fg-muted); }
+.ci__lead strong { font-size: 1.5rem; color: var(--p-fg); font-weight: 600; letter-spacing: -0.02em; }
+.ci__list { margin: 0.5rem 0 0 !important; padding-left: 1.2rem !important; }
+.ci__list li { margin: 0.15rem 0 !important; font-size: 1.1rem !important; line-height: 1.35 !important; color: var(--p-fg); }
+.ci__crd :deep(pre), .ci__crd :deep(code) { font-size: 0.78rem !important; line-height: 1.4 !important; }
+.ci__repo { position: absolute; right: 3.5rem; bottom: 1.2rem; display: flex; align-items: center; gap: 1rem; }
+.ci__qr { width: 150px; height: 150px; border-radius: 10px; background: #fff; padding: 6px; border: 1.5px solid var(--p-border); }
+.ci__repo span { font-family: var(--slidev-font-mono); font-size: 1.1rem; font-weight: 700; color: var(--p-primary); }
 </style>
 
 <!--
-[7:30 to 9:00]
+[about 45 seconds]
 
-Walk it left to right.
+This is skill-ci, the project I built to try the idea. CI for agent skills
+on Kubernetes, open source under Apache 2.0. I started it after feedback
+from customers: teams had skills everywhere and no way to know which ones to
+trust. It evaluates on three harnesses today: Claude Code, Codex and
+OpenCode, each with the models it supports (CONTRACT.md "Model list").
 
-1. A team pushes a skill with ORAS. It lands in Harbor as an OCI artifact.
-2. Harbor fires a PUSH_ARTIFACT webhook at the controller.
-3. The controller, a Go service with a SkillEval custom resource, creates one
-   SkillEval per entry in the model list, and each one becomes a Job. The
-   model list is a ConfigMap. Change it, say a new harness release, and the
-   controller evaluates every beta and stable skill again. That is the arrow
-   from the top.
-4. The Job pulls the skill by digest, runs the Tier 1 and 2 checks, then runs
-   trials. Every trial is one Agent Sandbox, for Claude Code with Opus 5.5,
-   Codex with gpt-6.1-sol, OpenCode with Qwen 3.8 Flash.
-5. Scores come back, the controller applies the policy and moves the tags
-   through the Harbor API. Metrics go to Prometheus and Grafana, and there is
-   a reporting site for the humans.
+[click] skill-ci itself is a controller with three CRDs: SkillEval for one
+run, SandboxProfile for what a trial sandbox looks like, SkillCIConfig for
+the policy.
+[click] And it reports like any other platform service: Prometheus metrics
+on /metrics, lift per skill version, and a ready Grafana dashboard.
+If you run an OpenTelemetry pipeline instead, the controller pushes the same
+metrics over OTLP, http/protobuf or gRPC, off until you set an endpoint.
+[click] This is a real SkillEval. One per skill version and model list
+entry: the skill, the agent and its release, the model. The status is the
+result: 0.95 with the skill, 0.36 without, lift +0.59, the interval well
+above zero, verdict Helps. This entry is required, so it gates the tags.
+[click] Same skill, same version, on Codex with an OpenAI model: lift +0.35.
+Still helps, but only about half the effect, and a much wider interval. That's the harness and model
+dependency from earlier, as two objects in your cluster. This entry is
+optional: it shows up everywhere but never holds a skill back.
 
-Drawn in Excalidraw: slides/diagrams/architecture.excalidraw (edit it at
-excalidraw.com, then run npm run diagrams).
+The QR code goes to the repo; leave it up a second.
+
+Sources: README.md, LICENSE (Apache 2.0), CONTRACT.md "CRD: SkillEval"
+(fields; apiVersion skillci.dev/v1alpha1, digest, attempts, trigger and the
+optional fields trimmed), demo/models.yaml (required true and false),
+DEMO.md, "The state before the talk", 2026-11-02 (k8s-resource-naming v1.0.0: Claude
+Code 2.1.292 with Opus 5.5, Codex 0.161.0 with gpt-6.1-sol). Current release
+0.11.2 (deploy/versions.env).
+QR code: the QRCode component (qrcode library), https://github.com/dirien/skill-ci.
+
+Telemetry (the OTLP slide was cut): only the skillci_ families are exported,
+with the same names, labels and values as /metrics, because the export reads
+the same Prometheus collectors. Helm value otlp.endpoint; an ingest key goes
+in a Secret (otlp.headersSecret.name). Do not scrape and push into the same
+Prometheus, or every series is stored twice. The dashboard is
+infra/dashboards/skill-ci.json, delivered as a ConfigMap for the Grafana sidecar. Tested on the DOKS cluster on
+2026-10-31 against an OpenTelemetry Collector 0.162.0 over http/protobuf and
+gRPC. Source: CONTRACT.md "OpenTelemetry export", docs/observability.md.
 -->
 
 ---
 
-# The parts and their jobs
+# Built on battle-proven open source building blocks
 
 <div class="grid grid-cols-4 gap-5 mt-4 parts">
   <div class="gpu-card gpu-card--muted part" v-click><ph-package class="part__icon" /><div class="part__name">Harbor</div><div class="part__job">Skills as OCI artifacts, push webhook</div><div class="part__ver">goharbor 2.15.4</div></div>
@@ -584,7 +892,7 @@ excalidraw.com, then run npm run diagrams).
   <div class="gpu-card gpu-card--muted part" v-click><ph-magnifying-glass class="part__icon" /><div class="part__name">SkillEvaluator</div><div class="part__job">Three tiers, with and without lift</div><div class="part__ver">NVIDIA, 0.6.0 + patch</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-flask class="part__icon" /><div class="part__name">Harbor framework</div><div class="part__job">Runs the agent trials</div><div class="part__ver">0.24.0</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-cube class="part__icon" /><div class="part__name">Agent Sandbox</div><div class="part__job">Warm pools, one pod per trial</div><div class="part__ver">kubernetes-sigs, v1.0.9</div></div>
-  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">CRDs, Jobs, network policy, tags</div><div class="part__ver">Go, 0.10.1</div></div>
+  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">CRDs, Jobs, network policy, tags</div><div class="part__ver">Go, 0.11.2</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-chart-line-up class="part__icon" /><div class="part__name">Prometheus + Grafana</div><div class="part__job">Lift per skill version, or OTLP to any backend</div><div class="part__ver">kube-prometheus-stack</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-browsers class="part__icon" /><div class="part__name">Reporting site</div><div class="part__job">Every run, in plain words</div><div class="part__ver">served by the controller</div></div>
 </div>
@@ -623,39 +931,42 @@ the Pulumi YAML program are in the same repo.
 
 ---
 
-# What happens on a push
+# Under the hood of skill-ci
 
-```mermaid {scale: 1.08}
-sequenceDiagram
-  participant T as Team
-  participant H as Harbor
-  participant C as Controller
-  participant J as Runner Job
-  participant S as Agent Sandboxes
-  T->>H: oras push skill:v1.1.0
-  H->>C: PUSH_ARTIFACT webhook
-  C->>J: one Job per SkillEval
-  J->>J: Tier 1 and 2 checks
-  J->>S: trials, with and without the skill
-  S-->>J: scores
-  J-->>C: result
-  C->>H: move beta and stable tags
-  C->>C: update metrics
-```
+<div class="diagram-slide">
+  <Diagram name="architecture" alt="Architecture: a team pushes a skill to Harbor, a webhook triggers the skill-ci controller, which starts a runner Job that runs trials in Agent Sandboxes, then moves tags and exports metrics" />
+</div>
+
+<style scoped>
+.diagram-slide { height: 36rem; margin-top: -0.5rem; }
+</style>
 
 <!--
-[10:00 to 10:45]
+[7:30 to 9:00]
 
-The same flow as a sequence. Two details matter.
+Walk it left to right.
 
-The webhook only counts for tags that look like vX.Y.Z. beta and stable are
-ignored, so the controller moving a tag never triggers itself. And the
-controller dedupes by digest, not by tag.
+1. A team pushes a skill with ORAS. It lands in Harbor as an OCI artifact.
+2. Harbor fires a PUSH_ARTIFACT webhook at the controller.
+3. The controller, a Go service with a SkillEval custom resource, creates one
+   SkillEval per entry in the model list, and each one becomes a Job. The
+   model list is a ConfigMap. Change it, say a new harness release, and the
+   controller evaluates every beta and stable skill again. That is the arrow
+   from the top.
+4. The Job pulls the skill by digest, runs the Tier 1 and 2 checks, then runs
+   trials. Every trial is one Agent Sandbox, for Claude Code with Opus 5.5,
+   Codex with gpt-6.1-sol, OpenCode with Qwen 3.8 Flash.
+5. Scores come back, the controller applies the policy and moves the tags
+   through the Harbor API. Metrics go to Prometheus and Grafana, and there is
+   a reporting site for the humans.
 
-The Job runs Tier 1 and 2 first. If they fail, the arrow to the sandboxes
-never happens.
-
-Source: CONTRACT.md "Triggers", "All tiers and publication".
+Drawn in Excalidraw: slides/diagrams/architecture.excalidraw (edit it at
+excalidraw.com, then run npm run diagrams).
+If asked about the push flow: the webhook only counts tags that look like
+vX.Y.Z; beta and stable are ignored, so the controller moving a tag never
+triggers itself. The controller dedupes by digest, not by tag. The Job runs
+Tier 1 and 2 first; if they fail, no sandbox starts. Source: CONTRACT.md
+"Triggers", "All tiers and publication".
 -->
 
 ---
@@ -702,6 +1013,7 @@ The verdict is a status field of a Succeeded run, not a phase of its own.
 ---
 
 <div class="statement">
+  <ph-money class="statement__icon" />
   <h1>Cheap checks <em>first</em>.</h1>
 </div>
 
@@ -712,8 +1024,24 @@ Evals cost tokens, so the pipeline starts with the cheap checks.
 -->
 
 ---
+layout: full
+---
 
-# Three tiers, one gate
+<Meme src="/memes/donald-duck-counting-money.gif" fit="contain" />
+
+<!--
+[about 5 seconds]
+
+Because every live trial is someone counting tokens. Let it loop once.
+
+GIF: Donald Duck counting money, via tenor.com
+(media.tenor.com/KjtgHR9aTFkAAAAM/donald-duck-counting-money.gif), 220 x 264,
+shown with the blurred backdrop.
+-->
+
+---
+
+# Three tiers
 
 <div class="grid grid-cols-3 gap-8 mt-6 zm">
   <div class="gpu-card gpu-card--primary tier" v-click>
@@ -770,136 +1098,197 @@ scanners in the runner".
 
 ---
 
+<div class="statement">
+  <ph-flask class="statement__icon" />
+  <h1>Tier 3: does the skill <em>help</em>?</h1>
+</div>
+
+<!--
+[12:40 to 12:50]
+
+Tier 1 and 2 passed, so now we spend tokens. Three questions for the next
+four slides: where do the test cases come from, what do we measure, and how
+does the gate decide on a noisy measurement.
+-->
+
+---
+
 # Who writes the test cases
 
-<div class="grid grid-cols-[1.15fr_1fr] gap-8 mt-8 items-start zm">
-  <div class="cases" v-click>
-    <div class="gpu-caption gpu-caption--accent">evals/evals.json (abridged)</div>
+<div class="cases mt-10 zm">
+  <div class="gpu-caption gpu-caption--accent">skills/k8s-incident-triage/evals/evals.json (abridged)</div>
 
 ```json
 {
-  "skill_name": "acme-release-notes",
+  "skill_name": "k8s-incident-triage",
   "evals": [{
-    "id": "rn-basic",
-    "prompt": "Write the release notes for 1.4.0 into RELEASE_NOTES.md ...",
-    "expected_output": "'ACME-RN/2 1.4.0', then ## Added and ## Fixed",
+    "id": "triage-oom",
+    "prompt": "The ledger API keeps restarting. Write a triage note into TRIAGE.md.
+               kubectl describe pod: ...",
+    "expected_output": "Cause OOM_KILLED, the OOMKilled line, the next command",
     "assertions": [
-      "RELEASE_NOTES.md exists",
-      "The first line is exactly 'ACME-RN/2 1.4.0'"
+      "The Cause section is exactly 'OOM_KILLED'",
+      "The Next step is 'kubectl ... top pod'",
+      "No delete, restart or scale"
     ]
   }]
 }
 ```
 
-  </div>
-  <div class="steps">
-    <div class="step" v-click><span class="step__n">1</span><div><strong>Draft</strong>: <code>make draft-evals</code> (SkillEvaluator), or Anthropic's skill-creator</div></div>
-    <div class="step" v-click><span class="step__n">2</span><div><strong>Review</strong>: a person replaces wording copied from <code>SKILL.md</code> and adds checks on files</div></div>
-    <div class="step" v-click><span class="step__n">3</span><div><strong>Push</strong>: skill-ci runs the cases on every push and every harness release</div></div>
-    <div class="nocases" v-click>No test cases: Tier 1 and 2 still run, then the run fails and says what is missing.</div>
-  </div>
 </div>
+<div class="origin mt-8" v-click>Drafted by SkillEvaluator or skill-creator, <strong>reviewed by a person</strong>, committed with the skill.</div>
 
 <style scoped>
-.cases :deep(pre), .cases :deep(code) { font-size: 0.82rem !important; line-height: 1.5 !important; }
-.steps { display: flex; flex-direction: column; gap: 0.9rem; }
-.step { display: flex; align-items: flex-start; gap: 0.9rem; padding: 0.85rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.05rem; line-height: 1.35; }
-.step__n { flex-shrink: 0; width: 2.1rem; height: 2.1rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
-.nocases { padding: 0.6rem 1rem; border-left: 4px solid var(--p-primary); font-size: 1rem; line-height: 1.35; color: var(--p-fg-muted); }
+.cases :deep(pre), .cases :deep(code) { font-size: 0.9rem !important; line-height: 1.5 !important; }
+.cases .gpu-caption { margin-bottom: 0.6rem; }
+.origin { font-size: 1.4rem; color: var(--p-fg-muted); }
+.origin strong { color: var(--p-primary); font-weight: 600; }
 </style>
 
 <!--
-[cut if short on time, about 40 seconds]
+[about 20 seconds]
 
-[click] Tier 3 runs test cases, and they come from the skill: evals/evals.json,
-the format from agentskills.io. Each case has a prompt, a description of the
-expected output, and assertions the judge checks. This one is from the demo
-skill: the first line must be exactly ACME-RN/2 and the version.
+Tier 3 runs test cases, and they come with the skill: evals/evals.json, the
+format from agentskills.io. Each case has a prompt, the expected output, and
+assertions the judge checks. This one is from the demo skill, the on-call
+triage: the prompt carries the kubectl describe output of a pod that was
+OOMKilled, and the checks want the ACME cause code, the exact read-only next
+command, and nothing destructive. No model knows your team's cause codes.
 
-[click] Nobody writes these from nothing. make draft-evals runs SkillEvaluator's
-create-eval-dataset in a short pod with the cluster's key: one request, about
-20 seconds, four cases. Anthropic's skill-creator does the same in Claude Code.
-[click] But a person reviews them. The generator reads SKILL.md, so its
-assertions repeat the skill's own wording and cannot catch a rule the skill
-forgot. Add checks on files the agent has to write.
-[click] Then push. skill-ci never writes or regenerates the tests: the gate
-runs the cases the author committed, on every push and every harness release.
+[click] Nobody writes these from nothing, and nobody should trust a generator
+alone. A person reviews them.
 
-[click] A skill without test cases still gets the static and security checks;
-then the run fails with "no eval dataset" and the make draft-evals command.
+If asked, the details:
+- Draft: make draft-evals runs SkillEvaluator's create-eval-dataset in a short
+  pod with the cluster's key, one request, about 20 seconds, four cases.
+  Anthropic's skill-creator does the same in Claude Code.
+- Review: the generator reads SKILL.md, so its assertions repeat the skill's
+  own wording and cannot catch a rule the skill forgot. Add checks on files
+  the agent has to write.
+- Push: skill-ci never writes or regenerates the tests. The gate runs the
+  cases the author committed, on every push and every harness release.
+- No test cases: the static and security checks still run, then the run fails
+  with "no eval dataset" and the make draft-evals command.
 
 Sources: agentskills.io/skill-creation/evaluating-skills; SkillEvaluator 0.6.0
 create-eval-dataset (tested on the DOKS cluster 2026-10-31: claude-opus-5-5,
 about 20 s, 4 cases); anthropics/skills skill-creator (Apache-2.0);
-skills/acme-release-notes/evals/evals.json.
+skills/k8s-incident-triage/evals/evals.json (case triage-oom, abridged and
+wrapped for the slide: the prompt carries the full describe output, the
+next-step assertion names the exact command).
 -->
 
 ---
 
-# The skill declares its network, the platform enforces it
+# How one trial is scored
 
-<div class="grid grid-cols-[1fr_1.15fr] gap-8 mt-4 items-start zm">
-  <div class="netdecl" v-click>
-    <div class="gpu-caption gpu-caption--accent">SKILL.md frontmatter</div>
-
-```yaml
-metadata:
-  skillci.dev/network: allowlist
-  skillci.dev/network-allow: "@python,dl.k8s.io"
-```
-
-  <p class="netdecl__note">Pushed as OCI annotations, read by the controller.</p>
+<div class="sc mt-6">
+  <div class="dims">
+    <div class="dims__head"><span>NVIDIA SkillEvaluator dimension</span><span>with</span><span>without</span></div>
+    <div class="dims__row" :class="{ 'dims__row--out': d.out }" v-for="d in [
+      { name: 'Security', q: 'Is it safe to use?', by: 'trace checks', w: '1.00', wo: '1.00' },
+      { name: 'Correctness', q: 'Is the answer correct?', by: 'LLM judge', w: '0.91', wo: '0.56' },
+      { name: 'Effectiveness', q: 'Did the skill help complete the task?', by: 'LLM judges', w: '0.91', wo: '0.19' },
+      { name: 'Efficiency', q: 'Did it avoid wasted tool or skill usage?', by: 'trace checks', w: '0.75', wo: '0.10' },
+      { name: 'Discoverability', q: 'Was the skill loaded? 0 without one', by: 'not counted', w: '1.00', wo: '0.00', out: true },
+    ]" :key="d.name">
+      <div>
+        <div class="dims__name">{{ d.name }}</div>
+        <div class="dims__q">{{ d.q }} <span class="dims__by">· {{ d.by }}</span></div>
+      </div>
+      <span class="dims__w">{{ d.w }}</span>
+      <span class="dims__wo">{{ d.wo }}</span>
+    </div>
   </div>
-  <div class="modes">
-    <div class="mode" v-click><code>none</code><span>the agent's model API and the judge, nothing else</span></div>
-    <div class="mode" v-click><code>allowlist</code><span>plus named domains and bundles like <code>@python</code></span></div>
-    <div class="mode" v-click><code>full</code><span>the internet, never the cluster</span></div>
-    <div class="modes__how" v-click>One CiliumNetworkPolicy per evaluation, the same for both arms. Platform default and ceiling in the SkillCIConfig CRD.</div>
+  <div class="side">
+    <div class="total" v-click>
+      <div class="total__k">Trial score</div>
+      <div class="total__nums">
+        <div><div class="total__w">0.89</div><div class="total__l">with</div></div>
+        <div><div class="total__wo">0.46</div><div class="total__l">without</div></div>
+      </div>
+      <div class="total__txt">the mean of the four counted dimensions<br>lift = with − without</div>
+    </div>
+    <div class="legend">
+      <div class="legend__bar"><span>0</span><div class="legend__track"></div><span>1</span></div>
+      <p><strong>0</strong> failed every check, <strong>1</strong> passed every check</p>
+      <p><strong>Trace checks</strong> rules on what the agent did</p>
+      <p><strong>LLM judge</strong> grades the answer against the test case</p>
+    </div>
   </div>
 </div>
+<div class="src mt-6">k8s-incident-triage v1.0.0 on Claude Code 2.1.292 with Opus 5.5. Every number is the mean of 9 trials of one arm. Dimensions from the SkillEvaluator 0.6.0 report.</div>
 
 <style scoped>
-.netdecl :deep(pre), .netdecl :deep(code) { font-size: 0.95rem !important; line-height: 1.55 !important; }
-.netdecl__note { margin: 0.8rem 0 0 !important; font-size: 1.05rem !important; color: var(--p-fg-muted); }
-.modes { display: flex; flex-direction: column; gap: 0.8rem; }
-.mode { display: grid; grid-template-columns: 7.5rem 1fr; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
-.mode > code { font-size: 1.1rem; font-weight: 700; }
-.modes__how { padding: 0.6rem 1rem; border-left: 4px solid var(--p-primary); font-size: 1rem; line-height: 1.35; color: var(--p-fg-muted); }
+.sc { display: grid; grid-template-columns: 1fr 27rem; gap: 3.5rem; align-items: start; }
+.dims__head, .dims__row { display: grid; grid-template-columns: 1fr 5.5rem 5.5rem; align-items: center; gap: 1rem; }
+.dims__head { padding-bottom: 0.6rem; font-family: var(--slidev-font-mono); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--p-fg-muted); }
+.dims__head span:nth-child(n+2) { text-align: right; }
+.dims__row { padding: 0.75rem 0; border-top: 1px solid var(--p-border); }
+.dims__name { font-size: 1.3rem; font-weight: 600; color: var(--p-fg); line-height: 1.2; }
+.dims__q { margin-top: 0.15rem; font-size: 1.02rem; color: var(--p-fg-muted); }
+.dims__by { font-family: var(--slidev-font-mono); font-size: 0.88rem; }
+.dims__w, .dims__wo { font-family: var(--slidev-font-mono); font-size: 1.3rem; text-align: right; }
+.dims__w { color: var(--p-primary); font-weight: 600; }
+.dims__wo { color: var(--p-fg); }
+.dims__row--out { opacity: 0.5; }
+.dims__row--out .dims__w, .dims__row--out .dims__wo { text-decoration: line-through; color: var(--p-fg-muted); font-weight: 400; }
+.dims__row--out .dims__by { color: var(--p-fg); font-weight: 700; }
+.side { display: flex; flex-direction: column; gap: 2.2rem; }
+.total { padding: 1.3rem 1.5rem; border-left: 3px solid var(--p-primary); background: var(--p-bg-elevated); border-radius: 0 12px 12px 0; }
+.total__k { font-family: var(--slidev-font-mono); font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--p-primary); }
+.total__nums { display: flex; gap: 2.5rem; margin: 0.6rem 0 0.7rem; }
+.total__w, .total__wo { font-family: var(--slidev-font-mono); font-size: 2.6rem; line-height: 1; }
+.total__w { color: var(--p-primary); font-weight: 700; }
+.total__wo { color: var(--p-fg); }
+.total__l { margin-top: 0.3rem; font-size: 0.95rem; color: var(--p-fg-muted); }
+.total__txt { font-size: 1rem; line-height: 1.5; color: var(--p-fg-muted); }
+.legend p { margin: 0.35rem 0 0 !important; font-size: 1rem !important; line-height: 1.4 !important; color: var(--p-fg-muted); }
+.legend strong { color: var(--p-fg); font-weight: 600; margin-right: 0.2rem; }
+.legend__bar { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.7rem; font-family: var(--slidev-font-mono); font-size: 0.95rem; color: var(--p-fg-muted); }
+.legend__track { flex: 1; height: 0.45rem; border-radius: 999px; background: linear-gradient(90deg, var(--p-border), var(--p-primary)); }
 </style>
 
 <!--
-[cut if short on time, about 40 seconds]
+[12:50 to 13:30]
 
-A skill that downloads tools at run time behaves differently with and without
-network, so the network is part of what a skill depends on. [click] The skill
-says what it needs, in the metadata of its frontmatter, which the agentskills
-spec leaves open for exactly this. The push copies it into the OCI
-annotations, so the controller reads it like an image label.
+Before the numbers, what one number means. SkillEvaluator, the NVIDIA tool
+inside the runner, scores every trial on five dimensions. Security, Correctness,
+Effectiveness, Efficiency, Discoverability. Some are checked by rules against
+the trace of what the agent did, two are graded by an LLM judge against the
+test case.
 
-[click] none: the agent can reach its model API and the judge, nothing else.
-The judge part I learned from the first live run: SkillEvaluator scores each
-trial inside the sandbox, so with Codex the judge on api.anthropic.com was
-blocked until the controller allowed it. [click]
-allowlist: plus named domains, and bundles the platform defines, like @python
-for pypi.org and files.pythonhosted.org. [click] full: the internet, but
-never the cluster: no Harbor, no Kubernetes API from inside a trial.
+The scale is 0 to 1. 0 means it failed every check of that dimension, 1 means
+it passed every check. Every number here is the mean of nine trials: the
+on-call triage skill on Claude Code, nine runs with the skill, nine without.
 
-[click] The controller creates one CiliumNetworkPolicy per evaluation before
-the trials start, with the same rules for the with and without arms. The
-platform team sets the default and a ceiling in the SkillCIConfig, an object
-in the cluster it edits with kubectl or GitOps, so a skill cannot ask for
-more than the platform allows. A skill that declares nothing gets full.
+Read the rows: safe either way. Without the skill the answer is half right,
+0.56, and the agent does not do the task the way the case asks for: 0.19 on
+effectiveness.
 
-Verified on the DOKS cluster on 2026-10-31 with release 0.10.1, a skill that
-renders banners with the Python package art, Claude Code with Opus 5.5:
-none: hubble observe shows pypi.org resolved and the connections dropped,
-with skill 0.67; allowlist @python: the trials reach pypi.org, with skill
-0.94; no metadata (full): 0.94. Without the skill about 0.39 in all three.
-Codex in none mode: 0.72 with, 0.46 without (judge host allowed).
-Trials claim pods from a SandboxWarmPool that a SandboxProfile defines.
-Sources: Cilium toFQDNs test on the DOKS cluster 2026-10-31 (api.anthropic.com
-allowed, pypi.org and github.com blocked, pypi.org 200 without the policy);
-agentskills.io/specification (metadata field); CONTRACT.md "Network modes".
+The last row is the one we do not count. Discoverability asks whether the
+skill was loaded. Without a skill it is 0 by definition, so it would add 0.20
+to every lift, even for a skill that gets loaded and does nothing useful. Our
+gate promotes at plus 0.10, so that would be enough to pass. skill-ci leaves
+it out.
+
+[click] The trial score is the mean of the four that count. 0.89 with the
+skill, 0.46 without. The lift is the difference, plus 0.43. That is the number
+on the next slide.
+
+If asked: NVIDIA says its judges are not calibrated against human labels; the
+gate trusts differences between runs of the same judge, not the absolute
+score. SkillEvaluator's own overall score is the mean of all five, 0.91 and
+0.37 here.
+
+Sources: SkillEvaluator 0.6.0 docs, tier3-live-evaluation "Results by
+Dimension" (five dimensions, overall = equal-weight mean, Effectiveness =
+mean of goal_accuracy and behavior_check, Skill Lift = with minus without);
+CONTRACT.md "Trial score" (skill-ci-task-mean-v1, mean of the four without
+Discoverability); trials of k8s-incident-triage-v1-0-0-claude-code-2-1-292,
+2026-11-02 (accuracy 0.91/0.56, goal accuracy 0.86/0.16, behavior check
+0.95/0.22, skill execution 1.00/0.00, skill efficiency 0.75/0.10, security
+1.00/1.00), rescored with runner/scoring.py: 0.8918/0.4616.
 -->
 
 ---
@@ -908,9 +1297,9 @@ agentskills.io/specification (metadata field); CONTRACT.md "Network modes".
 
 <div class="lift mt-6">
   <div class="lift__row" v-for="m in [
-    { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.36, withSkill: 0.95, lift: '+0.59', ci: '[+0.58, +0.60]' },
-    { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.47, withSkill: 0.72, lift: '+0.25', ci: '[+0.24, +0.27]' },
-    { agent: 'OpenCode 1.19.1', name: 'qwen3.8-flash', without: 0.39, withSkill: 0.96, lift: '+0.57', ci: '[+0.55, +0.58]' },
+    { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.46, withSkill: 0.89, lift: '+0.43', ci: '[+0.37, +0.49]' },
+    { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.45, withSkill: 0.85, lift: '+0.40', ci: '[+0.30, +0.50]' },
+    { agent: 'OpenCode 1.19.1', name: 'qwen3.8-flash', without: 0.51, withSkill: 0.90, lift: '+0.39', ci: '[+0.34, +0.44]' },
   ]" :key="m.name" v-click>
     <div class="lift__name"><div class="lift__agent">{{ m.agent }}</div>{{ m.name }}</div>
     <div class="lift__bars">
@@ -920,7 +1309,13 @@ agentskills.io/specification (metadata field); CONTRACT.md "Network modes".
     <div class="lift__val">{{ m.lift }}<div class="lift__ci">95% CI {{ m.ci }}</div></div>
   </div>
 </div>
-<div class="src mt-6">acme-release-notes v1.0.0, 3 eval cases × 3 attempts per arm (9 trials each). Recorded 2026-10-31.</div>
+<div class="bg mt-6" v-click>
+  <div class="bg__item"><div class="bg__k">Trials</div><div>3 test cases × 3 attempts = <strong>9 per arm</strong>, each in its own sandbox</div></div>
+  <div class="bg__item"><div class="bg__k">Bar</div><div>mean <strong>trial score</strong> of 9 trials, 0 to 1, from the slide before</div></div>
+  <div class="bg__item"><div class="bg__k">Lift</div><div><strong>with − without</strong>, the same task</div></div>
+  <div class="bg__item"><div class="bg__k">95% CI</div><div>where the <strong>real lift</strong> is, from the spread of the 9</div></div>
+</div>
+<div class="src mt-3">k8s-incident-triage v1.0.0, one model per agent. Trials recorded 2026-11-02, scored without Discoverability.</div>
 
 <style scoped>
 .lift { display: flex; flex-direction: column; gap: 1.6rem; }
@@ -933,38 +1328,48 @@ agentskills.io/specification (metadata field); CONTRACT.md "Network modes".
 .lift__bar--without { background: var(--p-border); color: var(--p-fg); }
 .lift__bar--with { background: var(--p-primary); color: var(--p-bg); font-weight: 700; }
 .lift__val { font-size: 2.4rem; font-weight: 600; letter-spacing: -0.04em; color: var(--p-primary); text-align: right; }
+.bg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; padding: 0.9rem 1.2rem; border: 1px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.05rem; line-height: 1.35; color: var(--p-fg-muted); }
+.bg__k { font-family: var(--slidev-font-mono); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-primary); margin-bottom: 0.3rem; }
+.bg strong { color: var(--p-fg); font-weight: 600; }
 </style>
 
 <!--
 [12:40 to 13:40]
 
-This is the core measurement. Same skill, acme-release-notes, which teaches a
-made-up release note format called ACME-RN/2. Three agents, each with its own
-model. Claude Code with Opus 5.5 goes from 0.36 to 0.95, plus 0.59. Codex with
-gpt-6.1-sol goes from 0.47 to 0.72, plus 0.25. OpenCode with Qwen 3.8 Flash
-through OpenRouter, a small and cheap model, goes from 0.39 to 0.96, plus 0.57.
-All three intervals sit well above zero: nine trials per arm, and the scores
-barely move between trials.
+This is the core measurement. Same skill, k8s-incident-triage, the on-call
+triage skill: cause code, evidence line, read-only next command. Three
+agents, each with its own model. Claude Code with Opus 5.5 goes from 0.46 to
+0.89, plus 0.43. Codex with gpt-6.1-sol goes from 0.45 to 0.85, plus 0.40.
+OpenCode with Qwen 3.8 Flash through OpenRouter, a small and cheap model,
+goes from 0.51 to 0.90, plus 0.39. All three intervals sit well above zero.
+
+[click] Where the numbers come from: three test cases, three attempts each, so
+nine trials per arm, every one in its own sandbox pod. Each bar is the trial
+score from the slide before, averaged over the nine. The lift is the
+difference. The interval comes from how much the nine trials spread: the real
+lift for Claude Code lies between plus 0.37 and plus 0.49.
 
 The same skill helps all three, by very different amounts, and the small model
 with the skill matches the big one. That is why the lift is measured per agent
 and model, never once for the skill.
 
-I picked the format on purpose. No model can know it, so the lift is large and
-easy to read. Real skills have smaller lifts, and sometimes none. Be upfront
-about that.
+The ACME conventions are made up on purpose. No model can know your team's
+cause codes and runbook commands, so the lift is large and easy to read.
+That is exactly what team skills encode. Real skills have smaller lifts,
+and sometimes none. Be upfront about that.
 
-Numbers: SkillEvals on the DOKS cluster, completed 2026-10-31
-(release 0.7.1: claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
-openai/gpt-6.1-sol; opencode 1.19.1 with openrouter/qwen/qwen3.8-flash on
-release 0.7.2), 3 cases × 3 attempts per arm.
+Numbers: SkillEvals on the DOKS cluster, completed 2026-11-02, release
+0.11.2: claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
+openai/gpt-6.1-sol, opencode 1.19.1 with openrouter/qwen/qwen3.8-flash;
+3 cases × 3 attempts per arm. Rescored without Discoverability
+(runner/scoring.py, Welch 95% on the two-decimal trial scores); SkillEvaluator's
+overall gave +0.54, +0.40 and +0.51.
 -->
 
 ---
 
 <div class="statement">
   <h1>One number is a bad <em>gate</em>.</h1>
-  <p>The same version scored 0.95, then 0.87.</p>
 </div>
 
 <!--
@@ -989,8 +1394,8 @@ Source: README.md "How the gate decides".
   </div>
   <div class="rules">
     <div class="gpu-card gpu-card--muted" v-click>
-      <div class="gpu-caption gpu-caption--muted">9 trials per arm</div>
-      <p>3 eval cases × 3 attempts, Welch interval at 95%</p>
+      <div class="gpu-caption gpu-caption--muted">How to read it</div>
+      <p><strong>Dot</strong>: new version minus stable. <strong>Bar</strong>: where the real difference is, 95% sure</p>
     </div>
     <div class="gpu-card gpu-card--primary" v-click>
       <div class="gpu-caption gpu-caption--accent">Whole interval below 0</div>
@@ -1012,29 +1417,50 @@ Source: README.md "How the gate decides".
 <!--
 [14:10 to 15:20]
 
-Each run keeps its trial scores: three eval cases, three attempts each, up to
-nine scores per arm. The controller puts a Welch confidence interval, 95
-percent by default, around the difference between the candidate and the
-stable version.
+Same idea as the lift, one level up. Now we compare the new version with the
+stable one, not with no skill. Each run keeps its nine trial scores per arm,
+and the controller puts a 95 percent confidence interval (Welch) around the
+difference: new version minus stable.
 
-[click] Chart: the difference to stable, from minus 0.40 to plus 0.10. The
-dashed line is the 0.05 tolerance.
-[click] Nine trials per arm.
-[click] Top row: the measured v1.2.0 run on Claude Code, difference minus 0.29,
-interval from minus 0.31 to minus 0.27. The whole interval is below zero. The
-drop is real: Regressed.
+[click] Chart: the difference to stable, from minus 0.40 to plus 0.10. Zero
+means as good as stable. The dashed line is the 0.05 tolerance.
+[click] How to read it. The dot is the measured difference. The bar is the
+range where the real difference lies, 95 percent sure. More trials, shorter
+bar.
+[click] Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code.
+0.65 against 0.89 for stable v1.1.0, a difference of minus 0.25, interval
+from minus 0.33 to minus 0.17. The whole bar is below zero. The drop is real:
+Regressed, fix the skill.
 [click] Bottom row: difference minus 0.08, interval from minus 0.18 to plus
-0.03. It is bigger than the tolerance, but noise could explain it:
-Inconclusive. Not promoted, stable stays, and the message to the author is
-"run more trials" instead of "fix it".
+0.03. It is bigger than the tolerance, but the bar crosses zero, so noise
+could explain it: Inconclusive. Not promoted, stable stays, and the message
+to the author is "run more trials" instead of "fix it".
 
 The same rule guards promotion: a lift of plus 0.12 whose interval runs from
 minus 0.05 to plus 0.29 does not earn stable.
 
-The top row is measured (SkillEvals on the DOKS cluster, 2026-10-31, 9 trials
-per arm). The bottom row is the worked example in CONTRACT.md and README.md
-("Policy"), from the unit-test fixtures of the controller: no run on the
-current model list was Inconclusive. Say so if asked.
+The top row is measured (SkillEval on the DOKS cluster, 2026-11-02, release
+0.11.2, 9 trials per arm; the trials of the run in step 3 of the demo,
+rescored without Discoverability; SkillEvaluator's overall gave -0.20,
+[-0.26, -0.13]). The bottom row
+is the worked example in CONTRACT.md and README.md ("Policy"), from the
+unit-test fixtures of the controller: no run on the current model list was
+Inconclusive. Say so if asked.
+-->
+
+---
+
+<div class="statement">
+  <ph-package class="statement__icon" />
+  <h1>How do skills reach <em>developers</em>?</h1>
+</div>
+
+<!--
+[15:20 to 15:30]
+
+The gate decided which version is good. A decision nobody can act on is
+useless, so: how does that version reach a developer's agent? With what we
+already have: tags, referrers, a pull.
 -->
 
 ---
@@ -1052,7 +1478,7 @@ current model list was Inconclusive. Say so if asked.
     <div class="chan__row" v-click>
       <span class="chan__ver">v1.2.0</span><span class="chan__tag chan__tag--beta">beta</span><span class="chan__note">Regressed, held back</span>
     </div>
-    <div class="src mt-4">acme-release-notes, tags as set by the controller</div>
+    <div class="src mt-4">k8s-incident-triage, tags as set by the controller</div>
   </div>
   <div>
     <v-clicks>
@@ -1100,6 +1526,60 @@ Tags from README.md "Sample skills" and DEMO.md "Expected tags in Harbor".
 
 ---
 
+# The evidence travels with the artifact
+
+<div class="grid grid-cols-[1.25fr_1fr] gap-10 mt-2 items-start zm">
+  <div class="tree" v-click>
+    <div class="gpu-caption gpu-caption--accent">oras discover skills/k8s-incident-triage:v1.1.0</div>
+
+```text
+skills/k8s-incident-triage@sha256:d4be1085ce07…
+├── application/vnd.skillci.report.v1+json      ×3
+│     agent: claude-code    lift: +0.56
+│     publication: passed
+│     trials: sha256:555a904c7691…
+└── application/vnd.skillci.trials.v1+json      ×3
+      one per agent, redacted, every trial session
+```
+
+  </div>
+  <div class="ocigets">
+    <div class="ocigets__row" v-click><strong>Pull it</strong><span><code>oras pull</code> the report from any machine with read access</span></div>
+    <div class="ocigets__row" v-click><strong>Copy it</strong><span><code>oras cp -r</code> moves the skill and its evidence together</span></div>
+    <div class="ocigets__row" v-click><strong>Delete it</strong><span>Remove the version and its evidence goes with it</span></div>
+  </div>
+</div>
+
+<style scoped>
+.tree :deep(pre), .tree :deep(code) { font-size: 0.85rem !important; line-height: 1.5 !important; }
+.ocigets { display: flex; flex-direction: column; gap: 0.75rem; }
+.ocigets__row { display: grid; grid-template-columns: 7rem 1fr; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
+.ocigets__row strong { font-size: 1.2rem; color: var(--p-primary); }
+</style>
+
+<!--
+[about 30 seconds]
+
+Where does the evidence live? Not in a database next to the registry. [click]
+On the artifact. This is oras discover on one skill version: three eval
+reports, one per agent, each with its lift and SkillEvaluator's publication
+verdict as annotations, and three trial bundles with every session the agents
+ran, redacted before upload. The report points at its bundle by digest.
+
+[click] Anyone with read access pulls the report, no dashboard needed.
+[click] Copy the skill to another registry with its referrers and the
+evidence comes along. [click] Delete the version and the evidence goes with
+it.
+
+Source: oras discover --format tree of skills/k8s-incident-triage:v1.1.0 on
+the DOKS cluster, 2026-11-02, release 0.11.2; trimmed to one report's
+annotations.
+Checked the same day on Harbor 2.15.4: oras cp -r copied a referrer with its
+subject, and deleting the subject artifact removed the referrer too.
+-->
+
+---
+
 # Developers follow a channel, not a file
 
 <div class="grid grid-cols-[1.15fr_1fr] gap-10 mt-4 items-start zm">
@@ -1107,8 +1587,8 @@ Tags from README.md "Sample skills" and DEMO.md "Expected tags in Harbor".
     <div class="gpu-caption gpu-caption--accent">Today: plain ORAS</div>
 
 ```bash
-oras pull harbor.example.com/skills/acme-release-notes:stable \
-  -o ~/.claude/skills/acme-release-notes
+oras pull harbor.example.com/skills/k8s-incident-triage:stable \
+  -o ~/.claude/skills/k8s-incident-triage
 ```
 
   <p class="dist__note">Same registry, same access control, any agent that reads a skills folder.</p>
@@ -1162,109 +1642,157 @@ decision as of 2026-10-31); github.com/ThomasVitale/agents-skills-oci-artifacts-
 <!--
 [16:10 to 16:20]
 
-Let's watch it work. I pre-baked the results, because one SkillEval takes 11
-to 13 minutes. I'll trigger one live push so you see it start.
-
-TODO: decide before the talk whether to trigger a live push (spends tokens and
-three Job slots, result arrives after the talk) or show only the finished
-objects. DEMO.md has both options for beat 2.
+Let's watch it work. One SkillEval takes 11 to 13 minutes, so I start the
+runs live and show the ones I prepared earlier. DEMO.md has every command.
 -->
 
 ---
 
-# Demo 1: push a skill
+# The demo, in four steps
+
+<div class="plan mt-6">
+  <div class="plan__row" v-click><span class="plan__n">1</span><div><strong>Push a new version</strong><span>one SkillEval per agent and model</span></div><code>make demo-live VERSION=v1.1.1</code></div>
+  <div class="plan__row" v-click><span class="plan__n">2</span><div><strong>The gate says no, before any tokens</strong><span>an unsafe skill never reaches a sandbox</span></div><code>make results SKILL=k8s-resource-naming</code></div>
+  <div class="plan__row" v-click><span class="plan__n">3</span><div><strong>Better takes <code>stable</code>, worse stays on <code>beta</code></strong><span>the gate compares with the version you run today</span></div><code>make results SKILL=k8s-incident-triage</code></div>
+  <div class="plan__row" v-click><span class="plan__n">4</span><div><strong>The harness changed</strong><span>every released version runs again, nobody pushed</span></div><code>make demo-model-swap MODE=bump TO=2.1.300</code></div>
+</div>
+
+<p class="plan__note" v-click>Every run takes about 12 minutes. I start them live and show the ones I prepared earlier.</p>
+
+<style scoped>
+.plan { display: flex; flex-direction: column; gap: 0.9rem; }
+.plan__row { display: grid; grid-template-columns: 2.8rem 1fr auto; align-items: center; gap: 1.2rem; padding: 0.9rem 1.3rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
+.plan__n { width: 2.6rem; height: 2.6rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.3rem; }
+.plan__row strong { display: block; font-size: 1.55rem; font-weight: 600; letter-spacing: -0.02em; color: var(--p-fg); }
+.plan__row div span { display: block; font-size: 1.15rem; color: var(--p-fg-muted); margin-top: 0.15rem; }
+.plan__row > code { font-size: 1.05rem; }
+.plan__note { margin: 1.4rem 0 0 !important; font-size: 1.3rem !important; color: var(--p-fg-muted); }
+</style>
+
+<!--
+[about 30 seconds]
+
+Four steps, two skills, both SRE work. [click] A push starts the pipeline.
+[click] An unsafe skill is stopped before it costs anything. [click] A
+better version is promoted, a worse one held back. [click] And when the
+agent itself updates, every released skill is tested again.
+
+[click] Each run takes about twelve minutes, so I start them live and show
+the finished ones I prepared earlier. If anything fails, the recording is the
+next slide, "The demo, recorded".
+
+Source: DEMO.md, "The four steps".
+-->
+
+---
+layout: full
+title: The demo, recorded
+---
+
+<video class="rec" src="/demo/demo.mp4" poster="/demo/demo-poster.jpg" controls muted playsinline preload="auto"></video>
+
+<style scoped>
+.rec { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #1e1e2e; }
+</style>
+
+<!--
+Fallback for the whole demo: the four steps on the DOKS cluster, recorded
+with Charm VHS on 2026-11-02 (demo/recordings/, joined by
+demo/recordings/join.sh). Waiting for a run is cut out. A title card opens
+each step: step 1 at 0:00, step 2 at 0:26, step 3 at 0:46, step 4 at 1:08,
+93 seconds in all.
+
+Live demo works: skip this slide. Live demo breaks: play it here, talk over
+it, then click through the step slides for the numbers. One step breaks:
+jump to that step's time.
+-->
+
+---
+
+# Step 1: push a new version
 
 <div class="demo">
 
 ```bash
-make status
-make demo-push SKILL=acme-release-notes VERSION=v1.1.0
-kubectl -n skill-ci get skillevals -w
+make demo-live VERSION=v1.1.1
+make results SKILL=k8s-incident-triage
 ```
 
 <div class="info-card" v-click>
   <div class="info-card__label">What you see</div>
   <ul>
+    <li>ORAS pushes <code>k8s-incident-triage:v1.1.1</code>, artifact type <code>application/vnd.agentskill.v1</code>, network <code>none</code></li>
     <li>Harbor fires the webhook, the controller logs it</li>
-    <li>One SkillEval per model list entry: Pending, then Running</li>
-    <li>The skills in Harbor with their tags</li>
+    <li>Three new SkillEvals, one per agent and model: <code>Pending</code>, then <code>Running</code></li>
   </ul>
 </div>
-
 </div>
 
 <!--
-[16:20 to 17:10]
+[about 1 minute]
 
-make status shows two blocks: the SkillEvals, and the skills in Harbor with
-their digests and tags. These are OCI artifacts, pushed with the artifact type
-application/vnd.agentskill.v1.
+make demo-live takes v1.1.0, the stable version, adds one rule (keep the note
+under 15 lines) and pushes it as v1.1.1. A new digest, so Harbor fires the
+webhook. [click] In the controller log you see it handled, and make results
+shows three new rows: Claude Code, Codex and OpenCode, one SkillEval each,
+Pending, then Running as the Jobs start.
 
-Then the push. In the controller log you see the webhook handled, then new
-SkillEvals appear Pending, then Running as Jobs start. One per entry of the
-model list, for this digest.
+"That takes twelve minutes, so here is one I prepared earlier."
 
-Do not wait: "that takes twelve minutes, here is one I prepared earlier."
-
-Source: DEMO.md beats 1 and 2, README.md "Run the demo". The push path ran
-with the current model list on 2026-10-31 (make demo-push, three entries,
-about 12 minutes per round). Rehearse the live push of a copied directory once
-more before the talk.
+If v1.1.1 already exists, use the next free version (DEMO.md, pre-show
+checklist). Fallback: "The demo, recorded", step 1 at 0:00.
 -->
 
 ---
 
-# Demo 2: the gate says no, before any tokens
+# Step 2: the gate says no, before any tokens
 
 <div class="demo">
 
 ```bash
-make demo-push SKILL=k8s-resource-naming VERSION=v1.1.0
-kubectl -n skill-ci get skillevals \
-  -l skillci.dev/skill=k8s-resource-naming -o wide
+cat demo/variants/k8s-resource-naming/v1.1.0/scripts/bootstrap.sh
+make results SKILL=k8s-resource-naming
 ```
 
 <div class="info-card" v-click>
   <div class="info-card__label">Tier 1, security check</div>
-  <p><code>curl … | sudo bash</code> in <code>scripts/bootstrap.sh</code>. Verdict <strong>Rejected</strong>, Tier 3 skipped.</p>
+  <p><code>curl … | sudo bash</code> in <code>scripts/bootstrap.sh</code>. Verdict <strong>Rejected</strong> on every entry, Tier 3 skipped: no sandbox, no tokens. <code>stable</code> stays on v1.0.0.</p>
 </div>
-
 </div>
 
 <!--
-[17:10 to 18:10]
+[about 1 minute]
 
-k8s-resource-naming v1.1.0 is deliberately unsafe. It is v1.0.0 plus a cluster
-bootstrap section that tells the agent to run a script, and the script pipes a
-remote installer into a root shell. The host is a reserved .example name and
-nothing runs it.
+k8s-resource-naming v1.1.0 is deliberately unsafe. It is v1.0.0 plus a
+"cluster bootstrap" section that tells the agent to run a script, and the
+script pipes a remote installer into a root shell. The host is a reserved
+.example name and nothing runs it.
 
-Tier 1's security check flags two high findings: External Script Fetching and
-Chaining Abuse, both at scripts/bootstrap.sh line 5. The runner reports Tier 1
-failed, skips Tier 3, and the controller marks the run Rejected. No sandboxes,
-no tokens. v1.0.0 of the same skill passes the same check.
+[click] Tier 1's security check flags External Script Fetching and Chaining
+Abuse at scripts/bootstrap.sh line 5. The runner skips Tier 3 and the
+controller marks the run Rejected, on all three entries. No sandboxes, no
+tokens. v1.0.0 of the same skill passes the same check and keeps stable.
 
-Source: demo/variants/README.md. Ran on 2026-10-31 with all three entries:
-each one Rejected with Tier1Failed, the same two findings, no trials.
-Fallback: the backup slide "the Rejected run" after the closing slide.
+Source: demo/variants/README.md; run on the DOKS cluster 2026-11-02.
+Fallback: "The demo, recorded", step 2 at 0:26.
 -->
 
 ---
 
-# Demo 3: the regression is held back
+# Step 3: better takes stable, worse stays on beta
 
 <div class="reg mt-4">
   <div class="reg__head"><span>Agent and model</span><span>Stable v1.1.0</span><span>v1.2.0</span><span>Lift</span><span>Verdict</span></div>
-  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.98</span><span class="reg__bad">0.69</span><span>+0.33</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.72</span><span>0.47</span><span>+0.01</span><span>Neutral</span></div>
-  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.95</span><span>0.72</span><span>+0.35</span><span>Helps</span></div>
+  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.91</span><span class="reg__bad">0.72</span><span>+0.37</span><span class="reg__bad">Regressed</span></div>
+  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.84</span><span>0.53</span><span>+0.13</span><span>Helps</span></div>
+  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.89</span><span>0.71</span><span>+0.35</span><span>Helps</span></div>
 </div>
 
 <div class="demo">
 
 ```bash
-kubectl -n skill-ci get skillevals -o wide \
-  -l skillci.dev/skill=acme-release-notes | grep v1-2-0
+make results SKILL=k8s-incident-triage
+demo/status.sh --tags-only
 ```
 
 </div>
@@ -1276,44 +1804,51 @@ kubectl -n skill-ci get skillevals -o wide \
 .reg__row { border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
 .reg__row span:first-child { font-family: var(--slidev-font-mono); font-size: 1.1rem; }
 .reg__bad { color: #bd141c; font-weight: 700; }
-:global(.dark) .reg__bad { color: #ff9fa4; }
+:global(.dark .reg__bad) { color: #ff9fa4; }
 </style>
 
 <!--
-[18:10 to 19:40]
+[about 2 minutes, the centrepiece]
 
-This is the best moment of the talk. v1.2.0 of acme-release-notes is a
-deliberately worse rewrite whose rules contradict its own evals.
+This is the best moment of the talk. v1.1.0 added two on-call rules and took
+stable from v1.0.0. v1.2.0 is a deliberately worse rewrite: it writes
+INCIDENT.md, drops the cause codes, lists every idea.
 
-Look at the lift on Claude Code: plus 0.33. A check against the no-skill
-baseline alone says this skill helps, and would have promoted it. But stable
-v1.1.0 scored 0.98 with the skill, and this version scores 0.69. The gate
-compares with the version you run today: a difference of minus 0.29, 95%
-interval minus 0.31 to minus 0.27, all of it below the tolerance. Regressed,
-and v1.2.0 stays at beta.
+[click] Look at the lift on Claude Code: plus 0.37. A check against the
+no-skill baseline alone says this skill helps, and would have promoted it.
+But stable v1.1.0 scored 0.91 with the skill, and this version scores 0.72.
+The gate compares with the version you run today: a difference of minus
+0.20, 95% interval minus 0.26 to minus 0.13, all of it below the tolerance.
+Regressed, and v1.2.0 stays at beta.
 
-[click] [click] [click] Point at the two optional rows. Codex drops to 0.47,
-Neutral, and OpenCode to 0.72, still Helps over no skill. Both are optional, so
-neither gates: that is the policy working as written, not a missed
+[click] [click] The two optional rows: Codex falls from 0.84 to 0.53 and
+OpenCode from 0.89 to 0.71, both still above no skill, so Helps. Both are
+optional, so neither gates: the policy working as written, not a missed
 regression. Say it before someone asks.
 
-Be honest: v1.2.0 was written to fail. The real-world version is a well-meant
-edit that fixes one case and breaks two.
+demo/status.sh --tags-only then shows stable on v1.1.0, beta on v1.2.0.
+The reason in words: kubectl get skilleval
+k8s-incident-triage-v1-2-0-claude-code-2-1-292-claude-opus-5-5, condition
+Regressed: "scores 0.72 with v1.2.0, stable v1.1.0 scored 0.91: difference
+-0.20, 95% CI [-0.26, -0.13] (tolerance 0.05)".
 
-Source: DEMO.md "The state the beats rely on" and beat 5; SkillEvals on the
-DOKS cluster, 2026-10-31, 9 trials per arm.
+Be honest: v1.2.0 was written to fail. The real-world version is a
+well-meant edit that fixes one case and breaks two.
+
+Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
+2026-11-02, 9 trials per arm. Fallback: "The demo, recorded", step 3 at 0:46.
 -->
 
 ---
 
-# Demo 4: the model or the harness changed
+# Step 4: the harness changed
 
 <div class="grid grid-cols-3 gap-6 mt-4 zm">
   <div class="gpu-card gpu-card--primary hn" v-click>
     <div class="gpu-caption gpu-caption--accent">Gates promotion</div>
     <div class="hn__agent">Claude Code</div>
     <div class="hn__model">Opus 5.5</div>
-    <div class="hn__ver">2.1.292</div>
+    <div class="hn__ver">2.1.292 → 2.1.300</div>
   </div>
   <div class="gpu-card gpu-card--muted hn" v-click>
     <div class="gpu-caption gpu-caption--muted">Optional</div>
@@ -1332,8 +1867,8 @@ DOKS cluster, 2026-10-31, 9 trials per arm.
 <div class="demo mt-8">
 
 ```bash
-make demo-model-swap MODE=bump TO=2.1.308
-make demo-model-swap MODE=require AGENT=codex
+make demo-model-swap MODE=bump TO=2.1.300
+make results SKILL=k8s-incident-triage
 ```
 
 </div>
@@ -1346,311 +1881,32 @@ make demo-model-swap MODE=require AGENT=codex
 </style>
 
 <!--
-[19:40 to 21:20]
-
-The model list names the harness as well as the model. An entry is agent plus
-agent version plus model. Here: Claude Code 2.1.292 with Opus 5.5, which gates
-promotion. Codex 0.161.0 with gpt-6.1-sol and OpenCode 1.19.1 with Qwen 3.8
-Flash, both optional: they run and show up everywhere but never hold a skill
-back.
-
-[click through the three entries]
-
-First command: bump Claude Code to a newer release. A new agent version is a
-new entry, so the controller creates a SkillEval for every beta and stable
-skill digest on it. Nobody pushed a skill. The tool changed, and every skill in
-a release channel is tested against it, the way a package is rebuilt against a
-new compiler. Results stay per entry, and the regression gate compares with
-stable on the same harness release only.
-
-Second command: flip Codex to required. The runs that already exist are
-re-judged at once, with no new run. A skill that Codex does not lift stops
-being promoted.
-
-Every run takes 11 to 13 minutes: start it, say "one I prepared earlier",
-show finished entries on the reporting site (one column per agent@version and
-model) or in Grafana (the agent_version label).
-
-Source: demo/models.yaml, DEMO.md beats 7 and 8, README.md "Agents and their
-versions". The judge is always Anthropic, whatever agent runs.
-
-Codex and OpenCode ran end to end on 2026-10-31 (every sample skill and
-variant). The harness bump ran live on 2026-10-31 with 2.1.300: four new runs,
-v1.2.0 Regressed again against stable on the same harness release
-(difference minus 0.28, interval minus 0.31 to minus 0.26). DEMO.md beat 7.
--->
-
----
-
-# Demo 5: the numbers over time
-
-<div class="demo">
-
-```bash
-make dashboard      # Grafana, dashboard skill-ci
-make reports-ui     # the reporting site, localhost:8082
-make report SKILL=acme-release-notes VERSION=v1.1.0
-```
-
-<div class="info-card" v-click>
-  <div class="info-card__label">What you see</div>
-  <ul>
-    <li>Lift per skill version, <code>agent@version</code> and model</li>
-    <li>Why v1.2.0 is held back, in plain words</li>
-    <li>The full evaluation report, attached to the skill digest</li>
-  </ul>
-</div>
-
-</div>
-
-<!--
-[21:20 to 22:00]
-
-Grafana: the controller exposes skillci_lift, skillci_stable,
-skillci_regressed and friends, Prometheus scrapes them. Then the reporting
-site: every run, the release channels, and a skill page that says in words why
-v1.2.0 is held back and v1.1.0 is on stable.
-
-make report pulls the SkillEvaluator report that is attached to the skill
-digest as an OCI referrer. It survives the pod and travels with the artifact.
-
-Source: DEMO.md beat 9. Every run of the pre-baked state has a stored report
-(checked 2026-10-31), Rejected runs included.
-
-Fallbacks: the backup slides after the closing slide (Grafana, the
-acme-release-notes skill page), recorded 2026-10-31.
--->
-
----
-
-# The evidence travels with the artifact
-
-<div class="grid grid-cols-[1.25fr_1fr] gap-10 mt-2 items-start zm">
-  <div class="tree" v-click>
-    <div class="gpu-caption gpu-caption--accent">oras discover skills/net-pypi-check:v1.1.0</div>
-
-```text
-skills/net-pypi-check@sha256:6c9e260654e5…
-├── application/vnd.skillci.report.v1+json      ×3
-│     agent: claude-code    lift: +0.58
-│     publication: passed
-│     trials: sha256:f06911ca3561…
-└── application/vnd.skillci.trials.v1+json      ×3
-      one per agent, redacted, every trial session
-```
-
-  </div>
-  <div class="ocigets">
-    <div class="ocigets__row" v-click><strong>Pull it</strong><span><code>oras pull</code> the report from any machine with read access</span></div>
-    <div class="ocigets__row" v-click><strong>Copy it</strong><span><code>oras cp -r</code> moves the skill and its evidence together</span></div>
-    <div class="ocigets__row" v-click><strong>Delete it</strong><span>Remove the version and its evidence goes with it</span></div>
-  </div>
-</div>
-
-<style scoped>
-.tree :deep(pre), .tree :deep(code) { font-size: 0.85rem !important; line-height: 1.5 !important; }
-.ocigets { display: flex; flex-direction: column; gap: 0.75rem; }
-.ocigets__row { display: grid; grid-template-columns: 7rem 1fr; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.1rem; line-height: 1.35; }
-.ocigets__row strong { font-size: 1.2rem; color: var(--p-primary); }
-</style>
-
-<!--
-[about 30 seconds]
-
-Where does the evidence live? Not in a database next to the registry. [click]
-On the artifact. This is oras discover on one skill version: three eval
-reports, one per agent, each with its lift and SkillEvaluator's publication
-verdict as annotations, and three trial bundles with every session the agents
-ran, redacted before upload. The report points at its bundle by digest.
-
-[click] Anyone with read access pulls the report, no dashboard needed.
-[click] Copy the skill to another registry with its referrers and the
-evidence comes along. [click] Delete the version and the evidence goes with
-it.
-
-Source: oras discover --format tree on the DOKS cluster, 2026-10-31, after
-the 0.11 release (trial bundles); trimmed to one report's annotations.
-Checked the same day on Harbor 2.15.4: oras cp -r copied a referrer with its
-subject, and deleting the subject artifact removed the referrer too.
--->
-
----
-
-# Scraped or pushed: the same numbers
-
-<div class="otel-flow" v-click>
-
-```mermaid {scale: 1.55}
-flowchart LR
-  C["skill-ci controller<br/>skillci_* metrics"] -->|"scrape /metrics"| P["Prometheus"]
-  P --> G["Grafana"]
-  C -->|"push, OTLP<br/>http/protobuf or gRPC"| O["OpenTelemetry Collector<br/>or Grafana Alloy"]
-  O --> B["any OTLP backend"]
-```
-
-</div>
-
-<div class="grid grid-cols-[1.1fr_1fr] gap-8 mt-4 items-center" v-click>
-  <div class="otel-values">
-
-```yaml
-otlp:
-  endpoint: otel-collector.monitoring:4318
-  insecure: true
-  headersSecret:
-    name: otlp-headers   # ingest key
-```
-
-  </div>
-  <p class="otel-note">Same names, labels and values on both paths. Off until you set an endpoint.</p>
-</div>
-
-<style scoped>
-.otel-flow { display: flex; justify-content: center; }
-.otel-values :deep(pre), .otel-values :deep(code) { font-size: 1.05rem !important; line-height: 1.55 !important; }
-.otel-note { margin: 0 !important; font-size: 1.55rem !important; line-height: 1.35 !important; }
-</style>
-
-<!--
-[22:00 to 22:20, cut if short on time]
-
-[click] The dashboard you just saw scrapes the controller. Many teams already
-run an OpenTelemetry pipeline instead, so the controller can push the same
-metrics over OTLP, the way the pulumi-exporter does: an endpoint, http/protobuf
-or gRPC, TLS on or off, and headers for an ingest key.
-
-[click] In the Helm chart that is a few lines of values. The ingest key comes from a
-Secret, not from the values. Same metric names, labels and values on both
-paths, because the export reads the same Prometheus collectors. Only the
-skillci_ metrics go out, not the Go runtime noise.
-
-Do not point it at the same Prometheus that scrapes it, or every series is
-stored twice.
-
-Source: CONTRACT.md "OpenTelemetry export", charts/skill-ci-controller
-README "OpenTelemetry (OTLP)", controller release 0.8.0. Tested on the DOKS
-cluster on 2026-10-31 against an OpenTelemetry Collector 0.162.0 (debug
-exporter), over http/protobuf and gRPC: 13 skillci_ families, the same values
-as /metrics (skillci_lift of v1.2.0 on Claude Code 0.33), service.version
-0.8.0, pod and namespace attributes, and the final flush of the old pod on a
-rollout. Also covered by the controller tests against local OTLP receivers.
--->
-
----
-
-<div class="statement">
-  <h1>What broke while I <em>built it</em>.</h1>
-</div>
-
-<!--
-[22:00 to 22:10]
-
-Building this was not smooth. Six things I would tell my past self.
--->
-
----
-
-# Lessons from building it, part 1
-
-<div class="grid grid-cols-3 gap-6 mt-4 zm">
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-ghost class="les__icon" />
-    <div class="les__title">Orphaned sandboxes</div>
-    <p>Cancelled runs left Agent Sandboxes behind, holding capacity. Sandboxes are now owned by the runner pod.</p>
-  </div>
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-arrows-in-line-vertical class="les__icon" />
-    <div class="les__title">The autoscaler evicts</div>
-    <p>A scale-down drained the node in the middle of a build. Evals and platform pods opt out of eviction.</p>
-  </div>
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-dice-five class="les__icon" />
-    <div class="les__title">One attempt is noise</div>
-    <p>0.95 on one run, 0.87 on the next. Three attempts per arm and an interval decide now.</p>
-  </div>
-</div>
-
-<style scoped>
-.les { display: flex; flex-direction: column; gap: 0.8rem; }
-.les__icon { font-size: 2.4rem; color: var(--p-primary); }
-.les__title { font-size: 1.8rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; color: var(--p-fg); }
-.les p { margin: 0 !important; font-size: 1.3rem !important; line-height: 1.35 !important; }
-</style>
-
-<!--
-[22:10 to 23:00]
-
-[click] Orphaned sandboxes. Cancelled runs left their Agent Sandboxes behind,
-and they kept holding cluster capacity until new trials timed out. Sandboxes
-created from inside the cluster are now owned by the runner pod, so Kubernetes
-garbage-collects them, and the reset target deletes leftovers.
-
-[click] The autoscaler. It drained the node BuildKit ran on in the middle of
-an image build. The in-cluster build is gone since (one prebuilt sandbox image
-from CI), and the toolbox, every Harbor component, the runner and the trial
-sandbox pods are safe-to-evict false, so a node scale-down never kills a
-running eval. If a pod is lost anyway, the run is
-retried once, because that says nothing about the skill.
-
-[click] One attempt is noise. A single attempt per arm flipped verdicts. The
-deployed default is three attempts per arm and the Welch interval.
-
-Source: git history of dirien/skill-ci (28b017a, 6ae593c, 119a95f, fb8387b),
-CONTRACT.md lines on safe-to-evict and Retry.
--->
-
----
-
-# Lessons from building it, part 2
-
-<div class="grid grid-cols-3 gap-6 mt-4 zm">
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-arrows-clockwise class="les__icon" />
-    <div class="les__title">The stable tag flapped</div>
-    <p>An older version took stable from a newer one, and back. Now the newest wins ties, and dedupe is by digest.</p>
-  </div>
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-plug class="les__icon" />
-    <div class="les__title">Harbor's Kubernetes backend is thin</div>
-    <p>In DinD mode every <code>COPY</code> failed. Each trial runs as an unprivileged Sandbox instead.</p>
-  </div>
-  <div class="gpu-card gpu-card--primary les" v-click>
-    <ph-seal-warning class="les__icon" />
-    <div class="les__title">Publication needs all tiers</div>
-    <p>Without its scanners, Tier 1 reports incomplete. Tier 2 needs an embeddings key.</p>
-  </div>
-</div>
-
-<style scoped>
-.les { display: flex; flex-direction: column; gap: 0.8rem; }
-.les__icon { font-size: 2.4rem; color: var(--p-primary); }
-.les__title { font-size: 1.8rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; color: var(--p-fg); }
-.les p { margin: 0 !important; font-size: 1.3rem !important; line-height: 1.35 !important; }
-</style>
-
-<!--
-[23:00 to 23:50]
-
-[click] The stable tag flapped. With controller 0.2.0 an older version that
-qualified for promotion took stable from a newer one, and the newer one took
-it back: ten tag operations in 18 seconds after a restart. The fix is that
-the newest version wins ties unless it scores worse, and the controller
-re-checks sibling versions when a result arrives.
-
-[click] Harbor's generic Kubernetes backend is thin. In DinD mode it ships
-only the Dockerfile to the build Job, so every COPY fails; its context archive
-drops empty directories, which breaks the no-skill baseline; it has no
-network or resource policy. I wrote harbor-agent-sandbox to swap the
-privileged pod for an unprivileged Sandbox, and a prebuilt sandbox image
-replaced the per-trial build altogether.
-
-[click] Publication is incomplete until all tiers ran. Tier 1 is only
-trustworthy with its scanners installed, so the runner image pins them. Tier 2
-needs an embeddings provider and Anthropic has none, so you need another
-key, or Tier 2 reports incomplete.
-
-Source: DEMO.md "Controller version check", README.md "Findings that shape
-the build" and "Tiers and scanners in the runner".
+[about 2 minutes]
+
+The model list names the harness as well as the model: agent plus agent
+version plus model. [click] Claude Code with Opus 5.5 gates promotion.
+[click] [click] Codex and OpenCode are optional: they run and show up
+everywhere, but never hold a skill back.
+
+The command bumps Claude Code from 2.1.292 to 2.1.300. A new agent release is
+a new entry, so the controller starts a SkillEval for every beta and stable
+version on it. Nobody pushed a skill. The tool changed, and every skill in a
+release channel is tested against it, the way a package is rebuilt against a
+new compiler.
+
+What came back, prepared earlier: on Claude Code 2.1.300, v1.1.0 still helps
+(0.90 with, 0.33 without, +0.57) and v1.2.0 is Regressed again: 0.68
+against stable's 0.90, difference minus 0.22, interval minus 0.28 to minus
+0.16. Same verdict on both releases, so here the harness update was safe.
+That is the point: you know, instead of hoping. The k8s-resource-naming
+v1.0.0 run on 2.1.300 also still helps, +0.54.
+
+Then the numbers over time: Grafana (lift per skill version, agent_version
+label) and the reporting site (why v1.2.0 is held back, in words).
+
+Source: demo/models.yaml, DEMO.md step 4. 2.1.300 was published on
+2026-10-14 (2.1.308, the default, is under 14 days old on talk day).
+Fallback: "The demo, recorded", step 4 at 1:08.
 -->
 
 ---
@@ -1669,38 +1925,57 @@ Template: "Success Kid", via imgflip.
 
 ---
 
-# Your blueprint
+# Remember the hands?
 
-<ol class="bp zm">
-  <v-clicks>
-  <li><span class="bp__n">1</span>Skills are OCI artifacts: digest, tags, referrers</li>
-  <li><span class="bp__n">2</span>A push webhook and the model list start the evals</li>
-  <li><span class="bp__n">3</span>Static and security checks run before any tokens</li>
-  <li><span class="bp__n">4</span>With and without the skill, several attempts, an interval</li>
-  <li><span class="bp__n">5</span>Tags are the channels, metrics are the dashboard</li>
-  </v-clicks>
-</ol>
+<div class="recap mt-4 zm">
+  <div class="recap__row" v-click>
+    <div class="recap__q"><ph-hand-waving /> A central skills repo</div>
+    <div class="recap__a">The registry you already run. A skill is an OCI artifact: the digest is what was tested.</div>
+  </div>
+  <div class="recap__row" v-click>
+    <div class="recap__q"><ph-hand-waving /> Evals for them</div>
+    <div class="recap__a">Cheap checks first, then with and without the skill, several attempts, an interval decides.</div>
+  </div>
+  <div class="recap__row" v-click>
+    <div class="recap__q"><ph-hand-waving /> Re-run when the model changes</div>
+    <div class="recap__a">The model list is an input. A new harness re-runs every released version, nobody pushes.</div>
+  </div>
+  <div class="recap__row" v-click>
+    <div class="recap__q"><ph-package /> And ship it</div>
+    <div class="recap__a">Tags are the release channels, the evidence travels with the artifact.</div>
+  </div>
+</div>
+
+<p class="recap__close" v-click>Swap the registry, swap the evaluator. Keep the loop.</p>
 
 <style scoped>
-.bp { list-style: none; padding: 0; margin: 1.2rem 0 0; display: flex; flex-direction: column; gap: 1.1rem; }
-.bp li { display: flex; align-items: center; gap: 1.4rem; font-size: 2rem !important; line-height: 1.2 !important; letter-spacing: -0.02em; margin: 0; }
-.bp__n { flex-shrink: 0; width: 3.2rem; height: 3.2rem; border-radius: 9999px; background: var(--p-primary); color: var(--p-bg); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.5rem; }
+.recap { display: flex; flex-direction: column; gap: 0.9rem; }
+.recap__row { display: grid; grid-template-columns: 25rem 1fr; align-items: center; gap: 1.5rem; padding: 0.95rem 1.3rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
+.recap__q { display: flex; align-items: center; gap: 0.6rem; font-size: 1.35rem; font-weight: 600; color: var(--p-fg-muted); }
+.recap__q svg { flex-shrink: 0; font-size: 1.6rem; color: var(--p-primary); }
+.recap__a { font-size: 1.4rem; line-height: 1.3; color: var(--p-fg); }
+.recap__close { margin: 1.4rem 0 0 !important; font-size: 1.7rem !important; font-weight: 600; letter-spacing: -0.02em; color: var(--p-primary); }
 </style>
 
 <!--
-[24:00 to 24:25]
+[23:40 to 24:20]
 
-Five things to take home. The skills live in a registry as OCI artifacts:
-the digest is what was tested, the tags are the channels, and the evidence
-hangs off the digest as referrers. A
-push webhook and the model list, including harness versions, start the evals.
-The cheap static and security checks run before any tokens. The live run
-compares with and without the skill, with several attempts and a confidence
-interval. And the tags are your release channels while metrics are your
-dashboard.
+Back to the four questions from the start.
 
-Nothing here is specific to my stack. Swap Harbor for the registry you run,
-swap the evaluator, keep the loop.
+[click] A central skills repo: you have one already, the registry you run for
+your images. A skill is an OCI artifact, and the digest is exactly what was
+tested.
+[click] Evals: the cheap static and security checks first, then with and
+without the skill, several attempts, and a confidence interval decides, not
+one number.
+[click] Re-run when the model changes: the model list, harness versions
+included, is an input of the pipeline. Change it and every beta and stable
+version runs again. Nobody has to push.
+[click] And shipping: the tags beta and stable are the release channels, and
+the eval reports hang off the digest as referrers.
+
+[click] Nothing here is specific to my stack. Swap Harbor for the registry
+you run, swap the evaluator, keep the loop.
 -->
 
 ---
@@ -1812,7 +2087,7 @@ TODO: add the session feedback QR if KubeAuto Day provides one.
 
 # Backup: the Grafana dashboard
 
-<img src="/fallback/grafana.png" class="fallback" alt="Grafana dashboard skill-ci with lift per skill version, agent and model" />
+<img src="/fallback/grafana.png" class="fallback" alt="Grafana dashboard skill-ci filtered to k8s-incident-triage and k8s-resource-naming: lift per skill version, agent and model, scores with and without the skill, versions on stable" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
@@ -1820,28 +2095,31 @@ TODO: add the session feedback QR if KubeAuto Day provides one.
 
 <!--
 Backup after the closing slide, outside the talk. Show it when Grafana is
-unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-10-31
-(release 0.11.1), filtered with the dashboard's Skill variable to the three
-demo skills of DEMO.md "The state the beats rely on". The phase panels count
-every SkillEval in the namespace.
+unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-11-02
+(release 0.11.2), last 12 hours, filtered with the dashboard's Skill variable
+to the two demo skills. On stable: naming v1.0.0 and triage v1.1.0. The empty
+red cell is triage v1.0.0 on Claude Code 2.1.300: superseded versions are
+not evaluated again. The phase panels count every SkillEval in the
+namespace.
 -->
 
 ---
 
 # Backup: why v1.2.0 is held back
 
-<img src="/fallback/skill-acme-release-notes.png" class="fallback" alt="Reporting UI skill page for acme-release-notes: v1.1.0 on stable, v1.2.0 held back as Regressed on both required Claude Code entries" />
+<img src="/fallback/skill-k8s-incident-triage.png" class="fallback" alt="Reporting UI skill page for k8s-incident-triage: v1.1.0 on stable, v1.2.0 held back as Regressed on the required Claude Code entry" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
 </style>
 
 <!--
-Backup for the reporting UI (/skills/acme-release-notes, make reports-ui),
-release 0.11.1, 2026-10-31. Every version by every model list entry: verdict,
+Backup for the reporting UI (/skills/k8s-incident-triage, make reports-ui),
+release 0.11.2, 2026-11-02. Every version by every model list entry: verdict,
 scores with and without the skill, lift with its 95% interval, tiers, and the
 decision in words. v1.2.0 is held back because it is worse than stable v1.1.0
-beyond noise on both required entries.
+beyond noise on the required Claude Code entry: 0.72 against 0.91,
+difference -0.20, 95% CI [-0.26, -0.13].
 -->
 
 ---
@@ -1855,7 +2133,7 @@ beyond noise on both required entries.
 </style>
 
 <!--
-Backup for Demo 2: k8s-resource-naming v1.1.0 on Claude Code, Tier 1
+Backup for step 2: k8s-resource-naming v1.1.0 on Claude Code, Tier 1
 failed on scripts/bootstrap.sh line 5, Tier 3 skipped, no live trials spent.
 Reporting UI, release 0.11.1, 2026-10-31.
 -->
@@ -1864,27 +2142,29 @@ Reporting UI, release 0.11.1, 2026-10-31.
 
 # Backup: one trial, step by step
 
-<img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session: prompt, metadata, phase bar, dimension scores, a log with filter chips, session findings and eval criteria with step links" />
+<img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session of k8s-incident-triage v1.1.0, case triage-oom, with the skill: the prompt with the kubectl describe output, score 0.95, 9 of 9 criteria passed, the phase bar, six dimension scores, the log and the eval criteria" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
 </style>
 
 <!--
-Backup for the trial session viewer (new in 0.11.0): net-pypi-check v1.2.0,
-Claude Code with Opus 5.5, with the skill, attempt 1. The prompt, who ran it,
-tokens and cost, the phases, the six dimensions, then the log with filter
-chips (messages, tools, packages, skill, network, judge) and on the right the
-findings and the eval criteria with links to the steps that back them. The
-session comes from the trial bundle attached to the skill digest, redacted by
-the runner before upload. Release 0.11.1, 2026-10-31.
+Backup for the trial session viewer: k8s-incident-triage v1.1.0, case
+triage-oom, Claude Code 2.1.292 with Opus 5.5, with the skill, attempt 1.
+The prompt carries the kubectl describe output of an OOMKilled pod. Score
+0.95, 9 of 9 criteria passed, 59 seconds, 4.7 cents. The phases, the six
+dimensions, then the log with filter chips (messages, tools, skill, network,
+judge) and on the right the findings and the eval criteria with links to the
+steps that back them. The session comes from the trial bundle attached to
+the skill digest, redacted by the runner before upload. Release 0.11.2,
+recorded 2026-11-02.
 -->
 
 ---
 
 # Backup: with and without, side by side
 
-<img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page: the same case with the skill (0.94, used the art package) and without it (0.35, used pyfiglet)" />
+<img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page for case triage-oom: with the skill 0.95 and 9 of 9 criteria, without it 0.31 and 2 of 9" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
@@ -1892,30 +2172,35 @@ the runner before upload. Release 0.11.1, 2026-10-31.
 
 <!--
 Backup for the lift: the same case, attempt 1, with and without the skill.
-With the skill the agent used the Python art package the skill asks for and
-scored 0.94; without it, it reached for pyfiglet and the judge failed the
-criterion, 0.35. Same tokens in, half the cost with the skill. This is what
-the lift number means, one trial at a time. net-pypi-check v1.2.0, Claude
-Code with Opus 5.5, release 0.11.1, 2026-10-31.
+With the skill the agent wrote the ACME triage note: first line TRIAGE
+payments-prd/ledger-api-..., Cause OOM_KILLED, the OOMKilled line as
+evidence, the read-only next command. 0.95, 9 of 9 criteria. Without it the
+note was a reasonable generic incident write-up with Summary and Impact
+sections and the evidence as a table: 0.31, 2 of 9. It even cost more, 8.3
+cents against 4.7, because it wrote more. This is what the lift number
+means, one trial at a time. k8s-incident-triage v1.1.0, Claude Code 2.1.292
+with Opus 5.5, release 0.11.2, 2026-11-02.
 -->
 
 ---
 
-# Backup: what the network policy blocked
+# Backup: what the network policy allowed
 
-<img src="/fallback/trial-network.png" class="fallback" alt="Reporting UI network tab of a trial in mode none: api.anthropic.com forwarded, pypi.org dropped by the policy 13 times at step 4" />
+<img src="/fallback/trial-network.png" class="fallback" alt="Reporting UI network tab of a k8s-incident-triage trial in network mode none: one destination, api.anthropic.com, forwarded 6 times" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
 </style>
 
 <!--
-Backup for the network modes slide. The same skill that needs the Python art
-package, pushed with network mode none: the trial reached api.anthropic.com
-(the model and the judge), and Cilium dropped every connection to pypi.org,
-13 of them, starting at step 4 where the agent ran pip install. Without the
-package the trial scored 0.48 and passed 0 of 2 criteria. Flows come from
-Hubble Relay, collected by the runner during the run and stored in the trial
-bundle. net-pypi-check v1.3.0, Claude Code with Opus 5.5, release 0.11.1,
-2026-10-31.
+Backup if someone asks about network isolation. A skill declares its network
+in SKILL.md metadata (skillci.dev/network: none, allowlist or full; you saw
+the annotation on the OCI slide), and the controller enforces it with one
+CiliumNetworkPolicy per evaluation (CONTRACT.md "Network modes").
+k8s-incident-triage declares none: the trial reached exactly one host,
+api.anthropic.com (the model and the judge), and nothing else. A skill that
+tries to pip install under none shows a DROPPED row with POLICY_DENIED and
+the step that tried it. Flows come from Hubble Relay, collected by the runner
+during the run and stored in the trial bundle. Case triage-oom, Claude Code
+2.1.292 with Opus 5.5, release 0.11.2, 2026-11-02.
 -->
