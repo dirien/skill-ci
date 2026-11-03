@@ -1,15 +1,18 @@
 <script setup>
 // The version-over-version gate, drawn as 95% intervals of "candidate minus stable".
-// Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code (2026-11-03, release 0.12.0), scored without Discoverability.
-// Bottom row: the worked Inconclusive example in CONTRACT.md.
+// Top row: the worked Inconclusive example in CONTRACT.md, the case a one-number gate gets wrong.
+// Bottom row: the measured k8s-incident-triage v1.2.0 run on Claude Code (2026-11-03, release 0.12.0), scored without Discoverability.
+// The slide shows the bottom row on a later click through the measured prop.
+const props = defineProps({ measured: { type: Boolean, default: true } })
 const lo = -0.4
 const hi = 0.1
 const w = 1000
 const x = (v) => ((v - lo) / (hi - lo)) * w
 const rows = [
-  // side: where the numbers go (left, right or below the bar), so they never cross the zero or tolerance lines
-  { label: 'v1.2.0, measured', mean: -0.27, a: -0.35, b: -0.19, verdict: 'Regressed', kind: 'bad', side: 'below' },
-  { label: 'v1.2.0, spread-out trials', mean: -0.08, a: -0.18, b: 0.03, verdict: 'Inconclusive', kind: 'warn', side: 'left' },
+  // side: where the numbers go (left or below the bar), so they never cross the zero or tolerance lines.
+  // oneNumber: what a fixed "more than 0.05 below stable" gate says, shown when it disagrees.
+  { label: 'same skill, noisy run', mean: -0.08, a: -0.18, b: 0.03, verdict: 'Inconclusive', kind: 'warn', side: 'left', oneNumber: 'Regressed' },
+  { label: 'v1.2.0, measured', mean: -0.27, a: -0.35, b: -0.19, verdict: 'Regressed', kind: 'bad', side: 'below', measured: true },
 ]
 const ticks = [-0.4, -0.3, -0.2, -0.1, 0, 0.1]
 const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
@@ -22,12 +25,15 @@ const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
     <text :x="x(0)" y="26" class="ci__zero-label" text-anchor="middle">0 = same as stable</text>
     <line :x1="x(-0.05)" y1="40" :x2="x(-0.05)" y2="330" class="ci__tol" />
     <text :x="x(-0.05)" y="362" class="ci__tick" text-anchor="middle">tolerance −0.05</text>
-    <g v-for="(r, i) in rows" :key="r.verdict" :transform="`translate(0 ${120 + i * 125})`">
+    <g v-for="(r, i) in rows" v-show="!r.measured || props.measured" :key="r.verdict" :transform="`translate(0 ${110 + i * 145})`">
       <line :x1="x(r.a)" y1="0" :x2="x(r.b)" y2="0" :class="['ci__bar', `ci__bar--${r.kind}`]" />
       <line :x1="x(r.a)" y1="-20" :x2="x(r.a)" y2="20" :class="['ci__cap', `ci__bar--${r.kind}`]" />
       <line :x1="x(r.b)" y1="-20" :x2="x(r.b)" y2="20" :class="['ci__cap', `ci__bar--${r.kind}`]" />
       <circle :cx="x(r.mean)" cy="0" r="12" :class="['ci__dot', `ci__fill--${r.kind}`]" />
       <text :x="x(r.mean)" y="-36" text-anchor="middle" :class="['ci__verdict', `ci__fill--${r.kind}`]">{{ r.verdict }}</text>
+      <text v-if="r.side === 'left'" :x="x(r.a) - 20" y="-30" text-anchor="end" class="ci__label">{{ r.label }}</text>
+      <text v-else :x="x(r.b) + 20" y="9" text-anchor="start" class="ci__label">{{ r.label }}</text>
+      <text v-if="r.oneNumber" :x="x(r.a) - 20" y="48" text-anchor="end" class="ci__old">one number would say: {{ r.oneNumber }}</text>
       <text
         :x="r.side === 'below' ? x(r.mean) : r.side === 'right' ? x(r.b) + 20 : x(r.a) - 20"
         :y="r.side === 'below' ? 52 : 9"
@@ -57,10 +63,12 @@ const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
 .ci__bar--warn { stroke: #b45309; }
 .ci__fill--bad { fill: #bd141c; }
 .ci__fill--warn { fill: #b45309; }
-.ci__zero-label, .ci__tick, .ci__verdict, .ci__nums { paint-order: stroke; stroke: var(--p-bg); stroke-width: 8px; stroke-linejoin: round; }
+.ci__zero-label, .ci__tick, .ci__verdict, .ci__nums, .ci__label, .ci__old { paint-order: stroke; stroke: var(--p-bg); stroke-width: 8px; stroke-linejoin: round; }
 .ci__dot { stroke: var(--p-bg); stroke-width: 3; }
 .ci__verdict { font-size: 34px; font-weight: 700; }
 .ci__nums { fill: var(--p-fg); font-size: 23px; }
+.ci__label { fill: var(--p-fg); font-size: 25px; font-weight: 700; }
+.ci__old { fill: var(--p-fg-muted); font-size: 23px; }
 /* The whole selector goes inside :global(). Vue drops everything after a
    leading ":global(.dark)", which turned these into ".dark { stroke; fill }"
    and outlined every SVG on the page in yellow in dark mode. */

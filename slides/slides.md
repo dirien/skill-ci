@@ -1369,7 +1369,7 @@ scores); SkillEvaluator's overall would give +0.55, +0.36 and +0.56.
 ---
 
 <div class="statement">
-  <h1>One number is a bad <em>gate</em>.</h1>
+  <h1>One number alone is a bad <em>gate</em>.</h1>
 </div>
 
 <!--
@@ -1390,20 +1390,20 @@ Source: README.md "How the gate decides".
 
 <div class="grid grid-cols-[1.75fr_1fr] gap-8 mt-4 items-center">
   <div v-click>
-    <IntervalChart />
+    <IntervalChart :measured="$clicks >= 4" />
   </div>
   <div class="rules">
     <div class="gpu-card gpu-card--muted" v-click>
       <div class="gpu-caption gpu-caption--muted">How to read it</div>
       <p><strong>Dot</strong>: new version minus stable. <strong>Bar</strong>: where the real difference is, 95% sure</p>
     </div>
-    <div class="gpu-card gpu-card--primary" v-click>
-      <div class="gpu-caption gpu-caption--accent">Whole interval below 0</div>
-      <p><strong>Regressed</strong>: fix the skill</p>
-    </div>
     <div class="gpu-card gpu-card--accent" v-click>
       <div class="gpu-caption gpu-caption--accent">Interval includes 0</div>
       <p><strong>Inconclusive</strong>: run more trials</p>
+    </div>
+    <div class="gpu-card gpu-card--primary" v-click>
+      <div class="gpu-caption gpu-caption--accent">Whole interval below 0</div>
+      <p><strong>Regressed</strong>: fix the skill</p>
     </div>
   </div>
 </div>
@@ -1423,35 +1423,36 @@ and the controller puts a 95 percent confidence interval (Welch) around the
 difference: new version minus stable.
 
 [click] Chart: the difference to stable, from minus 0.40 to plus 0.10. Zero
-means as good as stable. The dashed line is the 0.05 tolerance.
+means as good as stable. The dashed line is the 0.05 tolerance. The row on
+screen is the same skill on a noisy run: minus 0.08.
 [click] How to read it. The dot is the measured difference. The bar is the
 range where the real difference lies, 95 percent sure. More trials, shorter
 bar.
-[click] Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code.
-0.59 against 0.87 for stable v1.1.0, a difference of minus 0.27, interval
-from minus 0.35 to minus 0.19. The whole bar is below zero. The drop is real:
-Regressed, fix the skill.
-[click] Bottom row: difference minus 0.08, interval from minus 0.18 to plus
-0.03. It is bigger than the tolerance, but the bar crosses zero, so noise
-could explain it: Inconclusive. Not promoted, stable stays, and the message
-to the author is "run more trials" instead of "fix it".
+[click] Minus 0.08 is past the tolerance, so my old one-number gate blocks it:
+the same mistake as the 0.95 and 0.87 runs. The interval runs from minus 0.18
+to plus 0.03 and crosses zero, so noise could explain it: Inconclusive. Not
+promoted, stable stays, and the message to the author is "run more trials"
+instead of "fix it".
+[click] And a real drop still fails. The measured k8s-incident-triage v1.2.0
+run on Claude Code: 0.59 against 0.87 for stable v1.1.0, a difference of minus
+0.27, interval from minus 0.35 to minus 0.19. The whole bar is below zero.
+The drop is real: Regressed, fix the skill.
 
 The same rule guards promotion: a lift of plus 0.12 whose interval runs from
 minus 0.05 to plus 0.29 does not earn stable.
 
-The top row is measured (SkillEval on the DOKS cluster, 2026-11-03, release
-0.12.0, 9 trials per arm, scored without Discoverability; the run in step 3
-of the demo). The bottom row
-is the worked example in CONTRACT.md and README.md ("Policy"), from the
-unit-test fixtures of the controller: no run on the current model list was
-Inconclusive. Say so if asked.
+The bottom row is measured (SkillEval on the DOKS cluster, 2026-11-03,
+release 0.12.0, 9 trials per arm, scored without Discoverability; the run in
+step 3 of the demo). The top row is the worked example in CONTRACT.md and
+README.md ("Policy"), from the unit-test fixtures of the controller: no run on
+the current model list was Inconclusive. Say so if asked.
 -->
 
 ---
 
 <div class="statement">
   <ph-package class="statement__icon" />
-  <h1>How do skills reach <em>developers</em>?</h1>
+  <h1>How do skills now reach <em>developers</em>?</h1>
 </div>
 
 <!--
