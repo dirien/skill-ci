@@ -25,7 +25,7 @@ The controller serves a read-only reporting site on port 8082 (`--reports-addr`,
 - `/skills/<skill>` shows versions against model list entries (one column per `agent@version` and model) with the lift (and its confidence interval and n), the channel tags and the policy decision per version in plain words.
 - `/runs/<name>` shows one run: scores with the lift interval and n, the SkillEvaluator tiers and findings, the sandbox and the network of the run, conditions and, when a report is stored, the six SkillEvaluator dimensions with and without the skill. The full SkillEvaluator report and `result.json` open from there.
 
-Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. `make report-page` builds an offline page with every SkillEval and the SkillEvaluator reports (`OUT=reports/index.html`). The routes are listed in [CONTRACT.md, "Reporting site"](../CONTRACT.md).
+Reports are read from Harbor as OCI referrers of the evaluated skill digest and cached in memory. Runs from runners before 0.3.0 stored none and show "not stored". The pages need no internet, apart from the full SkillEvaluator report, which loads Chart.js from a CDN. The routes are listed in [CONTRACT.md, "Reporting site"](../CONTRACT.md).
 
 ## Network flows
 

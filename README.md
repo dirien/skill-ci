@@ -100,7 +100,6 @@ infra/                 Pulumi YAML reference stack: DOKS, Agent Sandbox, goharbo
 infra/dashboards/      Grafana dashboard JSON (provisioned through a ConfigMap)
 skills/                Sample skills with evals
 demo/                  Shell scripts behind the Makefile targets, skill version variants, initial model list
-tools/                 Generator of the offline report page (`make report-page`)
 reports/               Eval reports downloaded by `make report`
 .github/               CI and release workflows, Dependabot
 .goreleaser.yaml       Controller binaries and image of a release

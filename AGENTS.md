@@ -20,7 +20,6 @@ skill-ci is CI for agent skills on Kubernetes. A skill pushed to Harbor as an OC
 | `infra/` | Pulumi YAML reference stack (DOKS, Harbor, Cilium, monitoring) | Pulumi YAML | |
 | `skills/`, `demo/` | Sample skills; demo scripts and skill variants behind the Makefile targets | Markdown, shell | |
 | `testdata/` | Golden trial bundles and fake-secret redaction fixtures shared by the runner and controller tests | JSON | |
-| `tools/` | Offline report page generator | Python | |
 | `slides/` | Conference deck, separate from the project | Slidev | [slides/AGENTS.md](slides/AGENTS.md) |
 
 Inside `slides/`, [slides/AGENTS.md](slides/AGENTS.md) takes precedence over this file.

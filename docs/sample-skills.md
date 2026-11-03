@@ -50,7 +50,6 @@ Further versions live in `demo/variants/` (see [demo/variants/README.md](../demo
 | `make demo-model-swap` | Changes the model list live: `MODE=add` adds an optional model, `swap` replaces the Claude model, `bump [TO=2.1.308]` moves Claude Code to another release (the harness changed), `require AGENT=codex` / `optional AGENT=codex` flips whether an agent gates promotion, `restore` resets |
 | `make status` | `kubectl get skillevals -o wide` plus tags and digests per skill from the Harbor API |
 | `make report` | Downloads the eval reports attached to a skill version in Harbor (`SKILL=k8s-incident-triage VERSION=v1.1.0 [MODEL=...] OUT=reports/`) |
-| `make report-page` | Builds an offline page with every SkillEval and the SkillEvaluator reports (`OUT=reports/index.html`) |
 | `make reports-ui` | Port-forwards the controller's reporting site to `localhost:8082` and prints the URL |
 | `make dashboard` | Port-forwards Grafana to `localhost:3000` and prints the login hint |
 | `make reset` | Deletes SkillEvals and Jobs, removes `beta`/`stable` tags and the extra versions from Harbor, restores the model list |

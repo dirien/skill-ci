@@ -25,7 +25,6 @@ Decisions follow [GOVERNANCE.md](GOVERNANCE.md).
 | `config/` | Plain manifests (`kubectl apply -k config/`) and the CRD source | YAML |
 | `deploy/` | Install path with Helm and kubectl | shell, YAML |
 | `infra/` | Pulumi YAML reference stack on DigitalOcean | Pulumi YAML |
-| `tools/` | Generator of the offline report page | Python |
 | `skills/`, `demo/` | Sample skills and the scripts behind the Makefile targets | Markdown, shell |
 
 `make help` lists the Makefile targets.
@@ -72,7 +71,7 @@ uv run --no-project --with-requirements .github/requirements-ci.txt ruff check .
 uv run --no-project --with-requirements .github/requirements-ci.txt ruff format --check .
 ```
 
-`pyproject.toml` at the root sets the test paths (`runner/tests`, `harbor-agent-sandbox/tests`, `tools/tests`). The ruff settings are in `ruff.toml`.
+`pyproject.toml` at the root sets the test paths (`runner/tests`, `harbor-agent-sandbox/tests`). The ruff settings are in `ruff.toml`.
 
 ### Images
 
@@ -143,7 +142,7 @@ Commits made before the DCO check was added to the repository have no `Signed-of
 ## Pull requests
 
 - Keep a pull request focused on one change.
-- Add or update tests for every behavior change: Go tests next to the code in `controller/`, pytest tests under `runner/tests`, `harbor-agent-sandbox/tests` or `tools/tests`.
+- Add or update tests for every behavior change: Go tests next to the code in `controller/`, pytest tests under `runner/tests` or `harbor-agent-sandbox/tests`.
 - Update the documentation in the same pull request (see below).
 - Fill in the pull request template.
 - A maintainer reviews every pull request. Expect questions; they are part of the review.

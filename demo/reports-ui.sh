@@ -10,6 +10,6 @@ need kubectl
 
 say "Reporting site is at http://localhost:${port}"
 note "Runs, release channels, policy decisions and the stored SkillEvaluator reports."
-note "Needs controller image 0.3.0 or newer. Fallback without the cluster: make report-page"
+note "Needs controller image 0.3.0 or newer."
 echo
 exec kubectl -n "${NS}" port-forward svc/skill-ci-controller "${port}:8082"

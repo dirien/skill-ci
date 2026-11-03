@@ -30,8 +30,8 @@ type stableInfo struct {
 	Holder string
 }
 
-// decide ports the wording of tools/report_page.py: the policy outcome for
-// the evals of one skill version, read against the controller thresholds.
+// decide explains the policy outcome for the evals of one skill version,
+// read against the controller thresholds.
 func decide(runs []Run, st stableInfo, th policy.Thresholds) Decision {
 	var required []Run
 	for _, r := range runs {
