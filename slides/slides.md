@@ -532,7 +532,7 @@ Template: "One Does Not Simply" (Boromir, The Lord of the Rings), via imgflip.
   <div class="gpu-card gpu-card--primary ev2" v-click>
     <div class="ev2__head"><span class="ev2__n">3</span>A score</div>
     <p>A judge grades every run against the checks. The difference is the <strong>lift</strong>.</p>
-    <div class="ev2__ex"><span>with 0.95, without 0.36</span><span class="ev2__lift">lift +0.59</span></div>
+    <div class="ev2__ex"><span>with 0.90, without 0.45</span><span class="ev2__lift">lift +0.45</span></div>
   </div>
 </div>
 
@@ -561,8 +561,8 @@ the skill minus without the skill is the lift. That number is what the rest
 of this talk moves around.
 
 Numbers: k8s-resource-naming v1.0.0 on Claude Code 2.1.292 with Opus 5.5,
-3 cases x 3 trials per arm, 0.95 with, 0.36 without, lift +0.59, interval
-[+0.53, +0.64], recorded 2026-11-02 (DEMO.md, "The state before the talk"). The test case is naming-deployment
+3 cases x 3 trials per arm, 0.90 with, 0.45 without, lift +0.45, interval
+[+0.36, +0.54], recorded 2026-11-03 on release 0.12.0 (DEMO.md, "The state before the talk"). The test case is naming-deployment
 in skills/k8s-resource-naming/evals/evals.json. In skill-ci an arm runs 3
 attempts per case by default (CONTRACT.md, attempts).
 -->
@@ -788,10 +788,10 @@ spec:
   model: claude-opus-5-5
   required: true
 status:
-  withSkill: "0.95"
-  withoutSkill: "0.36"
-  lift: "+0.59"
-  liftCI: "[+0.53, +0.64]"
+  withSkill: "0.90"
+  withoutSkill: "0.45"
+  lift: "+0.45"
+  liftCI: "[+0.36, +0.54]"
   verdict: Helps
 ```
 
@@ -809,10 +809,10 @@ spec:
   model: openai/gpt-6.1-sol
   required: false
 status:
-  withSkill: "0.76"
-  withoutSkill: "0.41"
-  lift: "+0.35"
-  liftCI: "[+0.24, +0.46]"
+  withSkill: "0.75"
+  withoutSkill: "0.50"
+  lift: "+0.25"
+  liftCI: "[+0.17, +0.35]"
   verdict: Helps
 ```
 
@@ -855,10 +855,10 @@ If you run an OpenTelemetry pipeline instead, the controller pushes the same
 metrics over OTLP, http/protobuf or gRPC, off until you set an endpoint.
 [click] This is a real SkillEval. One per skill version and model list
 entry: the skill, the agent and its release, the model. The status is the
-result: 0.95 with the skill, 0.36 without, lift +0.59, the interval well
+result: 0.90 with the skill, 0.45 without, lift +0.45, the interval well
 above zero, verdict Helps. This entry is required, so it gates the tags.
-[click] Same skill, same version, on Codex with an OpenAI model: lift +0.35.
-Still helps, but only about half the effect, and a much wider interval. That's the harness and model
+[click] Same skill, same version, on Codex with an OpenAI model: lift +0.25.
+Still helps, but only about half the effect. That's the harness and model
 dependency from earlier, as two objects in your cluster. This entry is
 optional: it shows up everywhere but never holds a skill back.
 
@@ -867,9 +867,9 @@ The QR code goes to the repo; leave it up a second.
 Sources: README.md, LICENSE (Apache 2.0), CONTRACT.md "CRD: SkillEval"
 (fields; apiVersion skillci.dev/v1alpha1, digest, attempts, trigger and the
 optional fields trimmed), demo/models.yaml (required true and false),
-DEMO.md, "The state before the talk", 2026-11-02 (k8s-resource-naming v1.0.0: Claude
+DEMO.md, "The state before the talk", 2026-11-03 (k8s-resource-naming v1.0.0: Claude
 Code 2.1.292 with Opus 5.5, Codex 0.161.0 with gpt-6.1-sol). Current release
-0.11.2 (deploy/versions.env).
+0.12.0 (deploy/versions.env).
 QR code: the QRCode component (qrcode library), https://github.com/dirien/skill-ci.
 
 Telemetry (the OTLP slide was cut): only the skillci_ families are exported,
@@ -892,7 +892,7 @@ gRPC. Source: CONTRACT.md "OpenTelemetry export", docs/observability.md.
   <div class="gpu-card gpu-card--muted part" v-click><ph-magnifying-glass class="part__icon" /><div class="part__name">SkillEvaluator</div><div class="part__job">Three tiers, with and without lift</div><div class="part__ver">NVIDIA, 0.6.0 + patch</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-flask class="part__icon" /><div class="part__name">Harbor framework</div><div class="part__job">Runs the agent trials</div><div class="part__ver">0.24.0</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-cube class="part__icon" /><div class="part__name">Agent Sandbox</div><div class="part__job">Warm pools, one pod per trial</div><div class="part__ver">kubernetes-sigs, v1.0.9</div></div>
-  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">CRDs, Jobs, network policy, tags</div><div class="part__ver">Go, 0.11.2</div></div>
+  <div class="gpu-card gpu-card--primary part" v-click><ph-gear-six class="part__icon" /><div class="part__name">skill-ci controller</div><div class="part__job">CRDs, Jobs, network policy, tags</div><div class="part__ver">Go, 0.12.0</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-chart-line-up class="part__icon" /><div class="part__name">Prometheus + Grafana</div><div class="part__job">Lift per skill version, or OTLP to any backend</div><div class="part__ver">kube-prometheus-stack</div></div>
   <div class="gpu-card gpu-card--muted part" v-click><ph-browsers class="part__icon" /><div class="part__name">Reporting site</div><div class="part__job">Every run, in plain words</div><div class="part__ver">served by the controller</div></div>
 </div>
@@ -1187,9 +1187,9 @@ next-step assertion names the exact command).
     <div class="dims__head"><span>NVIDIA SkillEvaluator dimension</span><span>with</span><span>without</span></div>
     <div class="dims__row" :class="{ 'dims__row--out': d.out }" v-for="d in [
       { name: 'Security', q: 'Is it safe to use?', by: 'trace checks', w: '1.00', wo: '1.00' },
-      { name: 'Correctness', q: 'Is the answer correct?', by: 'LLM judge', w: '0.91', wo: '0.56' },
-      { name: 'Effectiveness', q: 'Did the skill help complete the task?', by: 'LLM judges', w: '0.91', wo: '0.19' },
-      { name: 'Efficiency', q: 'Did it avoid wasted tool or skill usage?', by: 'trace checks', w: '0.75', wo: '0.10' },
+      { name: 'Correctness', q: 'Is the answer correct?', by: 'LLM judge', w: '0.96', wo: '0.58' },
+      { name: 'Effectiveness', q: 'Did the skill help complete the task?', by: 'LLM judges', w: '0.93', wo: '0.20' },
+      { name: 'Efficiency', q: 'Did it avoid wasted tool or skill usage?', by: 'trace checks', w: '0.75', wo: '0.13' },
       { name: 'Discoverability', q: 'Was the skill loaded? 0 without one', by: 'not counted', w: '1.00', wo: '0.00', out: true },
     ]" :key="d.name">
       <div>
@@ -1204,8 +1204,8 @@ next-step assertion names the exact command).
     <div class="total" v-click>
       <div class="total__k">Trial score</div>
       <div class="total__nums">
-        <div><div class="total__w">0.89</div><div class="total__l">with</div></div>
-        <div><div class="total__wo">0.46</div><div class="total__l">without</div></div>
+        <div><div class="total__w">0.91</div><div class="total__l">with</div></div>
+        <div><div class="total__wo">0.48</div><div class="total__l">without</div></div>
       </div>
       <div class="total__txt">the mean of the four counted dimensions<br>lift = with − without</div>
     </div>
@@ -1263,7 +1263,7 @@ it passed every check. Every number here is the mean of nine trials: the
 on-call triage skill on Claude Code, nine runs with the skill, nine without.
 
 Read the rows: safe either way. Without the skill the answer is half right,
-0.56, and the agent does not do the task the way the case asks for: 0.19 on
+0.58, and the agent does not do the task the way the case asks for: 0.20 on
 effectiveness.
 
 The last row is the one we do not count. Discoverability asks whether the
@@ -1272,23 +1272,23 @@ to every lift, even for a skill that gets loaded and does nothing useful. Our
 gate promotes at plus 0.10, so that would be enough to pass. skill-ci leaves
 it out.
 
-[click] The trial score is the mean of the four that count. 0.89 with the
-skill, 0.46 without. The lift is the difference, plus 0.43. That is the number
+[click] The trial score is the mean of the four that count. 0.91 with the
+skill, 0.48 without. The lift is the difference, plus 0.43. That is the number
 on the next slide.
 
 If asked: NVIDIA says its judges are not calibrated against human labels; the
 gate trusts differences between runs of the same judge, not the absolute
-score. SkillEvaluator's own overall score is the mean of all five, 0.91 and
-0.37 here.
+score. SkillEvaluator's own overall score is the mean of all five, 0.93 and
+0.38 here.
 
 Sources: SkillEvaluator 0.6.0 docs, tier3-live-evaluation "Results by
 Dimension" (five dimensions, overall = equal-weight mean, Effectiveness =
 mean of goal_accuracy and behavior_check, Skill Lift = with minus without);
 CONTRACT.md "Trial score" (skill-ci-task-mean-v1, mean of the four without
-Discoverability); trials of k8s-incident-triage-v1-0-0-claude-code-2-1-292,
-2026-11-02 (accuracy 0.91/0.56, goal accuracy 0.86/0.16, behavior check
-0.95/0.22, skill execution 1.00/0.00, skill efficiency 0.75/0.10, security
-1.00/1.00), rescored with runner/scoring.py: 0.8918/0.4616.
+Discoverability); run k8s-incident-triage-v1-0-0-claude-code-2-1-292,
+release 0.12.0, 2026-11-03 (accuracy 0.96/0.58, goal accuracy 0.91/0.17,
+behavior check 0.95/0.22, skill execution 1.00/0.00, skill efficiency
+0.75/0.13, security 1.00/1.00); trial score 0.9093/0.4761.
 -->
 
 ---
@@ -1297,9 +1297,9 @@ Discoverability); trials of k8s-incident-triage-v1-0-0-claude-code-2-1-292,
 
 <div class="lift mt-6">
   <div class="lift__row" v-for="m in [
-    { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.46, withSkill: 0.89, lift: '+0.43', ci: '[+0.37, +0.49]' },
-    { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.45, withSkill: 0.85, lift: '+0.40', ci: '[+0.30, +0.50]' },
-    { agent: 'OpenCode 1.19.1', name: 'qwen3.8-flash', without: 0.51, withSkill: 0.90, lift: '+0.39', ci: '[+0.34, +0.44]' },
+    { agent: 'Claude Code 2.1.292', name: 'claude-opus-5-5', without: 0.48, withSkill: 0.91, lift: '+0.43', ci: '[+0.39, +0.48]' },
+    { agent: 'Codex 0.161.0', name: 'gpt-6.1-sol', without: 0.46, withSkill: 0.80, lift: '+0.34', ci: '[+0.22, +0.45]' },
+    { agent: 'OpenCode 1.19.1', name: 'qwen3.8-flash', without: 0.45, withSkill: 0.90, lift: '+0.45', ci: '[+0.39, +0.51]' },
   ]" :key="m.name" v-click>
     <div class="lift__name"><div class="lift__agent">{{ m.agent }}</div>{{ m.name }}</div>
     <div class="lift__bars">
@@ -1315,7 +1315,7 @@ Discoverability); trials of k8s-incident-triage-v1-0-0-claude-code-2-1-292,
   <div class="bg__item"><div class="bg__k">Lift</div><div><strong>with − without</strong>, the same task</div></div>
   <div class="bg__item"><div class="bg__k">95% CI</div><div>where the <strong>real lift</strong> is, from the spread of the 9</div></div>
 </div>
-<div class="src mt-3">k8s-incident-triage v1.0.0, one model per agent. Trials recorded 2026-11-02, scored without Discoverability.</div>
+<div class="src mt-3">k8s-incident-triage v1.0.0, one model per agent. Release 0.12.0, 2026-11-03, scored without Discoverability.</div>
 
 <style scoped>
 .lift { display: flex; flex-direction: column; gap: 1.6rem; }
@@ -1338,18 +1338,18 @@ Discoverability); trials of k8s-incident-triage-v1-0-0-claude-code-2-1-292,
 
 This is the core measurement. Same skill, k8s-incident-triage, the on-call
 triage skill: cause code, evidence line, read-only next command. Three
-agents, each with its own model. Claude Code with Opus 5.5 goes from 0.46 to
-0.89, plus 0.43. Codex with gpt-6.1-sol goes from 0.45 to 0.85, plus 0.40.
+agents, each with its own model. Claude Code with Opus 5.5 goes from 0.48 to
+0.91, plus 0.43. Codex with gpt-6.1-sol goes from 0.46 to 0.80, plus 0.34.
 OpenCode with Qwen 3.8 Flash through OpenRouter, a small and cheap model,
-goes from 0.51 to 0.90, plus 0.39. All three intervals sit well above zero.
+goes from 0.45 to 0.90, plus 0.45. All three intervals sit well above zero.
 
 [click] Where the numbers come from: three test cases, three attempts each, so
 nine trials per arm, every one in its own sandbox pod. Each bar is the trial
 score from the slide before, averaged over the nine. The lift is the
 difference. The interval comes from how much the nine trials spread: the real
-lift for Claude Code lies between plus 0.37 and plus 0.49.
+lift for Claude Code lies between plus 0.39 and plus 0.48.
 
-The same skill helps all three, by very different amounts, and the small model
+The same skill helps all three, by different amounts, and the small model
 with the skill matches the big one. That is why the lift is measured per agent
 and model, never once for the skill.
 
@@ -1358,12 +1358,12 @@ cause codes and runbook commands, so the lift is large and easy to read.
 That is exactly what team skills encode. Real skills have smaller lifts,
 and sometimes none. Be upfront about that.
 
-Numbers: SkillEvals on the DOKS cluster, completed 2026-11-02, release
-0.11.2: claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
+Numbers: SkillEvals on the DOKS cluster, completed 2026-11-03, release
+0.12.0: claude-code 2.1.292 with claude-opus-5-5, codex 0.161.0 with
 openai/gpt-6.1-sol, opencode 1.19.1 with openrouter/qwen/qwen3.8-flash;
-3 cases × 3 attempts per arm. Rescored without Discoverability
-(runner/scoring.py, Welch 95% on the two-decimal trial scores); SkillEvaluator's
-overall gave +0.54, +0.40 and +0.51.
+3 cases × 3 attempts per arm, scored without Discoverability
+(score policy skill-ci-task-mean-v1, Welch 95% on the two-decimal trial
+scores); SkillEvaluator's overall would give +0.55, +0.36 and +0.56.
 -->
 
 ---
@@ -1428,8 +1428,8 @@ means as good as stable. The dashed line is the 0.05 tolerance.
 range where the real difference lies, 95 percent sure. More trials, shorter
 bar.
 [click] Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code.
-0.65 against 0.89 for stable v1.1.0, a difference of minus 0.25, interval
-from minus 0.33 to minus 0.17. The whole bar is below zero. The drop is real:
+0.59 against 0.87 for stable v1.1.0, a difference of minus 0.27, interval
+from minus 0.35 to minus 0.19. The whole bar is below zero. The drop is real:
 Regressed, fix the skill.
 [click] Bottom row: difference minus 0.08, interval from minus 0.18 to plus
 0.03. It is bigger than the tolerance, but the bar crosses zero, so noise
@@ -1439,10 +1439,9 @@ to the author is "run more trials" instead of "fix it".
 The same rule guards promotion: a lift of plus 0.12 whose interval runs from
 minus 0.05 to plus 0.29 does not earn stable.
 
-The top row is measured (SkillEval on the DOKS cluster, 2026-11-02, release
-0.11.2, 9 trials per arm; the trials of the run in step 3 of the demo,
-rescored without Discoverability; SkillEvaluator's overall gave -0.20,
-[-0.26, -0.13]). The bottom row
+The top row is measured (SkillEval on the DOKS cluster, 2026-11-03, release
+0.12.0, 9 trials per arm, scored without Discoverability; the run in step 3
+of the demo). The bottom row
 is the worked example in CONTRACT.md and README.md ("Policy"), from the
 unit-test fixtures of the controller: no run on the current model list was
 Inconclusive. Say so if asked.
@@ -1533,11 +1532,11 @@ Tags from README.md "Sample skills" and DEMO.md "Expected tags in Harbor".
     <div class="gpu-caption gpu-caption--accent">oras discover skills/k8s-incident-triage:v1.1.0</div>
 
 ```text
-skills/k8s-incident-triage@sha256:d4be1085ce07…
+skills/k8s-incident-triage@sha256:6bba34624d42…
 ├── application/vnd.skillci.report.v1+json      ×3
-│     agent: claude-code    lift: +0.56
+│     agent: claude-code    lift: +0.43
 │     publication: passed
-│     trials: sha256:555a904c7691…
+│     trials: sha256:27c99fdc902a…
 └── application/vnd.skillci.trials.v1+json      ×3
       one per agent, redacted, every trial session
 ```
@@ -1572,7 +1571,7 @@ evidence comes along. [click] Delete the version and the evidence goes with
 it.
 
 Source: oras discover --format tree of skills/k8s-incident-triage:v1.1.0 on
-the DOKS cluster, 2026-11-02, release 0.11.2; trimmed to one report's
+the DOKS cluster, 2026-11-03, release 0.12.0; trimmed to one report's
 annotations.
 Checked the same day on Harbor 2.15.4: oras cp -r copied a referrer with its
 subject, and deleting the subject artifact removed the referrer too.
@@ -1697,7 +1696,7 @@ title: The demo, recorded
 
 <!--
 Fallback for the whole demo: the four steps on the DOKS cluster, recorded
-with Charm VHS on 2026-11-02 (demo/recordings/, joined by
+with Charm VHS on 2026-11-03, release 0.12.0 (demo/recordings/, joined by
 demo/recordings/join.sh). Waiting for a run is cut out. A title card opens
 each step: step 1 at 0:00, step 2 at 0:26, step 3 at 0:46, step 4 at 1:08,
 93 seconds in all.
@@ -1773,7 +1772,7 @@ Abuse at scripts/bootstrap.sh line 5. The runner skips Tier 3 and the
 controller marks the run Rejected, on all three entries. No sandboxes, no
 tokens. v1.0.0 of the same skill passes the same check and keeps stable.
 
-Source: demo/variants/README.md; run on the DOKS cluster 2026-11-02.
+Source: demo/variants/README.md; run on the DOKS cluster 2026-11-03.
 Fallback: "The demo, recorded", step 2 at 0:26.
 -->
 
@@ -1783,9 +1782,9 @@ Fallback: "The demo, recorded", step 2 at 0:26.
 
 <div class="reg mt-4">
   <div class="reg__head"><span>Agent and model</span><span>Stable v1.1.0</span><span>v1.2.0</span><span>Lift</span><span>Verdict</span></div>
-  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.91</span><span class="reg__bad">0.72</span><span>+0.37</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.84</span><span>0.53</span><span>+0.13</span><span>Helps</span></div>
-  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.89</span><span>0.71</span><span>+0.35</span><span>Helps</span></div>
+  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.87</span><span class="reg__bad">0.59</span><span>+0.16</span><span class="reg__bad">Regressed</span></div>
+  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.80</span><span>0.52</span><span>+0.09</span><span>Neutral</span></div>
+  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.89</span><span>0.61</span><span>+0.18</span><span>Helps</span></div>
 </div>
 
 <div class="demo">
@@ -1814,29 +1813,30 @@ This is the best moment of the talk. v1.1.0 added two on-call rules and took
 stable from v1.0.0. v1.2.0 is a deliberately worse rewrite: it writes
 INCIDENT.md, drops the cause codes, lists every idea.
 
-[click] Look at the lift on Claude Code: plus 0.37. A check against the
-no-skill baseline alone says this skill helps, and would have promoted it.
-But stable v1.1.0 scored 0.91 with the skill, and this version scores 0.72.
-The gate compares with the version you run today: a difference of minus
-0.20, 95% interval minus 0.26 to minus 0.13, all of it below the tolerance.
+[click] Look at the lift on Claude Code: plus 0.16. A check against the
+no-skill baseline alone says this skill helps, above the plus 0.10 threshold,
+and would have promoted it. But stable v1.1.0 scored 0.87 with the skill, and
+this version scores 0.59. The gate compares with the version you run today: a
+difference of minus 0.27, 95% interval minus 0.35 to minus 0.19, all of it
+below the tolerance.
 Regressed, and v1.2.0 stays at beta.
 
-[click] [click] The two optional rows: Codex falls from 0.84 to 0.53 and
-OpenCode from 0.89 to 0.71, both still above no skill, so Helps. Both are
-optional, so neither gates: the policy working as written, not a missed
+[click] [click] The two optional rows: Codex falls from 0.80 to 0.52, no
+longer clearly better than no skill, so Neutral. OpenCode falls from 0.89 to
+0.61, still above no skill, so Helps. Both are optional, so neither gates: the policy working as written, not a missed
 regression. Say it before someone asks.
 
 demo/status.sh --tags-only then shows stable on v1.1.0, beta on v1.2.0.
 The reason in words: kubectl get skilleval
 k8s-incident-triage-v1-2-0-claude-code-2-1-292-claude-opus-5-5, condition
-Regressed: "scores 0.72 with v1.2.0, stable v1.1.0 scored 0.91: difference
--0.20, 95% CI [-0.26, -0.13] (tolerance 0.05)".
+Regressed: "scores 0.59 with v1.2.0, stable v1.1.0 scored 0.87: difference
+-0.27, 95% CI [-0.35, -0.19] (tolerance 0.05)".
 
 Be honest: v1.2.0 was written to fail. The real-world version is a
 well-meant edit that fixes one case and breaks two.
 
 Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
-2026-11-02, 9 trials per arm. Fallback: "The demo, recorded", step 3 at 0:46.
+2026-11-03, release 0.12.0, 9 trials per arm. Fallback: "The demo, recorded", step 3 at 0:46.
 -->
 
 ---
@@ -1895,11 +1895,11 @@ release channel is tested against it, the way a package is rebuilt against a
 new compiler.
 
 What came back, prepared earlier: on Claude Code 2.1.300, v1.1.0 still helps
-(0.90 with, 0.33 without, +0.57) and v1.2.0 is Regressed again: 0.68
-against stable's 0.90, difference minus 0.22, interval minus 0.28 to minus
-0.16. Same verdict on both releases, so here the harness update was safe.
+(0.88 with, 0.44 without, +0.44) and v1.2.0 is Regressed again: 0.61
+against stable's 0.88, difference minus 0.27, interval minus 0.34 to minus
+0.20. Same verdict on both releases, so here the harness update was safe.
 That is the point: you know, instead of hoping. The k8s-resource-naming
-v1.0.0 run on 2.1.300 also still helps, +0.54.
+v1.0.0 run on 2.1.300 also still helps, +0.48.
 
 Then the numbers over time: Grafana (lift per skill version, agent_version
 label) and the reporting site (why v1.2.0 is held back, in words).
@@ -2095,8 +2095,8 @@ TODO: add the session feedback QR if KubeAuto Day provides one.
 
 <!--
 Backup after the closing slide, outside the talk. Show it when Grafana is
-unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-11-02
-(release 0.11.2), last 12 hours, filtered with the dashboard's Skill variable
+unreachable: press the right arrow after the thank-you slide, or jump by number. Screenshot of the DOKS cluster on 2026-11-03
+(release 0.12.0), last 12 hours, filtered with the dashboard's Skill variable
 to the two demo skills. On stable: naming v1.0.0 and triage v1.1.0. The empty
 red cell is triage v1.0.0 on Claude Code 2.1.300: superseded versions are
 not evaluated again. The phase panels count every SkillEval in the
@@ -2115,11 +2115,11 @@ namespace.
 
 <!--
 Backup for the reporting UI (/skills/k8s-incident-triage, make reports-ui),
-release 0.11.2, 2026-11-02. Every version by every model list entry: verdict,
+release 0.12.0, 2026-11-03. Every version by every model list entry: verdict,
 scores with and without the skill, lift with its 95% interval, tiers, and the
 decision in words. v1.2.0 is held back because it is worse than stable v1.1.0
-beyond noise on the required Claude Code entry: 0.72 against 0.91,
-difference -0.20, 95% CI [-0.26, -0.13].
+beyond noise on both required Claude Code entries: 0.59 against 0.87,
+difference -0.27, 95% CI [-0.35, -0.19] on 2.1.292, and the same on 2.1.300.
 -->
 
 ---
@@ -2135,14 +2135,14 @@ difference -0.20, 95% CI [-0.26, -0.13].
 <!--
 Backup for step 2: k8s-resource-naming v1.1.0 on Claude Code, Tier 1
 failed on scripts/bootstrap.sh line 5, Tier 3 skipped, no live trials spent.
-Reporting UI, release 0.11.1, 2026-10-31.
+Reporting UI, release 0.12.0, 2026-11-03.
 -->
 
 ---
 
 # Backup: one trial, step by step
 
-<img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session of k8s-incident-triage v1.1.0, case triage-oom, with the skill: the prompt with the kubectl describe output, score 0.95, 9 of 9 criteria passed, the phase bar, six dimension scores, the log and the eval criteria" />
+<img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session of k8s-incident-triage v1.1.0, case triage-oom, with the skill: the prompt with the kubectl describe output, score 0.94, 9 of 9 criteria passed, the phase bar, six dimension scores, the log and the eval criteria" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
@@ -2152,19 +2152,19 @@ Reporting UI, release 0.11.1, 2026-10-31.
 Backup for the trial session viewer: k8s-incident-triage v1.1.0, case
 triage-oom, Claude Code 2.1.292 with Opus 5.5, with the skill, attempt 1.
 The prompt carries the kubectl describe output of an OOMKilled pod. Score
-0.95, 9 of 9 criteria passed, 59 seconds, 4.7 cents. The phases, the six
+0.94, 9 of 9 criteria passed, 53 seconds, 4.9 cents. The phases, the six
 dimensions, then the log with filter chips (messages, tools, skill, network,
 judge) and on the right the findings and the eval criteria with links to the
 steps that back them. The session comes from the trial bundle attached to
-the skill digest, redacted by the runner before upload. Release 0.11.2,
-recorded 2026-11-02.
+the skill digest, redacted by the runner before upload. Release 0.12.0,
+recorded 2026-11-03.
 -->
 
 ---
 
 # Backup: with and without, side by side
 
-<img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page for case triage-oom: with the skill 0.95 and 9 of 9 criteria, without it 0.31 and 2 of 9" />
+<img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page for case triage-oom: with the skill 0.94 and 9 of 9 criteria, without it 0.44 and 2 of 9" />
 
 <style scoped>
 .fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
@@ -2174,12 +2174,12 @@ recorded 2026-11-02.
 Backup for the lift: the same case, attempt 1, with and without the skill.
 With the skill the agent wrote the ACME triage note: first line TRIAGE
 payments-prd/ledger-api-..., Cause OOM_KILLED, the OOMKilled line as
-evidence, the read-only next command. 0.95, 9 of 9 criteria. Without it the
-note was a reasonable generic incident write-up with Summary and Impact
-sections and the evidence as a table: 0.31, 2 of 9. It even cost more, 8.3
-cents against 4.7, because it wrote more. This is what the lift number
+evidence, the read-only next command. 0.94, 9 of 9 criteria. Without it the
+note was a reasonable generic incident write-up with Summary, What the
+snapshot shows and Status sections: 0.44, 2 of 9. It even cost more, 8.3
+cents against 4.9, because it wrote about four times as many tokens. This is what the lift number
 means, one trial at a time. k8s-incident-triage v1.1.0, Claude Code 2.1.292
-with Opus 5.5, release 0.11.2, 2026-11-02.
+with Opus 5.5, release 0.12.0, 2026-11-03.
 -->
 
 ---
@@ -2202,5 +2202,5 @@ api.anthropic.com (the model and the judge), and nothing else. A skill that
 tries to pip install under none shows a DROPPED row with POLICY_DENIED and
 the step that tried it. Flows come from Hubble Relay, collected by the runner
 during the run and stored in the trial bundle. Case triage-oom, Claude Code
-2.1.292 with Opus 5.5, release 0.11.2, 2026-11-02.
+2.1.292 with Opus 5.5, release 0.12.0, 2026-11-03.
 -->

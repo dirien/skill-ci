@@ -1,14 +1,14 @@
 <script setup>
 // The version-over-version gate, drawn as 95% intervals of "candidate minus stable".
-// Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code (2026-11-02), scored without Discoverability.
+// Top row: the measured k8s-incident-triage v1.2.0 run on Claude Code (2026-11-03, release 0.12.0), scored without Discoverability.
 // Bottom row: the worked Inconclusive example in CONTRACT.md.
 const lo = -0.4
 const hi = 0.1
 const w = 1000
 const x = (v) => ((v - lo) / (hi - lo)) * w
 const rows = [
-  // side: where the numbers go, so they never cross the zero or tolerance lines
-  { label: 'v1.2.0, measured', mean: -0.25, a: -0.33, b: -0.17, verdict: 'Regressed', kind: 'bad', side: 'right' },
+  // side: where the numbers go (left, right or below the bar), so they never cross the zero or tolerance lines
+  { label: 'v1.2.0, measured', mean: -0.27, a: -0.35, b: -0.19, verdict: 'Regressed', kind: 'bad', side: 'below' },
   { label: 'v1.2.0, spread-out trials', mean: -0.08, a: -0.18, b: 0.03, verdict: 'Inconclusive', kind: 'warn', side: 'left' },
 ]
 const ticks = [-0.4, -0.3, -0.2, -0.1, 0, 0.1]
@@ -29,9 +29,9 @@ const fmt = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2)
       <circle :cx="x(r.mean)" cy="0" r="12" :class="['ci__dot', `ci__fill--${r.kind}`]" />
       <text :x="x(r.mean)" y="-36" text-anchor="middle" :class="['ci__verdict', `ci__fill--${r.kind}`]">{{ r.verdict }}</text>
       <text
-        :x="r.side === 'right' ? x(r.b) + 20 : x(r.a) - 20"
-        y="9"
-        :text-anchor="r.side === 'right' ? 'start' : 'end'"
+        :x="r.side === 'below' ? x(r.mean) : r.side === 'right' ? x(r.b) + 20 : x(r.a) - 20"
+        :y="r.side === 'below' ? 52 : 9"
+        :text-anchor="r.side === 'below' ? 'middle' : r.side === 'right' ? 'start' : 'end'"
         class="ci__nums"
       >{{ fmt(r.mean) }}, 95% CI [{{ fmt(r.a) }}, {{ fmt(r.b) }}]</text>
     </g>
