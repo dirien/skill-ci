@@ -44,29 +44,29 @@ The Secret `llm-keys` needs `anthropic` (the judge, whatever agent runs, and Cla
 
 ## The state before the talk
 
-Measured on the DOKS cluster on 2026-11-02, release 0.11.2. `make results SKILL=<skill>` prints exactly these columns.
+Measured on the DOKS cluster on 2026-11-03, release 0.12.0. `make results SKILL=<skill>` prints exactly these columns. Scores leave out Discoverability (CONTRACT.md, "Trial score").
 
 `k8s-incident-triage`:
 
 | Version | Agent and model | With | Without | Lift | 95% interval | Verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| v1.0.0 | Claude Code 2.1.292, Opus 5.5 | 0.91 | 0.37 | +0.54 | [+0.50, +0.59] | Helps |
-| v1.0.0 | Codex 0.161.0, gpt-6.1-sol | 0.84 | 0.44 | +0.40 | [+0.30, +0.50] | Helps |
-| v1.0.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.92 | 0.41 | +0.51 | [+0.47, +0.55] | Helps |
-| v1.1.0 | Claude Code 2.1.292, Opus 5.5 | 0.91 | 0.35 | +0.56 | [+0.50, +0.62] | Helps |
-| v1.1.0 | Codex 0.161.0, gpt-6.1-sol | 0.84 | 0.40 | +0.44 | [+0.35, +0.52] | Helps |
-| v1.1.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.89 | 0.35 | +0.54 | [+0.48, +0.61] | Helps |
-| v1.2.0 | Claude Code 2.1.292, Opus 5.5 | 0.72 | 0.35 | +0.37 | [+0.34, +0.40] | Regressed |
-| v1.2.0 | Codex 0.161.0, gpt-6.1-sol | 0.53 | 0.40 | +0.13 | [+0.02, +0.22] | Helps |
-| v1.2.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.71 | 0.36 | +0.35 | [+0.31, +0.38] | Helps |
+| v1.0.0 | Claude Code 2.1.292, Opus 5.5 | 0.91 | 0.48 | +0.43 | [+0.39, +0.48] | Helps |
+| v1.0.0 | Codex 0.161.0, gpt-6.1-sol | 0.80 | 0.46 | +0.34 | [+0.22, +0.45] | Helps |
+| v1.0.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.90 | 0.45 | +0.45 | [+0.39, +0.51] | Helps |
+| v1.1.0 | Claude Code 2.1.292, Opus 5.5 | 0.87 | 0.44 | +0.43 | [+0.35, +0.50] | Helps |
+| v1.1.0 | Codex 0.161.0, gpt-6.1-sol | 0.80 | 0.41 | +0.39 | [+0.29, +0.50] | Helps |
+| v1.1.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.89 | 0.42 | +0.47 | [+0.39, +0.54] | Helps |
+| v1.2.0 | Claude Code 2.1.292, Opus 5.5 | 0.59 | 0.43 | +0.16 | [+0.13, +0.19] | Regressed |
+| v1.2.0 | Codex 0.161.0, gpt-6.1-sol | 0.52 | 0.43 | +0.09 | [-0.02, +0.19] | Neutral |
+| v1.2.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.61 | 0.43 | +0.18 | [+0.14, +0.21] | Helps |
 
 `k8s-resource-naming`:
 
 | Version | Agent and model | With | Without | Lift | 95% interval | Verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| v1.0.0 | Claude Code 2.1.292, Opus 5.5 | 0.95 | 0.36 | +0.59 | [+0.53, +0.64] | Helps |
-| v1.0.0 | Codex 0.161.0, gpt-6.1-sol | 0.76 | 0.41 | +0.35 | [+0.24, +0.46] | Helps |
-| v1.0.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.93 | 0.39 | +0.54 | [+0.50, +0.57] | Helps |
+| v1.0.0 | Claude Code 2.1.292, Opus 5.5 | 0.90 | 0.45 | +0.45 | [+0.36, +0.54] | Helps |
+| v1.0.0 | Codex 0.161.0, gpt-6.1-sol | 0.75 | 0.50 | +0.25 | [+0.17, +0.35] | Helps |
+| v1.0.0 | OpenCode 1.19.1, Qwen 3.8 Flash | 0.92 | 0.47 | +0.45 | [+0.41, +0.49] | Helps |
 | v1.1.0 | all three | | | | | Rejected (Tier 1), no trials |
 
 Tags in Harbor (`demo/status.sh --tags-only`; digests differ per push):
@@ -74,10 +74,10 @@ Tags in Harbor (`demo/status.sh --tags-only`; digests differ per push):
 ```text
 SKILL                    DIGEST                 TAGS
 k8s-resource-naming      sha256:ac8626acad6e    beta, stable, v1.0.0
-k8s-resource-naming      sha256:92bbf640ccb6    v1.1.0
+k8s-resource-naming      sha256:1e77ee6ef0b3    v1.1.0
 k8s-incident-triage      sha256:544c80c1c30e    v1.0.0
-k8s-incident-triage      sha256:d4be1085ce07    stable, v1.1.0
-k8s-incident-triage      sha256:b344b93df18a    beta, v1.2.0
+k8s-incident-triage      sha256:6bba34624d42    stable, v1.1.0
+k8s-incident-triage      sha256:7b251c0e39f1    beta, v1.2.0
 ```
 
 ### Rebuild the state
@@ -136,7 +136,7 @@ One hour before:
 
 4. The live version is free. `v1.1.1` must not exist yet for `k8s-incident-triage` (the bottom block of `make status`). If it does, use the next free one (`v1.1.2`) on stage and on the slide notes.
 
-5. Agent installs are allowed under network mode `none`. A Claude Code release other than the one in the sandbox image (step 4) is installed in each trial from `downloads.claude.ai`, which the `agentInstallHosts` default of 0.11.2 and earlier (`registry.npmjs.org` only) does not allow: the runs fail with `NetworkConnectionError ... exit 28`. The next release has `downloads.claude.ai` in the default (CHANGELOG "Unreleased"); a SkillCIConfig created by an older release keeps its own list, so check it either way.
+5. Agent installs are allowed under network mode `none`. A Claude Code release other than the one in the sandbox image (step 4) is installed in each trial from `downloads.claude.ai`, which the `agentInstallHosts` default of 0.11.2 and earlier (`registry.npmjs.org` only) does not allow: the runs fail with `NetworkConnectionError ... exit 28`. Since 0.12.0 the default has `downloads.claude.ai`, but a SkillCIConfig created by an older release keeps its own list, so check it either way.
 
    ```bash
    kubectl -n skill-ci get skillciconfig default -o jsonpath='{.status.effective.network.agentInstallHosts}{"\n"}'
@@ -204,7 +204,7 @@ demo/status.sh --tags-only
 Point at three things:
 
 1. v1.1.0 helps on every entry and took `stable` from v1.0.0.
-2. v1.2.0 on Claude Code: 0.72 with the skill, 0.35 without, lift +0.37. That lift is the trap: a check against the baseline alone would promote it. The gate compares with the stable version you run today (0.91) and holds it back: difference -0.20, 95% interval [-0.26, -0.13], all of it below the 0.05 tolerance. Codex (0.53) and OpenCode (0.71) also drop, but they are optional, so they never gate; both still beat no skill and say `Helps`.
+2. v1.2.0 on Claude Code: 0.59 with the skill, 0.43 without, lift +0.16. That lift is the trap: it clears the +0.10 promotion threshold, so a check against the baseline alone would promote it. The gate compares with the stable version you run today (0.87) and holds it back: difference -0.27, 95% interval [-0.35, -0.19], all of it below the 0.05 tolerance. Codex (0.52) and OpenCode (0.61) also drop, but they are optional, so they never gate; Codex is now `Neutral` (its interval includes 0), OpenCode still beats no skill and says `Helps`.
 3. The tags: `stable` on v1.1.0, `beta` on v1.2.0 (the newest), nothing else moved.
 
 The reason in words, for a question:
@@ -214,10 +214,10 @@ kubectl -n skill-ci get skilleval k8s-incident-triage-v1-2-0-claude-code-2-1-292
   -o jsonpath='{.status.conditions[?(@.type=="Regressed")].message}{"\n"}'
 ```
 
-Expected (2026-11-02):
+Expected (2026-11-03):
 
 ```text
-claude-code@2.1.292/claude-opus-5-5 scores 0.72 with v1.2.0, stable v1.1.0 scored 0.91: difference -0.20, 95% CI [-0.26, -0.13] (tolerance 0.05)
+claude-code@2.1.292/claude-opus-5-5 scores 0.59 with v1.2.0, stable v1.1.0 scored 0.87: difference -0.27, 95% CI [-0.35, -0.19] (tolerance 0.05)
 ```
 
 ### Step 4: the harness changed (about 2 minutes)
@@ -229,15 +229,15 @@ make results SKILL=k8s-incident-triage
 
 The model did not change, the tool around it did. A new agent release is a new entry of the model list, so the controller starts one SkillEval for every `beta` and `stable` version on Claude Code 2.1.300. Nobody pushed a skill. The results arrive after the talk; the prepared ones are in the step 4 video and on the reporting site (one column per `agent@version`).
 
-Prepared on 2026-11-02 (three runs on 2.1.300, about 25 minutes):
+Prepared on 2026-11-03, release 0.12.0 (three runs on 2.1.300, about 20 minutes):
 
 | Version | Agent and model | With | Without | Lift | 95% interval | Verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| triage v1.1.0 | Claude Code 2.1.300, Opus 5.5 | 0.90 | 0.33 | +0.57 | [+0.51, +0.63] | Helps |
-| triage v1.2.0 | Claude Code 2.1.300, Opus 5.5 | 0.68 | 0.35 | +0.33 | [+0.31, +0.36] | Regressed |
-| naming v1.0.0 | Claude Code 2.1.300, Opus 5.5 | 0.92 | 0.38 | +0.54 | [+0.48, +0.59] | Helps |
+| triage v1.1.0 | Claude Code 2.1.300, Opus 5.5 | 0.88 | 0.44 | +0.44 | [+0.37, +0.51] | Helps |
+| triage v1.2.0 | Claude Code 2.1.300, Opus 5.5 | 0.61 | 0.44 | +0.17 | [+0.14, +0.20] | Regressed |
+| naming v1.0.0 | Claude Code 2.1.300, Opus 5.5 | 0.93 | 0.45 | +0.48 | [+0.42, +0.55] | Helps |
 
-The regression condition of v1.2.0 now names both releases: "claude-code@2.1.300/claude-opus-5-5 scores 0.68 with v1.2.0, stable v1.1.0 scored 0.90: difference -0.22, 95% CI [-0.28, -0.16]". Same verdict on both releases: this harness update was safe, and you know it instead of hoping.
+The regression condition of v1.2.0 now names both releases: "claude-code@2.1.300/claude-opus-5-5 scores 0.61 with v1.2.0, stable v1.1.0 scored 0.88: difference -0.27, 95% CI [-0.34, -0.20]". Same verdict on both releases: this harness update was safe, and you know it instead of hoping.
 
 Then the numbers over time: Grafana tab (lift per skill version, `agent_version` label) and the reporting site tab (why v1.2.0 is held back, in words).
 

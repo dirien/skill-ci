@@ -6,19 +6,19 @@ The repository ships sample skills under `skills/` and a set of `make` targets t
 
 The sample skills are examples written to exercise skill-ci, not production skills. Each has three eval cases in the agentskills.io format. With 3 attempts per arm that makes 9 trials per arm, a small sample, which is why the gate uses confidence intervals.
 
-Two of them are the demo skills, both SRE and platform work. `make seed` pushes only these two (`SEED_ALL=1` pushes every skill). The table shows the lift over no skill measured on 2026-11-02, release 0.11.2, for Claude Code + Opus 5.5 / Codex + gpt-6.1-sol / OpenCode + Qwen 3.8 Flash. Only Claude Code is required; the other two never gate.
+Two of them are the demo skills, both SRE and platform work. `make seed` pushes only these two (`SEED_ALL=1` pushes every skill). The table shows the lift over no skill measured on 2026-11-03, release 0.12.0 (scored without Discoverability), for Claude Code + Opus 5.5 / Codex + gpt-6.1-sol / OpenCode + Qwen 3.8 Flash. Only Claude Code is required; the other two never gate.
 
 | Skill | What it encodes | Measured lift and outcome |
 | --- | --- | --- |
-| `k8s-incident-triage` | How the ACME on-call team triages a failing pod: an ACME cause code, the one input line that proves it, and the read-only next command for that cause, written to `TRIAGE.md`. Network mode `none` | v1.0.0 +0.54 / +0.40 / +0.51, with-skill 0.91 / 0.84 / 0.92. The cause codes and runbook commands are made up, so no model can produce them without the skill |
-| `k8s-resource-naming` | A team-specific naming and labelling convention for Kubernetes resources | v1.0.0 +0.59 / +0.35 / +0.54, `stable`. The conventions (`prd` instead of `prod`, `-cfg` and `-sec` suffixes, `acme.io/*` labels) are arbitrary, so a model cannot guess them |
+| `k8s-incident-triage` | How the ACME on-call team triages a failing pod: an ACME cause code, the one input line that proves it, and the read-only next command for that cause, written to `TRIAGE.md`. Network mode `none` | v1.0.0 +0.43 / +0.34 / +0.45, with-skill 0.91 / 0.80 / 0.90. The cause codes and runbook commands are made up, so no model can produce them without the skill |
+| `k8s-resource-naming` | A team-specific naming and labelling convention for Kubernetes resources | v1.0.0 +0.45 / +0.25 / +0.45, `stable`. The conventions (`prd` instead of `prod`, `-cfg` and `-sec` suffixes, `acme.io/*` labels) are arbitrary, so a model cannot guess them |
 
 `acme-release-notes` (a made-up release note format) and `python-docstrings` (Google-style docstrings) are test skills: the controller, runner and UI tests and the fixtures use them, and the demo does not push them.
 
 Further versions live in `demo/variants/` (see [demo/variants/README.md](../demo/variants/README.md)):
 
-- `k8s-incident-triage/v1.1.0` adds two on-call rules (the source of the evidence line, an owner line) and matching assertions. Measured: with-skill 0.91 / 0.84 / 0.89, lift +0.56 / +0.44 / +0.54, so it takes over `stable`.
-- `k8s-incident-triage/v1.2.0` is a deliberate regression. Its rules (write `INCIDENT.md`, no cause codes, a list of every idea) contradict the unchanged v1.1.0 evals. Measured on Claude Code: with-skill 0.72, still a positive lift (+0.37) over no skill, but -0.20 against stable v1.1.0 (95% CI [-0.26, -0.13]). The regression gate marks it `Regressed` and keeps the version at `beta`. The optional entries drop too (Codex 0.53, OpenCode 0.71, both still `Helps` over no skill) and gate nothing. On Claude Code 2.1.300 the verdict is the same: 0.68 against 0.90, -0.22.
+- `k8s-incident-triage/v1.1.0` adds two on-call rules (the source of the evidence line, an owner line) and matching assertions. Measured: with-skill 0.87 / 0.80 / 0.89, lift +0.43 / +0.39 / +0.47, so it takes over `stable`.
+- `k8s-incident-triage/v1.2.0` is a deliberate regression. Its rules (write `INCIDENT.md`, no cause codes, a list of every idea) contradict the unchanged v1.1.0 evals. Measured on Claude Code: with-skill 0.59, still a lift (+0.16) over no skill above the +0.10 promotion threshold, but -0.27 against stable v1.1.0 (95% CI [-0.35, -0.19]). The regression gate marks it `Regressed` and keeps the version at `beta`. The optional entries drop too (Codex 0.52, `Neutral`; OpenCode 0.61, still `Helps` over no skill) and gate nothing. On Claude Code 2.1.300 the verdict is the same: 0.61 against 0.88, -0.27.
 - `k8s-resource-naming/v1.1.0` is deliberately unsafe. Tier 1 rejects it, Tier 3 never runs, and the verdict is `Rejected`.
 - `acme-release-notes/v1.1.0` and `v1.2.0` are the same pair for the test skill.
 
