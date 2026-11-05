@@ -18,6 +18,26 @@ defaults:
 
 ---
 
+<img src="/img/kubeauto-title.jpg" class="organizer-title" alt="KubeAuto Day North America title slide: Skills Are Packages Now. Your Platform Should Treat Them That Way. Engin Diri, Principal Solutions Architect, Pulumi" />
+
+<style scoped>
+/* The organisers' slide covers the whole canvas, top bar and footer included. */
+.organizer-title { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; z-index: 20; }
+</style>
+
+<!--
+[0:00 to 0:30]
+
+Title slide from the KubeAuto Day organisers. Introduce yourself: Engin Diri,
+Principal Solutions Architect at Pulumi. The talk is "Skills Are Packages
+Now. Your Platform Should Treat Them That Way."
+
+Source: the organisers' speaker slide template (Google Slides), exported as an
+image on 2026-11-05.
+-->
+
+---
+
 <div class="statement">
   <p class="statement__kicker">It's 2026.</p>
   <h1>Skills are <em>big business</em>.</h1>
