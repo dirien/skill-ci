@@ -2131,7 +2131,10 @@ TODO: add the session feedback QR if KubeAuto Day provides one.
 <img src="/fallback/grafana.png" class="fallback" alt="Grafana dashboard skill-ci filtered to k8s-incident-triage and k8s-resource-naming: lift per skill version, agent and model, scores with and without the skill, versions on stable" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
@@ -2151,7 +2154,10 @@ namespace.
 <img src="/fallback/skill-k8s-incident-triage.png" class="fallback" alt="Reporting UI skill page for k8s-incident-triage: v1.1.0 on stable, v1.2.0 held back as Regressed on the required Claude Code entry" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
@@ -2170,7 +2176,10 @@ difference -0.27, 95% CI [-0.35, -0.19] on 2.1.292, and the same on 2.1.300.
 <img src="/fallback/run-rejected.png" class="fallback" alt="Reporting UI run page for k8s-resource-naming v1.1.0, Rejected by Tier 1 with the security findings" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
@@ -2186,7 +2195,10 @@ Reporting UI, release 0.12.0, 2026-11-03.
 <img src="/fallback/trial-session.png" class="fallback" alt="Reporting UI trial session of k8s-incident-triage v1.1.0, case triage-oom, with the skill: the prompt with the kubectl describe output, score 0.94, 9 of 9 criteria passed, the phase bar, six dimension scores, the log and the eval criteria" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
@@ -2208,7 +2220,10 @@ recorded 2026-11-03.
 <img src="/fallback/compare.png" class="fallback" alt="Reporting UI compare page for case triage-oom: with the skill 0.94 and 9 of 9 criteria, without it 0.44 and 2 of 9" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
@@ -2230,7 +2245,10 @@ with Opus 5.5, release 0.12.0, 2026-11-03.
 <img src="/fallback/trial-network.png" class="fallback" alt="Reporting UI network tab of a k8s-incident-triage trial in network mode none: one destination, api.anthropic.com, forwarded 6 times" />
 
 <style scoped>
-.fallback { max-height: 30rem; max-width: 100%; margin: 1.5rem auto 0; border-radius: 10px; border: 1.5px solid var(--p-border); }
+/* Full canvas, top bar and footer included; contain keeps the 16:10 screenshot whole. */
+.fallback { position: fixed; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: contain; background: var(--p-bg); z-index: 20; }
+/* The slide title on top of the screenshot: white with a black outline, readable on any part of it. */
+h1 { position: fixed; left: 120px; top: 36px; z-index: 21; margin: 0 !important; color: #fff !important; letter-spacing: 0 !important; -webkit-text-stroke: 7px #000; paint-order: stroke fill; text-shadow: 0 4px 18px rgb(0 0 0 / 0.45); }
 </style>
 
 <!--
