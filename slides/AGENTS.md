@@ -28,10 +28,12 @@ Slidev deck; the project it talks about is the repo one level up
 - Speaker notes on every slide, with a `[m:ss to m:ss]` window; the windows add
   up to 25:00.
 - No "not X but Y", no rhetorical questions, no emoji bullets, no lorem ipsum.
-- The numbers of the lift slide and of demo 3 were recorded on 2026-10-30 with
-  haiku, sonnet, and opus; refresh them when the cluster state is rebuilt with
-  the current model list (Claude Code + Opus 5.5, Codex + gpt-6.1-sol,
-  OpenCode + Qwen 3.8 Flash).
+- The scores on the slides, the demo video (`public/demo/demo.mp4`) and the
+  backup screenshots (`public/fallback/`) all come from one cluster state:
+  release 0.12.0, 2026-11-03, scored without Discoverability, the tables in
+  `../DEMO.md` "The state before the talk". Change one, change all of them.
+- No live cluster is assumed: the demo plays from the recording, and the step
+  slides carry the same commands and numbers on their own if the video fails.
 
 ## Commands
 
@@ -59,3 +61,17 @@ npm run diagrams             # re-render diagrams/*.excalidraw to public/diagram
   `CHROMIUM_PATH`.
 - `slidev-addon-excalidraw` 1.1.1 was checked and not used: it loads Excalidraw
   from esm.sh at view time, which fails on conference wifi.
+
+## Gotchas
+
+- The dev server keeps stale scoped styles after slides move or a `<style
+  scoped>` block changes: restart it before judging a screenshot. Stop it by
+  the PID of `node_modules/.bin/slidev`; `pkill -f` with the command line also
+  kills the shell that runs it.
+- Class names can collide with UnoCSS utilities (`h4` is `height: 1rem`):
+  prefix custom classes per slide (`hres__row`, `reg__row`).
+- A full-canvas image covers the top bar and footer with `position: fixed;
+  left: 0; top: 0; width: 1920px; height: 1080px; z-index: 20` (slide 1 and the
+  backup slides). `object-fit: contain` keeps the aspect ratio.
+- A two-column grid whose right column starts hidden (`v-click`) resizes on
+  the first click; use `grid-cols-[minmax(0,…fr)_minmax(0,…fr)]`.
