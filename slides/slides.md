@@ -1871,6 +1871,15 @@ Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
 
 # Step 4: the harness changed
 
+<div class="demo">
+
+```bash
+make demo-model-swap MODE=bump TO=2.1.300
+make results SKILL=k8s-incident-triage
+```
+
+</div>
+
 <div class="grid grid-cols-3 gap-6 mt-6">
   <div class="gpu-card gpu-card--primary hn" v-click>
     <div class="gpu-caption gpu-caption--accent">Gates promotion</div>
@@ -1890,15 +1899,6 @@ Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
     <div class="hn__model">Qwen 3.8 Flash</div>
     <div class="hn__ver">1.19.1</div>
   </div>
-</div>
-
-<div class="demo mt-5">
-
-```bash
-make demo-model-swap MODE=bump TO=2.1.300
-make results SKILL=k8s-incident-triage
-```
-
 </div>
 
 <div class="hres mt-5" v-click>
