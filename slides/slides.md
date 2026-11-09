@@ -1237,7 +1237,6 @@ next-step assertion names the exact command).
     </div>
   </div>
 </div>
-<div class="src mt-6">k8s-incident-triage v1.0.0 on Claude Code 2.1.292 with Opus 5.5. Every number is the mean of 9 trials of one arm. Dimensions from the SkillEvaluator 0.6.0 report.</div>
 
 <style scoped>
 .sc { display: grid; grid-template-columns: 1fr 27rem; gap: 3.5rem; align-items: start; }
@@ -1335,7 +1334,6 @@ behavior check 0.95/0.22, skill execution 1.00/0.00, skill efficiency
   <div class="bg__item"><div class="bg__k">Lift</div><div><strong>with − without</strong>, the same task</div></div>
   <div class="bg__item"><div class="bg__k">95% CI</div><div>where the <strong>real lift</strong> is, from the spread of the 9</div></div>
 </div>
-<div class="src mt-3">k8s-incident-triage v1.0.0, one model per agent. Release 0.12.0, 2026-11-03, scored without Discoverability.</div>
 
 <style scoped>
 .lift { display: flex; flex-direction: column; gap: 1.6rem; }
@@ -1498,7 +1496,6 @@ already have: tags, referrers, a pull.
     <div class="chan__row" v-click>
       <span class="chan__ver">v1.2.0</span><span class="chan__tag chan__tag--beta">beta</span><span class="chan__note">Regressed, held back</span>
     </div>
-    <div class="src mt-4">k8s-incident-triage, tags as set by the controller</div>
   </div>
   <div>
     <v-clicks>
@@ -1602,7 +1599,7 @@ subject, and deleting the subject artifact removed the referrer too.
 
 # Developers follow a channel, not a file
 
-<div class="grid grid-cols-[1.15fr_1fr] gap-10 mt-4 items-start zm">
+<div class="grid grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-8 mt-4 items-start zm">
   <div class="dist" v-click>
     <div class="gpu-caption gpu-caption--accent">Today: plain ORAS</div>
 
@@ -1611,11 +1608,12 @@ oras pull harbor.example.com/skills/k8s-incident-triage:stable \
   -o ~/.claude/skills/k8s-incident-triage
 ```
 
-  <p class="dist__note">Same registry, same access control, any agent that reads a skills folder.</p>
   </div>
   <div class="next">
-    <div class="gpu-caption">Next</div>
-    <div class="next__item" v-click><strong>A skill-ci CLI</strong><span>Resolve <code>stable</code> to a digest, install only with a passing report, write a lock file</span></div>
+    <div class="next__group" v-click>
+      <div class="gpu-caption">Next</div>
+      <div class="next__item"><strong>A skill-ci CLI</strong><span>Resolve <code>stable</code> to a digest, install only with a passing report, write a lock file</span></div>
+    </div>
     <div class="next__item" v-click><strong>The Agent Skills OCI draft</strong><span>Open proposal under the AAIF for media types, lock files and signatures</span></div>
     <div class="next__item" v-click><strong>Whatever tooling follows it</strong><span>One format, so any installer can read any registry</span></div>
   </div>
@@ -1624,7 +1622,7 @@ oras pull harbor.example.com/skills/k8s-incident-triage:stable \
 <style scoped>
 .dist :deep(pre), .dist :deep(code) { font-size: 0.9rem !important; line-height: 1.55 !important; }
 .dist__note { margin: 0.8rem 0 0 !important; font-size: 1.05rem !important; color: var(--p-fg-muted); }
-.next { display: flex; flex-direction: column; gap: 0.8rem; }
+.next, .next__group { display: flex; flex-direction: column; gap: 0.8rem; }
 .next__item { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.8rem 1rem; border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); font-size: 1.05rem; line-height: 1.35; }
 .next__item strong { font-size: 1.15rem; color: var(--p-fg); }
 .next__item span { color: var(--p-fg-muted); }
@@ -1677,7 +1675,7 @@ runs live and show the ones I prepared earlier. DEMO.md has every command.
   <div class="plan__row" v-click><span class="plan__n">4</span><div><strong>The harness changed</strong><span>every released version runs again, nobody pushed</span></div><code>make demo-model-swap MODE=bump TO=2.1.300</code></div>
 </div>
 
-<p class="plan__note" v-click>Every run takes about 12 minutes. All runs recorded on the DOKS cluster on November 3, 2026.</p>
+<p class="plan__note" v-click>Every run takes about 12 minutes. All runs recorded on the DOKS cluster.</p>
 
 <style scoped>
 .plan { display: flex; flex-direction: column; gap: 0.9rem; }
@@ -1801,14 +1799,6 @@ Fallback: "The demo, recorded", step 2 at 0:26.
 
 # Step 3: better takes stable, worse stays on beta
 
-<div class="reg mt-4">
-  <div class="reg__head"><span>Agent and model</span><span>No skill</span><span>v1.2.0</span><span>Stable v1.1.0</span><span>vs no skill</span><span>vs stable</span><span>Verdict</span></div>
-  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.43</span><span class="reg__bad">0.59</span><span>0.87</span><span>+0.16</span><span class="reg__bad">−0.27</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.43</span><span>0.52</span><span>0.80</span><span>+0.09</span><span class="reg__muted">not gated</span><span>Neutral</span></div>
-  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.43</span><span>0.61</span><span>0.89</span><span>+0.18</span><span class="reg__muted">not gated</span><span>Helps</span></div>
-</div>
-
-<div class="grid grid-cols-[1fr_1.15fr] gap-6 items-stretch">
 <div class="demo">
 
 ```bash
@@ -1817,10 +1807,17 @@ demo/status.sh --tags-only
 ```
 
 </div>
+
+<div class="reg mt-6">
+  <div class="reg__head"><span>Agent and model</span><span>No skill</span><span>v1.2.0</span><span>Stable v1.1.0</span><span>vs no skill</span><span>vs stable</span><span>Verdict</span></div>
+  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.43</span><span class="reg__bad">0.59</span><span>0.87</span><span>+0.16</span><span class="reg__bad">−0.27</span><span class="reg__bad">Regressed</span></div>
+  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.43</span><span>0.52</span><span>0.80</span><span>+0.09</span><span class="reg__muted">not gated</span><span>Neutral</span></div>
+  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.43</span><span>0.61</span><span>0.89</span><span>+0.18</span><span class="reg__muted">not gated</span><span>Helps</span></div>
+</div>
+
 <div class="info-card !m-0" v-click>
   <div class="info-card__label">Claude Code gates promotion</div>
   <p>vs no skill <strong>+0.16</strong>: alone, that promotes it. vs stable <strong>−0.27</strong>, 95% CI [−0.35, −0.19]: Regressed. Tags: <code>stable</code> v1.1.0, <code>beta</code> v1.2.0</p>
-</div>
 </div>
 
 <style scoped>
@@ -1895,13 +1892,6 @@ Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
   </div>
 </div>
 
-<div class="hres mt-6" v-click>
-  <div class="hres__head"><span>On Claude Code 2.1.300</span><span>No skill</span><span>With skill</span><span>vs no skill</span><span>Verdict</span></div>
-  <div class="hres__row"><span>triage v1.1.0 (stable)</span><span>0.44</span><span>0.88</span><span>+0.44</span><span>Helps</span></div>
-  <div class="hres__row"><span>triage v1.2.0 (beta)</span><span>0.44</span><span class="hres__bad">0.61</span><span>+0.17</span><span class="hres__bad">Regressed, −0.27 vs stable</span></div>
-  <div class="hres__row"><span>naming v1.0.0 (stable)</span><span>0.45</span><span>0.93</span><span>+0.48</span><span>Helps</span></div>
-</div>
-
 <div class="demo mt-5">
 
 ```bash
@@ -1909,6 +1899,13 @@ make demo-model-swap MODE=bump TO=2.1.300
 make results SKILL=k8s-incident-triage
 ```
 
+</div>
+
+<div class="hres mt-5" v-click>
+  <div class="hres__head"><span>On Claude Code 2.1.300</span><span>No skill</span><span>With skill</span><span>vs no skill</span><span>Verdict</span></div>
+  <div class="hres__row"><span>triage v1.1.0 (stable)</span><span>0.44</span><span>0.88</span><span>+0.44</span><span>Helps</span></div>
+  <div class="hres__row"><span>triage v1.2.0 (beta)</span><span>0.44</span><span class="hres__bad">0.61</span><span>+0.17</span><span class="hres__bad">Regressed, −0.27 vs stable</span></div>
+  <div class="hres__row"><span>naming v1.0.0 (stable)</span><span>0.45</span><span>0.93</span><span>+0.48</span><span>Helps</span></div>
 </div>
 
 <style scoped>
@@ -1978,7 +1975,7 @@ Template: "Success Kid", via imgflip.
     <div class="recap__a">The registry you already run. A skill is an OCI artifact: the digest is what was tested.</div>
   </div>
   <div class="recap__row" v-click>
-    <div class="recap__q"><ph-hand-waving /> Evals for them</div>
+    <div class="recap__q"><ph-hand-waving /> Evals for your skills</div>
     <div class="recap__a">Cheap checks first, then with and without the skill, several attempts, an interval decides.</div>
   </div>
   <div class="recap__row" v-click>
@@ -1991,7 +1988,6 @@ Template: "Success Kid", via imgflip.
   </div>
 </div>
 
-<p class="recap__close" v-click>Swap the registry, swap the evaluator. Keep the loop.</p>
 
 <style scoped>
 .recap { display: flex; flex-direction: column; gap: 0.9rem; }
@@ -2019,7 +2015,7 @@ version runs again. Nobody has to push.
 [click] And shipping: the tags beta and stable are the release channels, and
 the eval reports hang off the digest as referrers.
 
-[click] Nothing here is specific to my stack. Swap Harbor for the registry
+Nothing here is specific to my stack. Swap Harbor for the registry
 you run, swap the evaluator, keep the loop.
 -->
 
