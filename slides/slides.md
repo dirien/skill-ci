@@ -438,7 +438,7 @@ Image: Ralph Wiggum, "I'm helping" (The Simpsons), via pbs.twimg.com
 
 <div class="grid grid-cols-3 gap-8 mt-6 zm">
   <div class="gpu-card gpu-card--primary ev" v-click>
-    <div class="gpu-caption gpu-caption--accent">ACES</div>
+    <div class="gpu-caption gpu-caption--accent">Agentic Continuous Evaluation of Skills (ACES)</div>
     <div class="ev__big">72.8%</div>
     <p>of 947 paired runs improved with the skill: 58 production skills, four harnesses</p>
     <div class="src">arxiv.org/abs/2608.20614</div>
@@ -458,6 +458,8 @@ Image: Ralph Wiggum, "I'm helping" (The Simpsons), via pbs.twimg.com
 
 <style scoped>
 .ev { display: flex; flex-direction: column; gap: 1rem; }
+/* Every caption takes the three lines of the ACES one, so the numbers line up across the cards. */
+.ev .gpu-caption { line-height: 1.35; min-height: 4.05em; }
 .ev__big { white-space: nowrap; font-size: 3.1rem; font-weight: 600; letter-spacing: -0.04em; line-height: 1; color: var(--p-fg); }
 .ev__quote { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.2; color: var(--p-fg); flex: 1; }
 .ev p { margin: 0 !important; font-size: 1.5rem !important; line-height: 1.3 !important; flex: 1; }
