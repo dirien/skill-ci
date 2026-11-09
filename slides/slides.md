@@ -1677,7 +1677,7 @@ runs live and show the ones I prepared earlier. DEMO.md has every command.
   <div class="plan__row" v-click><span class="plan__n">4</span><div><strong>The harness changed</strong><span>every released version runs again, nobody pushed</span></div><code>make demo-model-swap MODE=bump TO=2.1.300</code></div>
 </div>
 
-<p class="plan__note" v-click>Every run takes about 12 minutes. I start them live and show the ones I prepared earlier.</p>
+<p class="plan__note" v-click>Every run takes about 12 minutes. All runs recorded on the DOKS cluster on November 3, 2026.</p>
 
 <style scoped>
 .plan { display: flex; flex-direction: column; gap: 0.9rem; }
@@ -1697,9 +1697,10 @@ Four steps, two skills, both SRE work. [click] A push starts the pipeline.
 better version is promoted, a worse one held back. [click] And when the
 agent itself updates, every released skill is tested again.
 
-[click] Each run takes about twelve minutes, so I start them live and show
-the finished ones I prepared earlier. If anything fails, the recording is the
-next slide, "The demo, recorded".
+[click] Each run takes about twelve minutes, so everything you see was
+recorded on the cluster on November 3. The recording is the next slide, "The
+demo, recorded"; the step slides after it carry the same commands and numbers
+if the video does not play.
 
 Source: DEMO.md, "The four steps".
 -->
@@ -1722,9 +1723,9 @@ demo/recordings/join.sh). Waiting for a run is cut out. A title card opens
 each step: step 1 at 0:00, step 2 at 0:26, step 3 at 0:46, step 4 at 1:08,
 93 seconds in all.
 
-Live demo works: skip this slide. Live demo breaks: play it here, talk over
-it, then click through the step slides for the numbers. One step breaks:
-jump to that step's time.
+No live cluster on talk day: play it here and talk over it, then click
+through the step slides for the numbers. Video does not play: skip it, the
+step slides stand on their own.
 -->
 
 ---
@@ -1759,8 +1760,7 @@ Pending, then Running as the Jobs start.
 
 "That takes twelve minutes, so here is one I prepared earlier."
 
-If v1.1.1 already exists, use the next free version (DEMO.md, pre-show
-checklist). Fallback: "The demo, recorded", step 1 at 0:00.
+Recorded on 2026-11-03: "The demo, recorded", step 1 at 0:00.
 -->
 
 ---
@@ -1802,12 +1802,13 @@ Fallback: "The demo, recorded", step 2 at 0:26.
 # Step 3: better takes stable, worse stays on beta
 
 <div class="reg mt-4">
-  <div class="reg__head"><span>Agent and model</span><span>Stable v1.1.0</span><span>v1.2.0</span><span>Lift</span><span>Verdict</span></div>
-  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.87</span><span class="reg__bad">0.59</span><span>+0.16</span><span class="reg__bad">Regressed</span></div>
-  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.80</span><span>0.52</span><span>+0.09</span><span>Neutral</span></div>
-  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.89</span><span>0.61</span><span>+0.18</span><span>Helps</span></div>
+  <div class="reg__head"><span>Agent and model</span><span>No skill</span><span>v1.2.0</span><span>Stable v1.1.0</span><span>vs no skill</span><span>vs stable</span><span>Verdict</span></div>
+  <div class="reg__row" v-click><span>Claude Code · opus-5-5</span><span>0.43</span><span class="reg__bad">0.59</span><span>0.87</span><span>+0.16</span><span class="reg__bad">−0.27</span><span class="reg__bad">Regressed</span></div>
+  <div class="reg__row" v-click><span>Codex · gpt-6.1-sol (optional)</span><span>0.43</span><span>0.52</span><span>0.80</span><span>+0.09</span><span class="reg__muted">not gated</span><span>Neutral</span></div>
+  <div class="reg__row" v-click><span>OpenCode · qwen3.8-flash (optional)</span><span>0.43</span><span>0.61</span><span>0.89</span><span>+0.18</span><span class="reg__muted">not gated</span><span>Helps</span></div>
 </div>
 
+<div class="grid grid-cols-[1fr_1.15fr] gap-6 items-stretch">
 <div class="demo">
 
 ```bash
@@ -1816,10 +1817,16 @@ demo/status.sh --tags-only
 ```
 
 </div>
+<div class="info-card !m-0" v-click>
+  <div class="info-card__label">Claude Code gates promotion</div>
+  <p>vs no skill <strong>+0.16</strong>: alone, that promotes it. vs stable <strong>−0.27</strong>, 95% CI [−0.35, −0.19]: Regressed. Tags: <code>stable</code> v1.1.0, <code>beta</code> v1.2.0</p>
+</div>
+</div>
 
 <style scoped>
 .reg { display: flex; flex-direction: column; gap: 0.7rem; margin-bottom: 1.6rem; }
-.reg__head, .reg__row { display: grid; grid-template-columns: 2.4fr 1fr 0.8fr 0.8fr 1fr; gap: 1rem; align-items: center; padding: 0.7rem 1.2rem; font-size: 1.35rem; }
+.reg__head, .reg__row { display: grid; grid-template-columns: 3fr 0.75fr 0.75fr 0.95fr 0.95fr 0.9fr 1fr; gap: 0.7rem; align-items: center; padding: 0.7rem 1.2rem; font-size: 1.3rem; }
+.reg__muted { color: var(--p-fg-muted); font-size: 1.05rem; }
 .reg__head { font-family: var(--slidev-font-mono); font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-fg-muted); padding-bottom: 0; }
 .reg__row { border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
 .reg__row span:first-child { font-family: var(--slidev-font-mono); font-size: 1.1rem; }
@@ -1834,7 +1841,8 @@ This is the best moment of the talk. v1.1.0 added two on-call rules and took
 stable from v1.0.0. v1.2.0 is a deliberately worse rewrite: it writes
 INCIDENT.md, drops the cause codes, lists every idea.
 
-[click] Look at the lift on Claude Code: plus 0.16. A check against the
+[click] Claude Code, left to right: 0.43 with no skill, 0.59 with v1.2.0,
+0.87 with stable v1.1.0. Two comparisons. Against no skill: plus 0.16. A check against the
 no-skill baseline alone says this skill helps, above the plus 0.10 threshold,
 and would have promoted it. But stable v1.1.0 scored 0.87 with the skill, and
 this version scores 0.59. The gate compares with the version you run today: a
@@ -1847,7 +1855,9 @@ longer clearly better than no skill, so Neutral. OpenCode falls from 0.89 to
 0.61, still above no skill, so Helps. Both are optional, so neither gates: the policy working as written, not a missed
 regression. Say it before someone asks.
 
-demo/status.sh --tags-only then shows stable on v1.1.0, beta on v1.2.0.
+[click] The card says it in one line: plus 0.16 against no skill would
+promote it, minus 0.27 against stable holds it back,
+and demo/status.sh --tags-only shows stable on v1.1.0, beta on v1.2.0.
 The reason in words: kubectl get skilleval
 k8s-incident-triage-v1-2-0-claude-code-2-1-292-claude-opus-5-5, condition
 Regressed: "scores 0.59 with v1.2.0, stable v1.1.0 scored 0.87: difference
@@ -1864,7 +1874,7 @@ Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
 
 # Step 4: the harness changed
 
-<div class="grid grid-cols-3 gap-6 mt-4 zm">
+<div class="grid grid-cols-3 gap-6 mt-6">
   <div class="gpu-card gpu-card--primary hn" v-click>
     <div class="gpu-caption gpu-caption--accent">Gates promotion</div>
     <div class="hn__agent">Claude Code</div>
@@ -1885,7 +1895,14 @@ Source: DEMO.md "The state before the talk"; SkillEvals on the DOKS cluster,
   </div>
 </div>
 
-<div class="demo mt-8">
+<div class="hres mt-6" v-click>
+  <div class="hres__head"><span>On Claude Code 2.1.300</span><span>No skill</span><span>With skill</span><span>vs no skill</span><span>Verdict</span></div>
+  <div class="hres__row"><span>triage v1.1.0 (stable)</span><span>0.44</span><span>0.88</span><span>+0.44</span><span>Helps</span></div>
+  <div class="hres__row"><span>triage v1.2.0 (beta)</span><span>0.44</span><span class="hres__bad">0.61</span><span>+0.17</span><span class="hres__bad">Regressed, −0.27 vs stable</span></div>
+  <div class="hres__row"><span>naming v1.0.0 (stable)</span><span>0.45</span><span>0.93</span><span>+0.48</span><span>Helps</span></div>
+</div>
+
+<div class="demo mt-5">
 
 ```bash
 make demo-model-swap MODE=bump TO=2.1.300
@@ -1895,9 +1912,16 @@ make results SKILL=k8s-incident-triage
 </div>
 
 <style scoped>
+.hres { display: flex; flex-direction: column; gap: 0.5rem; }
+.hres__head, .hres__row { display: grid; grid-template-columns: 2.1fr 0.75fr 0.8fr 0.85fr 1.9fr; gap: 1rem; align-items: center; padding: 0.5rem 1.2rem; font-size: 1.25rem; }
+.hres__head { font-family: var(--slidev-font-mono); font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--p-fg-muted); padding-bottom: 0; }
+.hres__row { border: 1.5px solid var(--p-border); border-radius: 12px; background: var(--p-bg-elevated); }
+.hres__row span:first-child { font-family: var(--slidev-font-mono); font-size: 1.05rem; }
+.hres__bad { color: #bd141c; font-weight: 700; }
+:global(.dark .hres__bad) { color: #ff9fa4; }
 .hn { display: flex; flex-direction: column; gap: 0.6rem; }
-.hn__agent { font-size: 2.2rem; font-weight: 600; letter-spacing: -0.04em; color: var(--p-fg); margin-top: 0.4rem; }
-.hn__model { font-size: 1.6rem; color: var(--p-primary); font-weight: 600; }
+.hn__agent { font-size: 1.9rem; font-weight: 600; letter-spacing: -0.04em; color: var(--p-fg); margin-top: 0.2rem; }
+.hn__model { font-size: 1.4rem; color: var(--p-primary); font-weight: 600; }
 .hn__ver { font-family: var(--slidev-font-mono); font-size: 1rem; color: var(--p-fg-muted); }
 </style>
 
@@ -1915,7 +1939,7 @@ version on it. Nobody pushed a skill. The tool changed, and every skill in a
 release channel is tested against it, the way a package is rebuilt against a
 new compiler.
 
-What came back, prepared earlier: on Claude Code 2.1.300, v1.1.0 still helps
+[click] What came back, prepared earlier: on Claude Code 2.1.300, v1.1.0 still helps
 (0.88 with, 0.44 without, +0.44) and v1.2.0 is Regressed again: 0.61
 against stable's 0.88, difference minus 0.27, interval minus 0.34 to minus
 0.20. Same verdict on both releases, so here the harness update was safe.
