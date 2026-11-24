@@ -75,6 +75,7 @@
         "argsIgnorePattern": "^_"
       }
     ],
+    "no-useless-assignment": "error",
     "no-useless-backreference": "error",
     "no-useless-catch": "error",
     "no-useless-escape": "error",
