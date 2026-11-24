@@ -50,7 +50,7 @@ Every dependency is pinned exactly (`save-exact` in `.npmrc`), and every version
 
 | Package | Version | Published | Note |
 | --- | --- | --- | --- |
-| Node | 24.22.0 | 2026-10-14 | LTS line 24 (Krypton). 24.22.1 (2026-10-20) was too new |
+| Node | 24.22.0 | 2026-10-14 | LTS line 24 (Krypton), chosen on 2026-10-31, when 24.22.1 (2026-10-20) was too new |
 | react | 19.3.1 | 2026-10-14 | |
 | react-dom | 19.3.1 | 2026-10-14 | |
 | react-router | 8.5.1 | 2026-10-27 | |

@@ -62,7 +62,7 @@ The Go standard library compiled into the binary is BSD-3-Clause. The base image
 
 ## Reporting UI (npm)
 
-The reporting site's single page app is built from `ui/` with Vite and embedded in the controller binary (`controller/internal/reportsite/web/dist/`). Checked on 2026-10-31 from the `license` field of each `node_modules/*/package.json` after `make ui-install` (`npm ci` from `ui/package-lock.json`). The lockfile has 211 entries; 186 were installed on linux/arm64. The other 25 are optional native binaries for other platforms, and their license comes from the lockfile: MIT for the 14 `@rolldown/binding-*` packages and `fsevents`, MPL-2.0 for the 10 `lightningcss-*` packages.
+The reporting site's single page app is built from `ui/` with Vite and embedded in the controller binary (`controller/internal/reportsite/web/dist/`). Checked on 2026-11-24 from the `license` field of each `node_modules/*/package.json` after `make ui-install` (`npm ci` from `ui/package-lock.json`). The lockfile has 168 entries; 101 were installed on linux/arm64. The other 67 are optional native binaries for other platforms, and their license comes from the lockfile: MIT for the 14 `@rolldown/binding-*`, 18 `@oxlint/binding-*` and 5 `@oxlint-tsgolint/*` packages and `fsevents`, Apache-2.0 for the 19 `@typescript/typescript-*` packages, MPL-2.0 for the 10 `lightningcss-*` packages.
 
 What ships: the built JavaScript holds only the runtime dependencies and their own dependencies, all MIT. Nothing else from `node_modules` reaches the controller image.
 
@@ -98,7 +98,7 @@ All 168 packages in the lockfile by license: MIT 121, Apache-2.0 25, MPL-2.0 12 
 | lightningcss, lightningcss-linux-arm64-gnu (and the other platform binaries) | 1.33.0 | MPL-2.0 | vite (CSS minifier at build time) |
 | lru-cache | 11.5.3 | BlueOak-1.0.0 | jsdom (test DOM) |
 | mdn-data | 2.27.1 | CC0-1.0 | jsdom, through css-tree (CSS data) |
-| @csstools/color-helpers, @csstools/css-syntax-patches-for-csstree | 6.1.2, 1.1.15 | MIT-0 | jsdom |
+| @csstools/color-helpers, @csstools/css-syntax-patches-for-csstree | 6.1.2, 1.1.16 | MIT-0 | jsdom |
 
 None of them is in the controller binary or any image. MPL-2.0 and CC0-1.0 are outside the CNCF allowlist (see the summary); check MIT-0 and BlueOak-1.0.0 against the allowlist before an application, in case the build tool chain counts.
 
