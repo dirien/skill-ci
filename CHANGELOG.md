@@ -2,6 +2,10 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
+## [0.12.1](https://github.com/dirien/skill-ci/releases/tag/v0.12.1) (2026-11-24)
+
+- Dependencies: controller-runtime 0.25.3, client-go, api and apimachinery 0.37.2, grpc 1.85.0, x/sync 0.25.0; the reporting UI's react-router 8.5.1, vite 8.3.6, vitest 5.1.0, eslint 10.14.0, typescript-eslint 8.72.1 and @vitejs/plugin-react 6.2.1; ruff 0.17.5 in CI; and the setup-helm, cosign-installer, upload-sarif, login-action and setup-uv actions. No behavior change.
+
 ## [0.12.0](https://github.com/dirien/skill-ci/releases/tag/v0.12.0) (2026-11-02)
 
 - Change: the gate scores a trial without Discoverability. A trial's score is the mean of SkillEvaluator's other four dimensions (Security, Correctness, Effectiveness, Efficiency); Discoverability is 0 by definition without a skill and added up to +0.20 to every lift, twice the promotion threshold. `withSkill`, `withoutSkill`, `lift`, `samples`, the trial bundle scores and the run page's summary row ("Score without skill execution") all use it. A run whose trials lack a metric keeps SkillEvaluator's overall score. Runs from before keep their stored scores: re-run the `stable` version of each skill after upgrading, so the regression gate compares runs scored the same way.
