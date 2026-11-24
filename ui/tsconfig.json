@@ -20,5 +20,5 @@
     "exactOptionalPropertyTypes": false,
     "skipLibCheck": true
   },
-  "include": ["src", "mock", "vite.config.ts", "eslint.config.js"]
+  "include": ["src", "mock", "vite.config.ts"]
 }
