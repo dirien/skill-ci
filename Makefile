@@ -142,7 +142,7 @@ ui-build: ## Build the UI into controller/internal/reportsite/web/dist, which go
 	cd ui && $(NPM) run build
 
 .PHONY: ui-test
-ui-test: ## UI lint, typecheck and tests (eslint, tsc --noEmit, vitest)
+ui-test: ## UI lint, typecheck and tests (oxlint, tsc --noEmit, vitest)
 	cd ui && $(NPM) run lint && $(NPM) run typecheck && $(NPM) run test
 
 .PHONY: ui-dev

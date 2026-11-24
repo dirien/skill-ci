@@ -2,6 +2,10 @@
 
 All notable changes to skill-ci. The controller, runner, sandbox image and Helm chart share one version. The [GitHub releases](https://github.com/dirien/skill-ci/releases) carry the full list of commits, binaries, checksums and SBOMs of each version.
 
+## Unreleased
+
+- Reporting UI: lint with Oxlint (`oxlint --type-aware`, rules in `ui/.oxlintrc.json`) instead of ESLint and typescript-eslint, and typecheck with TypeScript 7.0.2. typescript-eslint supports TypeScript below 6.1 only. The migrated rules cover ESLint's recommended set and all 43 rules of typescript-eslint's `recommendedTypeChecked`; `react/no-danger` replaces the `no-restricted-syntax` ban on `dangerouslySetInnerHTML`. Lint runs in under a second.
+
 ## [0.12.1](https://github.com/dirien/skill-ci/releases/tag/v0.12.1) (2026-11-24)
 
 - Dependencies: controller-runtime 0.25.3, client-go, api and apimachinery 0.37.2, grpc 1.85.0, x/sync 0.25.0; the reporting UI's react-router 8.5.1, vite 8.3.6, vitest 5.1.0, eslint 10.14.0, typescript-eslint 8.72.1 and @vitejs/plugin-react 6.2.1; ruff 0.17.5 in CI; and the setup-helm, cosign-installer, upload-sarif, login-action and setup-uv actions. No behavior change.

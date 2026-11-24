@@ -70,7 +70,7 @@ What ships: the built JavaScript holds only the runtime dependencies and their o
 | --- | --- | --- |
 | react | 19.3.1 | MIT |
 | react-dom | 19.3.1 | MIT |
-| react-router | 8.4.0 | MIT |
+| react-router | 8.5.1 | MIT |
 | scheduler (dependency of react-dom) | 0.28.0 | MIT |
 | @remix-run/route-pattern (dependency of react-router) | 0.22.1 | MIT |
 | cookie-es (dependency of react-router) | 3.1.1 | MIT |
@@ -79,26 +79,24 @@ Build and test tools (direct development dependencies; they run in CI and on a d
 
 | Package | Version | License |
 | --- | --- | --- |
-| vite | 8.3.4 | MIT |
-| @vitejs/plugin-react | 6.1.2 | MIT |
-| typescript | 6.0.3 | Apache-2.0 |
-| vitest | 5.0.5 | MIT |
+| vite | 8.3.6 | MIT |
+| @vitejs/plugin-react | 6.2.1 | MIT |
+| typescript | 7.0.2 | Apache-2.0 |
+| vitest | 5.1.0 | MIT |
 | jsdom | 30.1.3 | MIT |
 | @testing-library/react | 16.3.3 | MIT |
 | @testing-library/dom | 10.4.2 | MIT |
-| eslint | 10.13.0 | MIT |
-| @eslint/js | 10.0.1 | MIT |
-| typescript-eslint | 8.71.2 | MIT |
+| oxlint | 1.93.0 | MIT |
+| oxlint-tsgolint | 7.0.2006 | MIT |
 | @types/react | 19.3.0 | MIT |
 | @types/react-dom | 19.3.0 | MIT |
 
-All 186 installed packages by license: MIT 144, Apache-2.0 17, BSD-2-Clause 8, ISC 7, BSD-3-Clause 3, MIT-0 2, MPL-2.0 2, BlueOak-1.0.0 2, CC0-1.0 1. The ones outside MIT, Apache-2.0, BSD and ISC are all transitive development dependencies:
+All 168 packages in the lockfile by license: MIT 121, Apache-2.0 25, MPL-2.0 12 (one lightningcss, the rest its platform binaries), BSD-2-Clause 2, BSD-3-Clause 2, ISC 2, MIT-0 2, BlueOak-1.0.0 1, CC0-1.0 1. The ones outside MIT, Apache-2.0, BSD and ISC are all transitive development dependencies:
 
 | Package | Version | License | Pulled in by |
 | --- | --- | --- | --- |
 | lightningcss, lightningcss-linux-arm64-gnu (and the other platform binaries) | 1.33.0 | MPL-2.0 | vite (CSS minifier at build time) |
 | lru-cache | 11.5.3 | BlueOak-1.0.0 | jsdom (test DOM) |
-| minimatch | 10.2.6 | BlueOak-1.0.0 | eslint, typescript-eslint |
 | mdn-data | 2.27.1 | CC0-1.0 | jsdom, through css-tree (CSS data) |
 | @csstools/color-helpers, @csstools/css-syntax-patches-for-csstree | 6.1.2, 1.1.15 | MIT-0 | jsdom |
 
